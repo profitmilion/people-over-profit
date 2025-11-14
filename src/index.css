@@ -1,0 +1,119 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Zmienne kolorów i tło */
+:root {
+  --bg: #0a0a0a;
+  --card: #111214;
+  --muted: #0f1012;
+  --text: #e5e5e5;
+  --text-dim: #9ca3af;
+  --gold: #f5c451;
+  --gold-700: #d7a93a;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Pomocnicze klasy (opcjonalnie) */
+.container-5xl {
+  max-width: 64rem;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+@keyframes float-slow {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+.float-slow {
+  animation: float-slow 4s ease-in-out infinite;
+}
+
+.spin-slow {
+  animation: spin 10s linear infinite;
+}
+/* Animowane tło gradientowe */
+.bg-gradient-animate {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(56,189,248,0.35), transparent 55%),
+    radial-gradient(circle at 100% 0%, rgba(236,72,153,0.35), transparent 55%),
+    radial-gradient(circle at 0% 100%, rgba(234,179,8,0.30), transparent 55%),
+    radial-gradient(circle at 100% 100%, rgba(59,130,246,0.35), transparent 55%);
+  background-size: 200% 200%;
+  animation: gradientShift 18s ease-in-out infinite;
+}
+
+@keyframes gradientShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Powolna orbita – na pierścieniu wokół logo */
+@keyframes slowOrbit {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.orbit {
+  animation: slowOrbit 24s linear infinite;
+}
+
+/* Delikatne „pływanie” góra–dół logo */
+@keyframes floatSoft {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-4px); }
+}
+
+.float-soft {
+  animation: floatSoft 6s ease-in-out infinite;
+}
+/* Delikatne poziome linie jak na starym monitorze */
+.scanlines {
+  position: relative;
+  overflow: hidden;
+}
+
+.scanlines::before {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.35) 1px,
+    transparent 1px
+  );
+  background-size: 100% 3px;
+  mix-blend-mode: soft-light;
+  opacity: 0.6;
+}
+
+/* Lekkie ziarno / szum */
+.crt-noise::after {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='noStitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.18'/%3E%3C/svg%3E");
+  mix-blend-mode: soft-light;
+}

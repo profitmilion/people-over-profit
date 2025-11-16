@@ -1,54 +1,65 @@
 // src/types/core.ts
 
-// Proste "brandowanie" identyfikatorów (pomaga unikać pomyłek typów string)
+export type UserId = string;
 export type CycleId = string;
-export type UserId  = string;
 
 // Uczestnik cyklu
 export interface Participant {
-    userId: UserId;
-    joinedAt: number; // ms since epoch
+  userId: UserId;
+  joinedAt: number; // timestamp (ms od 1970)
 }
 
-// Wynik losowania
-export interface DrawResult {
-    cycleId: CycleId;
-    winners: UserId[];
-    drawnAt: number;   // ms since epoch
-    seed?: number | undefined;     // użyte ziarno (opcjonalnie)
+// Informacja o jednym losowaniu
+export interface DrawInfo {
+  cycleId: CycleId;
+  winners: UserId[];
+  drawnAt: number;
+  seed?: number;
+  // który z kolei draw w tym cyklu (1 = pierwsze losowanie itd.)
+  drawIndex?: number;
 }
 
-// Harmonogram losowania – logika puli czasu i countdown
+// Stary typ harmonogramu (zostawiamy dla kompatybilności)
 export interface DrawSchedule {
-    pooledSeconds: number;       // skumulowany czas dodany przez społeczność
-    thresholdSeconds: number;    // próg startu odliczania
-    countdownSeconds: number;    // długość odliczania (sekundy)
-    locked: boolean;             // true po osiągnięciu progu
-
-    // znaczniki czasu (opcjonalne)
-    scheduledAt?: number | undefined;        // ms – moment osiągnięcia progu
-    countdownStartAt?: number | undefined;   // ms – start odliczania
-    drawAt?: number | undefined;             // ms – docelowy moment losowania
+  pooledSeconds: number;
+  thresholdSeconds: number;
+  countdownSeconds: number;
+  locked: boolean;
+  scheduledAt?: number;
+  countdownStartAt?: number;
+  drawAt?: number;
 }
 
-// Status cyklu
-export type CycleStatus = "open" | "drawing" | "finished" | "closed";
-
-// Cykl
+// Cykl losowania POP33
 export interface Cycle {
-    id: CycleId;
-    status: CycleStatus;
-    participants: Participant[];
-    maxParticipants: number;
-    maxWinners: number;
-    openedAt: number;
-    closedAt?: number | undefined;
-    schedule: DrawSchedule;
-    draw?: DrawResult | undefined;
+  id: CycleId;
+  status: "open" | "drawing" | "finished";
+
+  participants: Participant[];
+  maxParticipants: number;
+  maxWinners: number;
+
+  openedAt: number;
+  closedAt?: number;
+
+  // ostatnie losowanie (do szybkiego podglądu)
+  draw?: DrawInfo;
+
+  // historia wszystkich losowań w tym cyklu
+  drawHistory?: DrawInfo[];
+
+  // legacy, nieużywane w nowej logice, ale zostawiamy, zeby nie psuć innych plików
+  schedule?: DrawSchedule;
+
+  // ile razy już losowaliśmy w tym cyklu
+  drawCount?: number;
+
+  // kiedy automatycznie zrobić kolejne losowanie (timestamp)
+  nextDrawAt?: number;
 }
 
-// Stan aplikacji
+// Cały stan aplikacji
 export interface AppState {
-    cycles: Cycle[];
-    lastUserId?: UserId | undefined;
+  cycles: Cycle[];
+  lastUserId?: UserId;
 }

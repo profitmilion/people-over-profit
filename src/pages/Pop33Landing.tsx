@@ -189,41 +189,48 @@ export default function Pop33Landing() {
                 {/* JAK TO DZIAŁA */}
                 <section className="bg-slate-900/40 border-y border-slate-800">
                     <div className="mx-auto max-w-5xl px-4 py-12 md:py-16">
-                        <h2 className="text-xl md:text-2xl font-semibold mb-6">
-                            Jak działa POP33 DEMO
-                        </h2>
+                        <div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-4 md:p-6">
+                            <h2 className="text-xl md:text-2xl font-semibold mb-4">
+                                Jak działa POP33 DEMO
+                            </h2>
+                            <p className="text-sm text-slate-300 mb-5 max-w-3xl">
+                                Wersja DEMO pozwala przetestować podstawowy przepływ użytkownika:
+                                wejście przez Farcaster, dołączenie do cyklu oraz udział w symulowanych
+                                losowaniach. Wszystko odbywa się na testnecie, bez prawdziwych środków.
+                            </p>
 
-                        <div className="grid gap-5 md:grid-cols-3 text-sm">
-                            <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-5">
-                                <p className="text-xs text-slate-400 mb-1">Krok 1</p>
-                                <h3 className="font-semibold mb-2">Dołącz przez Farcaster</h3>
-                                <p className="text-slate-300 text-sm">
-                                    Logujesz się swoim kontem Farcaster lub portfelem na
-                                    testnecie. DEMO nie pobiera prawdziwych środków, symulujemy
-                                    udział w losowaniach.
-                                </p>
-                            </div>
-                            <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-5">
-                                <p className="text-xs text-slate-400 mb-1">Krok 2</p>
-                                <h3 className="font-semibold mb-2">Aktywny cykl POP33</h3>
-                                <p className="text-slate-300 text-sm">
-                                    System tworzy cykle losowań. Każdy cykl ma ograniczoną liczbę
-                                    uczestników i z góry ustalony limit nagród. W DEMO pracujemy
-                                    na punktach, nie na USDC.
-                                </p>
-                            </div>
-                            <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-5">
-                                <p className="text-xs text-slate-400 mb-1">Krok 3</p>
-                                <h3 className="font-semibold mb-2">Codzienne losowanie</h3>
-                                <p className="text-slate-300 text-sm">
-                                    W każdym aktywnym cyklu odbywają się losowania zwycięzców.
-                                    DEMO zapisuje wyniki, żeby każdy mógł przeanalizować
-                                    statystyki, sprawiedliwość i przejrzystość systemu.
-                                </p>
+                            <div className="grid gap-5 md:grid-cols-3 text-sm">
+                                <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-5">
+                                    <p className="text-xs text-slate-400 mb-1">Krok 1</p>
+                                    <h3 className="font-semibold mb-2">Dołącz przez Farcaster</h3>
+                                    <p className="text-slate-300 text-sm">
+                                        Logujesz się swoim kontem Farcaster lub portfelem na testnecie.
+                                        DEMO nie pobiera prawdziwych środków, symulujemy udział w losowaniach.
+                                    </p>
+                                </div>
+                                <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-5">
+                                    <p className="text-xs text-slate-400 mb-1">Krok 2</p>
+                                    <h3 className="font-semibold mb-2">Aktywny cykl POP33</h3>
+                                    <p className="text-slate-300 text-sm">
+                                        System tworzy cykle losowań. Każdy cykl ma ograniczoną liczbę
+                                        uczestników i z góry ustalony limit nagród. W DEMO pracujemy
+                                        na punktach, nie na USDC.
+                                    </p>
+                                </div>
+                                <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-5">
+                                    <p className="text-xs text-slate-400 mb-1">Krok 3</p>
+                                    <h3 className="font-semibold mb-2">Codzienne losowanie</h3>
+                                    <p className="text-slate-300 text-sm">
+                                        W każdym aktywnym cyklu odbywają się losowania zwycięzców. DEMO
+                                        zapisuje wyniki, żeby każdy mógł przeanalizować statystyki,
+                                        sprawiedliwość i przejrzystość systemu.
+                                    </p>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </section>
+
 
                 {/* DLACZEGO POP33 */}
                 <section className="mx-auto max-w-5xl px-4 py-12 md:py-16">
@@ -311,29 +318,32 @@ export default function Pop33Landing() {
                 </section>
                 {/* Sekcja o PMN / HODL */}
                 <section className="mx-auto max-w-5xl px-4 py-12 md:py-16">
-                    <h2 className="text-xl md:text-2xl font-semibold mb-4">
-                        PMN, HODL i długoterminowa lojalność
-                    </h2>
-                    <p className="text-sm text-slate-300 mb-4 max-w-3xl">
-                        W docelowym modelu POP33 planowane jest powiązanie aplikacji z tokenem PMN.
-                        Część wpłat użytkowników miałaby być automatycznie dzielona w modelu
-                        50 / 50 – jedna część na indywidualne DCA HODL w tokenie PMN,
-                        druga część na specjalne konto HODL, które na smartkontrakcie
-                        kumuluje środki do poziomu 1 000 000.
-                    </p>
-                    <p className="text-sm text-slate-300 max-w-3xl mb-2">
-                        Po osiągnięciu tego poziomu planowane jest automatyczne wypłacenie zgromadzonej
-                        kwoty zwycięzcy zgodnie z zasadami kontraktu. Jeżeli użytkownik wygra wcześniej,
-                        jego konto HODL może zostać spalone jako element deflacyjny ekonomii tokena PMN
-                        albo przekazane na cele charytatywne, marketingowe lub na dodatkowe losowanie.
-                        Ostateczne zasady tego mechanizmu mają zostać wypracowane przez społeczność
-                        i dostosowane do obowiązujących regulacji.
-                    </p>
-                    <p className="text-[11px] text-slate-500 max-w-3xl">
-                        Ta sekcja opisuje kierunek rozwoju i nie stanowi oferty inwestycyjnej
-                        ani gwarancji jakichkolwiek wyników finansowych.
-                    </p>
+                    <div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-4 md:p-6 space-y-3">
+                        <h2 className="text-xl md:text-2xl font-semibold">
+                            PMN, HODL i długoterminowa lojalność
+                        </h2>
+                        <p className="text-sm text-slate-300 max-w-3xl">
+                            W docelowym modelu POP33 planowane jest powiązanie aplikacji z tokenem PMN.
+                            Część wpłat użytkowników miałaby być automatycznie dzielona w modelu
+                            50 / 50 – jedna część na indywidualne DCA HODL w tokenie PMN,
+                            druga część na specjalne konto HODL, które na smartkontrakcie
+                            kumuluje środki do poziomu 1 000 000.
+                        </p>
+                        <p className="text-sm text-slate-300 max-w-3xl">
+                            Po osiągnięciu tego poziomu planowane jest automatyczne wypłacenie zgromadzonej
+                            kwoty zwycięzcy zgodnie z zasadami kontraktu. Jeżeli użytkownik wygra wcześniej,
+                            jego konto HODL może zostać spalone jako element deflacyjny ekonomii tokena PMN
+                            albo przekazane na cele charytatywne, marketingowe lub na dodatkowe losowanie.
+                            Ostateczne zasady tego mechanizmu mają zostać wypracowane przez społeczność
+                            i dostosowane do obowiązujących regulacji.
+                        </p>
+                        <p className="text-[11px] text-slate-500 max-w-3xl">
+                            Ta sekcja opisuje kierunek rozwoju i nie stanowi oferty inwestycyjnej
+                            ani gwarancji jakichkolwiek wyników finansowych.
+                        </p>
+                    </div>
                 </section>
+
 
 
                 {/* FAQ */}

@@ -199,35 +199,40 @@ export default function ProdView() {
               {smartJoinStatus.kind === "READY"
                 ? ` mode=${smartJoinStatus.mode}`
                 : smartJoinStatus.kind === "BLOCKED"
-                ? ` reason=${smartJoinStatus.reason}`
-                : ""}{" "}
+                  ? ` reason=${smartJoinStatus.reason}`
+                  : ""}{" "}
               | active={activeUserCycles}/{MAX_USER_CYCLES}
             </span>
 
             {/* Legenda kolorów */}
-            <div className="mt-2 flex flex-wrap gap-3 text-[10px] opacity-80">
-              <div className="flex items-center gap-1">
-                <span
-                  className="inline-flex h-3 w-3 rounded-full"
-                  style={{ backgroundColor: "#22c55e" }}
-                />
-                <span>zielone – start, 0/10, jeszcze nie dołączyłeś</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <span
-                  className="inline-flex h-3 w-3 rounded-full"
-                  style={{ backgroundColor: "#f97316" }}
-                />
-                <span>pomarańczowe – aktywny, 1–9/10 cykli</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <span
-                  className="inline-flex h-3 w-3 rounded-full"
-                  style={{ backgroundColor: "#ef4444" }}
-                />
-                <span>czerwone – limit (10/10 lub limit systemu)</span>
+            <div className="mt-4 rounded-xl border border-neutral-800 bg-neutral-900/60 p-3 text-[11px] text-neutral-300 space-y-2">
+              <p className="font-semibold text-neutral-200">
+                Legenda kolorów przycisku wejścia do cyklu
+              </p>
+
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                  <span>zielony: start, 0/10 cykli, jeszcze nie dołączyłeś</span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="h-2.5 w-2.5 rounded-full bg-orange-500" />
+                  <span>pomarańczowy: aktywny udział, 1–9/10 cykli</span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="h-2.5 w-2.5 rounded-full bg-red-500" />
+                  <span>czerwony: limit systemu osiągnięty (10/10 lub brak miejsc)</span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="h-2.5 w-2.5 rounded-full bg-neutral-500" />
+                  <span>szary: Twój limit 10/10 osiągnięty – przycisk jest wyłączony</span>
+                </div>
               </div>
             </div>
+
           </div>
         </div>
 
@@ -297,12 +302,12 @@ export default function ProdView() {
                     {isOpen
                       ? "Otwarty"
                       : hasNextDraw
-                      ? "Zamknięty - oczekiwanie na kolejne losowanie"
-                      : isFinished && hasDrawHistory
-                      ? "Zakończony - losowania odbyły się"
-                      : isFinished
-                      ? "Zakończony"
-                      : c.status}
+                        ? "Zamknięty - oczekiwanie na kolejne losowanie"
+                        : isFinished && hasDrawHistory
+                          ? "Zakończony - losowania odbyły się"
+                          : isFinished
+                            ? "Zakończony"
+                            : c.status}
                   </div>
 
                   {/* Odliczanie do najbliższego losowania */}

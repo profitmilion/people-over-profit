@@ -32,13 +32,63 @@ function countOpenAfterLastClosed(cycles: AppState["cycles"]): number {
 
   const sliceStart = lastClosedIndex === -1 ? 0 : lastClosedIndex + 1;
 
-  return sorted
-    .slice(sliceStart)
-    .filter((c) => c.status === "open").length;
+  return sorted.slice(sliceStart).filter((c) => c.status === "open").length;
 }
 
 function canOpenAnotherCycle(cycles: AppState["cycles"]): boolean {
   return countOpenAfterLastClosed(cycles) < MAX_OPEN_AFTER_LAST_CLOSED;
+}
+
+// ========== STATUS „INTELIGENTNEGO JOIN” (DO UI / SYGNALIZACJI) ==========
+
+export type SmartJoinStatus =
+  | {
+      kind: "READY";
+      mode: "JOIN_OPEN" | "OPEN_NEW";
+      targetCycleId?: CycleId;
+    }
+  | {
+      kind: "BLOCKED";
+      reason: "LIMIT_REACHED";
+    };
+
+function computeSmartJoinStatus(state: AppState): SmartJoinStatus {
+  const cycles = state.cycles ?? [];
+  const uid = state.lastUserId; // może być undefined
+
+  // 1. Czy istnieje otwarty cykl, do którego użytkownik może dołączyć?
+  const joinable = cycles.find((c) => {
+    if (c.status !== "open") return false;
+    if (c.participants.length >= c.maxParticipants) return false;
+
+    // jeżeli użytkownik jeszcze nie ma ID, to i tak może dołączyć
+    if (!uid) return true;
+
+    // jeżeli ma ID - nie może być już uczestnikiem tego cyklu
+    return !c.participants.some((p) => p.userId === uid);
+  });
+
+  if (joinable) {
+    return {
+      kind: "READY",
+      mode: "JOIN_OPEN",
+      targetCycleId: joinable.id,
+    };
+  }
+
+  // 2. Jeżeli nie ma cyklu, do którego można dołączyć, sprawdzamy limit
+  if (!canOpenAnotherCycle(cycles)) {
+    return {
+      kind: "BLOCKED",
+      reason: "LIMIT_REACHED",
+    };
+  }
+
+  // 3. Możemy otworzyć nowy cykl i do niego dołączyć
+  return {
+    kind: "READY",
+    mode: "OPEN_NEW",
+  };
 }
 
 // ========== DOMYŚLNE PARAMETRY CYKLU ==========
@@ -103,7 +153,10 @@ function ensureInitialState(): AppState {
         };
 
         // jeżeli nie było drawHistory, a było draw, dodajemy do historii
-        if ((!cycle.drawHistory || cycle.drawHistory.length === 0) && cycle.draw) {
+        if (
+          (!cycle.drawHistory || cycle.drawHistory.length === 0) &&
+          cycle.draw
+        ) {
           cycle.drawHistory = [cycle.draw];
         }
 
@@ -126,6 +179,7 @@ function ensureInitialState(): AppState {
   if (state.cycles.length === 0) {
     state.cycles.push(newCycleTemplate(1));
     saveState(state);
+    return state;
   }
 
   return state;
@@ -250,6 +304,12 @@ export function useCycles() {
     return Number.isFinite(parsed) ? parsed : 1;
   }, [cycles]);
 
+  // Nowy: status inteligentnego join, dla UI (przycisk, ikonka, sygnalizacja)
+  const smartJoinStatus = useMemo(
+    () => computeSmartJoinStatus(state),
+    [state]
+  );
+
   const makeId = () =>
     typeof crypto !== "undefined" &&
     typeof (crypto as any).randomUUID === "function"
@@ -264,7 +324,7 @@ export function useCycles() {
     return uid;
   }, [state.lastUserId, persist]);
 
-  // PROD: dołączenie do najstarszego otwartego cyklu
+  // PROD: dołączenie do najstarszego otwartego cyklu (pozostawiamy dla kompatybilności)
   const joinFIFO = useCallback(() => {
     const uid = getOrCreateUserId();
     persist((s) => {
@@ -300,7 +360,7 @@ export function useCycles() {
     });
   }, [getOrCreateUserId, persist]);
 
-  // PROD: otwórz kolejny cykl i dołącz
+  // PROD: otwórz kolejny cykl i dołącz (to będzie nasz „inteligentny join”)
   const openNextAndJoin = useCallback(() => {
     const uid = getOrCreateUserId();
 
@@ -512,8 +572,13 @@ export function useCycles() {
     state,
     cycles: state.cycles,
     openCycle,
+    // stare API (zachowane)
     joinFIFO,
     openNextAndJoin,
+    // nowe API pod „inteligentny join”
+    smartJoin: openNextAndJoin,
+    smartJoinStatus,
+    // reszta
     runDraw,
     addFakeParticipants,
     resetDemo,

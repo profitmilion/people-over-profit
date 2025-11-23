@@ -21,8 +21,8 @@ function shortenUserId(id: string, len = 4) {
 
 export default function ProdView() {
   const {
-    joinFIFO,
-    openNextAndJoin,
+    smartJoin,
+    smartJoinStatus,
     cycles,
     getOrCreateUserId,
     openCycle
@@ -64,6 +64,86 @@ export default function ProdView() {
     (openCycle?.participants.length ?? 0) >=
     (openCycle?.maxParticipants ?? MAX_PARTICIPANTS);
 
+  // Sygnalizacja ze strony logiki globalnej (systemowy limit)
+  const blockedBySystemLimit =
+    smartJoinStatus.kind === "BLOCKED" &&
+    smartJoinStatus.reason === "LIMIT_REACHED";
+
+  const canJoinByStatus = smartJoinStatus.kind === "READY";
+
+  // Decyzja, czy przycisk powinien być aktywny
+  const joinDisabled = hasReachedUserLimit || !canJoinByStatus;
+
+  // Tekst tooltipa dla przycisku
+  let joinTitle = "Weź udział w losowaniu";
+  if (hasReachedUserLimit) {
+    joinTitle = `Osiągnąłeś limit ${MAX_USER_CYCLES} aktywnych cykli. Poczekaj na zakończenie części z nich.`;
+  } else if (blockedBySystemLimit) {
+    joinTitle =
+      "System osiągnął limit otwartych cykli. Poczekaj na kolejną rundę.";
+  } else if (!openCycle && smartJoinStatus.kind === "READY") {
+    joinTitle = "Dołączysz do nowego cyklu, gdy tylko zostanie otwarty.";
+  }
+
+  // =========================
+  // KOLORY wg Twojej mapy:
+  // 0/10   -> zielony (start)
+  // 1–9/10 -> pomarańczowy (aktywny)
+  // 10/10  -> czerwony (limit użytkownika)
+  // LIMIT SYSTEMU -> czerwony (priorytet)
+  // =========================
+
+  let statusText = "";
+  let statusLabel = "";
+
+  // domyślne kolory (gdyby coś było nieokreślone)
+  let indicatorColor = "#6b7280"; // gray
+
+  if (blockedBySystemLimit) {
+    // priorytet: systemowy limit
+    statusLabel = "Limit systemu";
+    statusText =
+      "System osiągnął limit otwartych cykli. Poczekaj na kolejną rundę.";
+    indicatorColor = "#ef4444"; // czerwony
+  } else if (hasReachedUserLimit) {
+    // użytkownik 10/10
+    statusLabel = "Limit użytkownika";
+    statusText = `Masz już ${activeUserCycles}/${MAX_USER_CYCLES} aktywnych cykli. To maksymalny limit w tym demie.`;
+    indicatorColor = "#ef4444"; // czerwony
+  } else if (activeUserCycles > 0) {
+    // 1–9/10
+    statusLabel = "Aktywny";
+    statusText = `Masz ${activeUserCycles}/${MAX_USER_CYCLES} aktywnych cykli. Możesz dołączyć do kolejnych.`;
+    indicatorColor = "#f97316"; // pomarańczowy
+  } else {
+    // 0/10
+    statusLabel = "Gotowe";
+    statusText =
+      "Jeszcze nie bierzesz udziału w żadnym cyklu. Możesz dołączyć do pierwszego.";
+    indicatorColor = "#22c55e"; // zielony
+  }
+
+  // Przycisk ma ten sam kolor co status
+  let buttonBg = indicatorColor;
+  let buttonBorder = indicatorColor;
+  let buttonText = "#000000";
+  let buttonCursor: "pointer" | "not-allowed" = "pointer";
+  let buttonOpacity = 1;
+
+  if (joinDisabled) {
+    buttonCursor = "not-allowed";
+    buttonOpacity = 0.6;
+    buttonText = "#000000";
+  }
+
+  const joinButtonStyle = {
+    backgroundColor: buttonBg,
+    borderColor: buttonBorder,
+    color: buttonText,
+    cursor: buttonCursor,
+    opacity: buttonOpacity
+  } as const;
+
   return (
     <div className="mx-auto max-w-3xl p-4 space-y-6">
       <div className="text-sm opacity-70">
@@ -71,60 +151,98 @@ export default function ProdView() {
       </div>
 
       {/* AKTUALNY CYKL */}
-      <section className="rounded-2xl border border-neutral-800 p-4 space-y-4">
-        <div className="text-lg font-semibold">Aktualny cykl</div>
+      <section className="rounded-2xl border border-neutral-800 p-4 space-y-4 bg-neutral-950/40">
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-lg font-semibold">Aktualny cykl</div>
+          {openCycle && (
+            <span className="text-[11px] px-2 py-0.5 rounded-full border border-neutral-700 text-neutral-300">
+              ID: <span className="font-mono">{openCycle.id}</span>
+            </span>
+          )}
+        </div>
 
         {openCycle ? (
           <div className="text-sm opacity-80">
-            ID: <span className="font-mono">{openCycle.id}</span> · Uczestników:{" "}
-            {openCycle.participants.length}/{openCycle.maxParticipants}
+            Uczestników: {openCycle.participants.length}/
+            {openCycle.maxParticipants}
           </div>
         ) : (
           <div className="text-sm opacity-80">Brak otwartego cyklu</div>
         )}
 
-        {/* Przyciski akcji */}
-        <div className="flex gap-3">
+        {/* Inteligentny przycisk + status */}
+        <div className="mt-2 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <button
-            className="px-4 py-2 rounded-xl border border-neutral-700 hover:bg-neutral-900 disabled:opacity-50"
-            onClick={joinFIFO}
-            disabled={
-              !openCycle ||
-              alreadyInOpenCycle ||
-              isOpenCycleFull ||
-              hasReachedUserLimit
-            }
-            title={
-              hasReachedUserLimit
-                ? `Osiągnąłeś limit ${MAX_USER_CYCLES} aktywnych cykli`
-                : !openCycle
-                ? "Brak otwartego cyklu"
-                : alreadyInOpenCycle
-                ? "Już dołączyłeś"
-                : isOpenCycleFull
-                ? "Cykl pełny"
-                : "Dołącz"
-            }
+            className="px-5 py-2.5 rounded-xl font-semibold text-sm border transition"
+            style={joinButtonStyle}
+            onClick={smartJoin}
+            disabled={joinDisabled}
+            title={joinTitle}
           >
-            Dołącz
+            {canJoinByStatus && !hasReachedUserLimit
+              ? "Weź udział"
+              : "Niedostępne"}
           </button>
 
-          <button
-            className="px-4 py-2 rounded-xl border border-amber-600 text-amber-500 hover:bg-amber-950/40 disabled:opacity-50"
-            onClick={openNextAndJoin}
-            disabled={
-              hasReachedUserLimit ||
-              (!alreadyInOpenCycle && !!openCycle && !isOpenCycleFull)
-            }
-            title={
-              hasReachedUserLimit
-                ? `Osiągnąłeś limit ${MAX_USER_CYCLES} aktywnych cykli`
-                : "Dołącz do nowego cyklu (po dołączeniu do bieżącego lub gdy bieżący pełny)"
-            }
-          >
-            Dołącz do nowego cyklu
-          </button>
+          <div className="flex flex-col gap-1 text-xs">
+            <span
+              className="font-semibold uppercase tracking-wide text-[11px]"
+              style={{ color: indicatorColor }}
+            >
+              {statusLabel}
+            </span>
+            <span className="opacity-80">{statusText}</span>
+
+            {/* Debug – na czas developmentu */}
+            <span className="opacity-50 text-[10px] font-mono">
+              debug: kind={smartJoinStatus.kind}
+              {smartJoinStatus.kind === "READY"
+                ? ` mode=${smartJoinStatus.mode}`
+                : smartJoinStatus.kind === "BLOCKED"
+                ? ` reason=${smartJoinStatus.reason}`
+                : ""}{" "}
+              | active={activeUserCycles}/{MAX_USER_CYCLES}
+            </span>
+
+            {/* Legenda kolorów */}
+            <div className="mt-2 flex flex-wrap gap-3 text-[10px] opacity-80">
+              <div className="flex items-center gap-1">
+                <span
+                  className="inline-flex h-3 w-3 rounded-full"
+                  style={{ backgroundColor: "#22c55e" }}
+                />
+                <span>zielone – start, 0/10, jeszcze nie dołączyłeś</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span
+                  className="inline-flex h-3 w-3 rounded-full"
+                  style={{ backgroundColor: "#f97316" }}
+                />
+                <span>pomarańczowe – aktywny, 1–9/10 cykli</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span
+                  className="inline-flex h-3 w-3 rounded-full"
+                  style={{ backgroundColor: "#ef4444" }}
+                />
+                <span>czerwone – limit (10/10 lub limit systemu)</span>
+              </div>
+            </div>
+          </div>
         </div>
+
+        {/* Informacja pomocnicza o bieżącym cyklu dla użytkownika */}
+        {alreadyInOpenCycle && (
+          <div className="mt-2 text-xs text-emerald-400">
+            Masz już udział w aktualnym otwartym cyklu.
+          </div>
+        )}
+        {isOpenCycleFull && openCycle && (
+          <div className="mt-1 text-xs text-amber-400">
+            Bieżący cykl jest pełny. System otworzy nowy cykl, gdy będzie to
+            możliwe.
+          </div>
+        )}
       </section>
 
       {/* TWOJE CYKLE – odliczanie + pełna historia zwycięzców */}
@@ -165,7 +283,7 @@ export default function ProdView() {
               return (
                 <div
                   key={c.id}
-                  className="rounded-xl border border-neutral-700 p-3 space-y-2"
+                  className="rounded-xl border border-neutral-700 p-3 space-y-2 bg-neutral-950/30"
                 >
                   {/* podstawowe info o cyklu */}
                   <div className="font-mono text-sm">{c.id}</div>
@@ -179,9 +297,9 @@ export default function ProdView() {
                     {isOpen
                       ? "Otwarty"
                       : hasNextDraw
-                      ? "Zamknięty – oczekiwanie na kolejne losowanie"
+                      ? "Zamknięty - oczekiwanie na kolejne losowanie"
                       : isFinished && hasDrawHistory
-                      ? "Zakończony – losowania odbyły się"
+                      ? "Zakończony - losowania odbyły się"
                       : isFinished
                       ? "Zakończony"
                       : c.status}
@@ -251,7 +369,7 @@ export default function ProdView() {
                   {/* Cykl zakończony, ale brak historii losowań */}
                   {isFinished && !hasDrawHistory && !hasNextDraw && (
                     <div className="mt-2 text-xs opacity-60">
-                      Zakończony – brak zapisanych danych o losowaniu (starszy
+                      Zakończony - brak zapisanych danych o losowaniu (starszy
                       cykl lub dane DEMO).
                     </div>
                   )}

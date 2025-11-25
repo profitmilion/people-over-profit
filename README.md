@@ -1,21 +1,58 @@
 # people-over-profit
-Innovative hybrid between crowdfunding and lottery on Base blockchain. Designed to let more people achieve wins and gains through fair tokenomics, open support mechanics, and loyalty-based auto-HODL system where “the last become the first.” A transparent, automated community economy.
+POP33 – People Over Profit
+
+POP33 is an innovative hybrid combining crowdfunding, transparent lottery mechanics, and built-in auto-HODL + DCA systems, operating directly on the Base blockchain and integrated with the Farcaster ecosystem.
+The model is designed so that participants approach the project primarily as a form of community-driven crowdfunding, where each monthly ticket (33 USDC) supports the project while granting access to daily 1,000,000 USDC draws.
+
+POP33 merges the simplicity of crowdfunding, the excitement of lottery participation, and automated value-building mechanisms (auto-HODL and DCA), creating a system that can be easily understood and adopted by millions of users.
+
+The project is intentionally aligned with the mission of supporting mass adoption of Farcaster and the Base network, directing broad Web2 and Web3 audiences into these ecosystems through a simple, fair, and accessible product.
+POP33 aims to establish a transparent, scalable, and fully automated community model, built on the values of cooperation, simplicity, and equal opportunity.
 # People Over Profit (POP33)
 
 
 ## 🌍 Vision
 
-We aim to build something that goes beyond traditional lotteries and crowdfunding.  
-POP33 introduces a new hybrid model that offers participants **higher odds and better ROI** through transparent blockchain mechanics, fair tokenomics, and shared participation.
+The vision of POP33 was born as a response to key problems visible in today’s world of blockchain and cryptocurrencies - and in the future, possibly the wider Web3 ecosystem.
+We see a space filled with overly complex tokenomics, systems that ordinary people cannot understand, and mechanisms that often enrich a small group at the expense of the majority.
+For many people, blockchain becomes a place of risk, speculation, stress and uncertainty, instead of a tool for empowerment and real opportunity.
 
-This is not just another lottery or funding system — it’s an **evolution**.  
-The first of a new generation of models that will redefine how people take part in collective projects, wealth creation, and Web3 opportunities.
+At the same time, while blockchain and decentralized economies create immense potential, we observe a deeper issue:
+most ordinary people do not participate in these opportunities because they lack knowledge, awareness and understanding.
+It is not potential that they lack, but education and simple tools that would allow them to enter this new space safely and confidently.
 
-POP33 also carries a strong **educational mission** — helping people understand how participation in decentralized systems, community profits, and fair token distribution can empower individuals instead of intermediaries.  
-It teaches shared ownership and responsibility in a global digital economy.
+Over the years, many promising projects have failed not because they were bad, but because the wider public simply did not understand how they could benefit.
+Blockchain environments have often been dominated by a narrow circle of early adopters, insiders and tech-oriented users - a group too small to drive meaningful change or mass adoption.
 
-Our long-term goal is to create a framework that becomes a new standard for fairness and sustainability —  
-**an innovative successor to both crowdfunding and lotteries.**
+POP33 was created to break this barrier.
+Its purpose is to give people who have been outside the blockchain world a simple, safe and educational way to start building their participation in a decentralized economy, without requiring any technical expertise.
+
+When we look at today’s entertainment and financial-competition markets, we see many games and lotteries offering high-payout potential - from traditional lotteries to poker tournaments like Texas Hold’em with million-dollar prizes.
+Yet all these options require significant knowledge, years of learning, psychological discipline, complex strategies and large financial entry costs.
+A single tournament seat can cost 3,000–5,000 USD, not counting the experience needed to have any real chance of winning.
+
+POP33 flips this logic.
+
+Instead of a system that rewards only professionals or people with large capital, we create a model where anyone can participate for a symbolic 33 USDC and have a real chance of winning - without preparation, without stress and without barriers.
+In terms of simplicity, accessibility and fairness, POP33 surpasses nearly all existing models - including commercial lotteries and skill-based games with high financial stakes.
+
+This simple structure gives POP33 enormous potential for mass adoption and rapid scalability.
+People want to participate in something fair, understandable and emotionally engaging - without years of training or high risk.
+POP33 is designed so that more people can win, more often.
+A 1,000,000 USDC prize is life-changing, yet manageable enough to allow regular payouts and fair distribution of benefits across the community.
+
+Our goal is not to maximize a single giant jackpot, but to distribute opportunity.
+This is the foundation of the People Over Profit philosophy.
+
+All surpluses and funds allocated to development, marketing, community initiatives or additional draws for underprivileged users will be managed transparently and in alignment with the project’s core values - serving the community rather than individual greed.
+This signals to future contributors, developers and investors that POP33 is a project with enormous growth potential, built on fairness, equal opportunity and responsibility.
+
+In the long term, we aim to create a framework that promotes fairness, shared benefit and sustainable development.
+Our ambition is to lay the foundation for truly democratic participation in value creation - a model that can become a new standard in the space: a transparent, fair and community-driven successor to both crowdfunding and lotteries, designed for the common good.
+
+POP33 is also an open invitation for builders, developers, marketers and creators who believe in simple, fair and scalable ideas.
+We welcome those who want to explore the concept, discuss the model, propose improvements or join the long-term development of a community-driven application on Base and Farcaster.
+Anyone who aligns with the People Over Profit philosophy is invited to collaborate and help shape a project designed to serve millions.
 
 ---
 

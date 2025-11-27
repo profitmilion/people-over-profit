@@ -1,6 +1,7 @@
 // src/components/ProdView.tsx
 import { useMemo, useState, useEffect } from "react";
 import { useCycles } from "../hooks/useCycles";
+import PopLogoOrbit from "./PopLogoOrbit";
 
 const MAX_PARTICIPANTS = 100;
 const MAX_USER_CYCLES = 10;
@@ -25,7 +26,7 @@ export default function ProdView() {
     smartJoinStatus,
     cycles,
     getOrCreateUserId,
-    openCycle
+    openCycle,
   } = useCycles();
 
   const userId = useMemo(() => getOrCreateUserId(), [getOrCreateUserId]);
@@ -141,14 +142,27 @@ export default function ProdView() {
     borderColor: buttonBorder,
     color: buttonText,
     cursor: buttonCursor,
-    opacity: buttonOpacity
+    opacity: buttonOpacity,
   } as const;
 
   return (
     <div className="mx-auto max-w-3xl p-4 space-y-6">
-      <div className="text-sm opacity-70">
-        Twój ID: <span className="font-mono">{userId}</span>
-      </div>
+      {/* Nagłówek z logo POP33 */}
+      <header className="flex flex-col items-center justify-center gap-4 text-center">
+        <PopLogoOrbit />
+
+
+        <div className="text-xs sm:text-sm text-neutral-400 sm:text-right">
+          <div>
+            Twój ID użytkownika:{" "}
+            <span className="font-mono text-neutral-200">{userId}</span>
+          </div>
+          <div className="mt-1 text-[11px] text-neutral-500">
+            ID jest lokalne dla tego demo i zapisane tylko w Twojej
+            przeglądarce.
+          </div>
+        </div>
+      </header>
 
       {/* AKTUALNY CYKL */}
       <section className="rounded-2xl border border-neutral-800 p-4 space-y-4 bg-neutral-950/40">
@@ -223,16 +237,20 @@ export default function ProdView() {
 
                 <div className="flex items-center gap-2">
                   <span className="h-2.5 w-2.5 rounded-full bg-red-500" />
-                  <span>czerwony: limit systemu osiągnięty (10/10 lub brak miejsc)</span>
+                  <span>
+                    czerwony: limit systemu osiągnięty (10/10 lub brak miejsc)
+                  </span>
                 </div>
 
                 <div className="flex items-center gap-2">
                   <span className="h-2.5 w-2.5 rounded-full bg-neutral-500" />
-                  <span>szary: Twój limit 10/10 osiągnięty – przycisk jest wyłączony</span>
+                  <span>
+                    szary: Twój limit 10/10 osiągnięty – przycisk jest
+                    wyłączony
+                  </span>
                 </div>
               </div>
             </div>
-
           </div>
         </div>
 

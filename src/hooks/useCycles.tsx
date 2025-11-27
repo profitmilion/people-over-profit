@@ -2,7 +2,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { loadState, saveState } from "../utils/storage";
 import { shuffle } from "../utils/rand";
-import type { AppState, Cycle, CycleId, UserId, DrawInfo } from "../types/core";
+import type {
+  AppState,
+  Cycle,
+  CycleId,
+  UserId,
+  DrawInfo,
+} from "../types/core";
 
 // ========== LIMIT OTWARTYCH CYKLI PO OSTATNIM ZAMKNIĘTYM ==========
 const MAX_OPEN_AFTER_LAST_CLOSED = 10;
@@ -52,21 +58,47 @@ export type SmartJoinStatus =
       reason: "LIMIT_REACHED";
     };
 
+function parseCycleNumber(id: CycleId): number {
+  const m = /^C-(\d+)$/.exec(id as string);
+  return m ? parseInt(m[1], 10) : 0;
+}
+
+// Wybór "najlepszego" otwartego cyklu dla danego użytkownika:
+// - status "open"
+// - niepełny
+// - użytkownik nie jest jeszcze uczestnikiem
+// - preferujemy cykl z największą liczbą uczestników
+// - przy remisie - najniższy numer cyklu (najstarszy)
+function getBestJoinableCycle(
+  cycles: AppState["cycles"],
+  uid: UserId | undefined
+): Cycle | undefined {
+  const candidates = (cycles ?? []).filter((c) => {
+    if (c.status !== "open") return false;
+    if (c.participants.length >= c.maxParticipants) return false;
+
+    if (!uid) return true;
+
+    return !c.participants.some((p) => p.userId === uid);
+  });
+
+  if (candidates.length === 0) return undefined;
+
+  candidates.sort((a, b) => {
+    const diff = b.participants.length - a.participants.length;
+    if (diff !== 0) return diff;
+    return parseCycleNumber(a.id) - parseCycleNumber(b.id);
+  });
+
+  return candidates[0];
+}
+
 function computeSmartJoinStatus(state: AppState): SmartJoinStatus {
   const cycles = state.cycles ?? [];
   const uid = state.lastUserId; // może być undefined
 
-  // 1. Czy istnieje otwarty cykl, do którego użytkownik może dołączyć?
-  const joinable = cycles.find((c) => {
-    if (c.status !== "open") return false;
-    if (c.participants.length >= c.maxParticipants) return false;
-
-    // jeżeli użytkownik jeszcze nie ma ID, to i tak może dołączyć
-    if (!uid) return true;
-
-    // jeżeli ma ID - nie może być już uczestnikiem tego cyklu
-    return !c.participants.some((p) => p.userId === uid);
-  });
+  // 1. Najpierw sprawdzamy, czy user może dołączyć do już otwartego cyklu
+  const joinable = getBestJoinableCycle(cycles, uid);
 
   if (joinable) {
     return {
@@ -76,7 +108,7 @@ function computeSmartJoinStatus(state: AppState): SmartJoinStatus {
     };
   }
 
-  // 2. Jeżeli nie ma cyklu, do którego można dołączyć, sprawdzamy limit
+  // 2. Nie ma otwartego cyklu do dołączenia, sprawdzamy limit systemowy
   if (!canOpenAnotherCycle(cycles)) {
     return {
       kind: "BLOCKED",
@@ -365,13 +397,6 @@ export function useCycles() {
     const uid = getOrCreateUserId();
 
     persist((s) => {
-      if (!canOpenAnotherCycle(s.cycles)) {
-        console.warn(
-          "Nie można otworzyć/dołączyć do kolejnego cyklu - osiągnięto limit 10 otwartych cykli po ostatnim zamkniętym."
-        );
-        return s;
-      }
-
       const copy: AppState = {
         ...s,
         cycles: s.cycles.map((c) => ({
@@ -382,13 +407,8 @@ export function useCycles() {
 
       const now = Date.now();
 
-      // najpierw spróbuj dołączyć do istniejącego otwartego cyklu
-      let cur = copy.cycles.find(
-        (c) =>
-          c.status === "open" &&
-          !c.participants.some((p) => p.userId === uid) &&
-          c.participants.length < c.maxParticipants
-      );
+      // 1. Najpierw spróbuj dołączyć do najlepszego otwartego cyklu
+      let cur = getBestJoinableCycle(copy.cycles, uid);
 
       if (cur) {
         cur.participants.push({ userId: uid, joinedAt: now });
@@ -405,22 +425,24 @@ export function useCycles() {
         return copy;
       }
 
-      // jeśli nie ma odpowiedniego otwartego, tworzymy nowy cykl
+      // 2. Nie ma otwartego cyklu – sprawdzamy limit
+      if (!canOpenAnotherCycle(copy.cycles)) {
+        console.warn(
+          "Nie można otworzyć kolejnego cyklu – osiągnięto limit otwartych cykli."
+        );
+        return s;
+      }
+
+      // 3. Otwieramy nowy cykl
       const lastNum =
         copy.cycles.length > 0
-          ? Math.max(
-              ...copy.cycles.map((c) => {
-                const m = /^C-(\d+)$/.exec(c.id as string);
-                return m ? parseInt(m[1], 10) : 0;
-              })
-            )
+          ? Math.max(...copy.cycles.map((c) => parseCycleNumber(c.id)))
           : 0;
 
       const nextIdNum = lastNum + 1;
       const nextCycle = newCycleTemplate(nextIdNum);
 
       nextCycle.participants.push({ userId: uid, joinedAt: now });
-
       copy.cycles.push(nextCycle);
 
       return copy;

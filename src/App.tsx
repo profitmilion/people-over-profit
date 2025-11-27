@@ -8,14 +8,16 @@ import Pop33Demo from "./pages/Pop33Demo";
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        {/* Strona główna - landing POP33 DEMO */}
-        <Route path="/" element={<Pop33Landing />} />
+    <div className="app-bg bg-gradient-animate scanlines crt-noise">
+      <BrowserRouter>
+        <Routes>
+          {/* Strona główna - landing POP33 DEMO */}
+          <Route path="/" element={<Pop33Landing />} />
 
-        {/* Strona DEMO - Twój dotychczasowy widok Dev/Prod */}
-        <Route path="/demo" element={<Pop33Demo />} />
-      </Routes>
-    </BrowserRouter>
+          {/* Strona DEMO - Twój dotychczasowy widok Dev/Prod */}
+          <Route path="/demo" element={<Pop33Demo />} />
+        </Routes>
+      </BrowserRouter>
+    </div>
   );
 }

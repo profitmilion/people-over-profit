@@ -44,12 +44,12 @@ export default function Pop33Demo() {
           <section className="space-y-3">
             <div className="flex flex-col gap-1">
               <h2 className="text-lg font-semibold">
-                Panel użytkownika – wersja DEMO
+                This is where future millionaires are born
               </h2>
-              <p className="text-xs text-neutral-400">
-                To jest widok z perspektywy zwykłego uczestnika. Dane i losowania
-                są symulowane na testnecie – bez prawdziwych środków.
+              <p className="text-[11px] text-neutral-500">
+                This is a POP33  environment. All data and draws are simulated.
               </p>
+
             </div>
 
             <div className="rounded-2xl border border-neutral-800 bg-neutral-950/80 p-3 md:p-4">

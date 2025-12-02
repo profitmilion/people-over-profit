@@ -1,19 +1,19 @@
 // src/components/ProdView.tsx
 import { useMemo, useState, useEffect } from "react";
 import { useCycles } from "../hooks/useCycles";
-import PopLogoOrbit from "./PopLogoOrbit";
+
 
 const MAX_PARTICIPANTS = 100;
 const MAX_USER_CYCLES = 10;
 
-// Prosty formatter daty (jak w DevPanelu)
+// Simple date formatter (same as in DevPanel)
 function fmt(ts?: number) {
   if (!ts) return "—";
   const d = new Date(ts);
   return d.toLocaleString();
 }
 
-// Skracanie ID użytkownika dla czytelności
+// Shorten user ID for readability
 function shortenUserId(id: string, len = 4) {
   if (!id) return "";
   if (id.length <= len * 2) return id;
@@ -31,7 +31,7 @@ export default function ProdView() {
 
   const userId = useMemo(() => getOrCreateUserId(), [getOrCreateUserId]);
 
-  // lokalny zegar – odliczanie (jak w DevPanelu)
+  // local clock for countdowns (same idea as DevPanel)
   const [nowTick, setNowTick] = useState<number>(() => Date.now());
 
   useEffect(() => {
@@ -41,7 +41,7 @@ export default function ProdView() {
     return () => clearInterval(id);
   }, []);
 
-  // cykle, w których użytkownik ma los (wszystkie, także historyczne)
+  // cycles where the user has at least one ticket (including historical)
   const userCycles = useMemo(() => {
     return cycles.filter((c) =>
       c.participants.some((p) => p.userId === userId)
@@ -50,7 +50,7 @@ export default function ProdView() {
 
   const totalUserCycles = userCycles.length;
 
-  // LICZYMY TYLKO AKTYWNE CYKLE do limitu (czyli takie, które NIE są finished)
+  // ONLY ACTIVE cycles count toward the limit (status not "finished")
   const activeUserCycles = useMemo(
     () => userCycles.filter((c) => c.status !== "finished").length,
     [userCycles]
@@ -65,66 +65,66 @@ export default function ProdView() {
     (openCycle?.participants.length ?? 0) >=
     (openCycle?.maxParticipants ?? MAX_PARTICIPANTS);
 
-  // Sygnalizacja ze strony logiki globalnej (systemowy limit)
+  // Global system limit (from smartJoinStatus)
   const blockedBySystemLimit =
     smartJoinStatus.kind === "BLOCKED" &&
     smartJoinStatus.reason === "LIMIT_REACHED";
 
   const canJoinByStatus = smartJoinStatus.kind === "READY";
 
-  // Decyzja, czy przycisk powinien być aktywny
+  // Decide if the main button should be enabled
   const joinDisabled = hasReachedUserLimit || !canJoinByStatus;
 
-  // Tekst tooltipa dla przycisku
-  let joinTitle = "Weź udział w losowaniu";
+  // Tooltip text for the button
+  let joinTitle = "Join the draw";
   if (hasReachedUserLimit) {
-    joinTitle = `Osiągnąłeś limit ${MAX_USER_CYCLES} aktywnych cykli. Poczekaj na zakończenie części z nich.`;
+    joinTitle = `You reached the limit of ${MAX_USER_CYCLES} active cycles. Please wait until some of them finish.`;
   } else if (blockedBySystemLimit) {
     joinTitle =
-      "System osiągnął limit otwartych cykli. Poczekaj na kolejną rundę.";
+      "The system reached the limit of open cycles. Please wait for the next round.";
   } else if (!openCycle && smartJoinStatus.kind === "READY") {
-    joinTitle = "Dołączysz do nowego cyklu, gdy tylko zostanie otwarty.";
+    joinTitle = "You will join a new cycle as soon as it opens.";
   }
 
   // =========================
-  // KOLORY wg Twojej mapy:
-  // 0/10   -> zielony (start)
-  // 1–9/10 -> pomarańczowy (aktywny)
-  // 10/10  -> czerwony (limit użytkownika)
-  // LIMIT SYSTEMU -> czerwony (priorytet)
+  // COLORS map:
+  // 0/10   -> green (start)
+  // 1–9/10 -> orange (active)
+  // 10/10  -> red (user limit)
+  // SYSTEM LIMIT -> red (priority)
   // =========================
 
   let statusText = "";
   let statusLabel = "";
 
-  // domyślne kolory (gdyby coś było nieokreślone)
+  // default color if something is undefined
   let indicatorColor = "#6b7280"; // gray
 
   if (blockedBySystemLimit) {
-    // priorytet: systemowy limit
-    statusLabel = "Limit systemu";
+    // priority: system limit
+    statusLabel = "System limit";
     statusText =
-      "System osiągnął limit otwartych cykli. Poczekaj na kolejną rundę.";
-    indicatorColor = "#ef4444"; // czerwony
+      "The system reached the limit of open cycles. Please wait for the next round.";
+    indicatorColor = "#ef4444"; // red
   } else if (hasReachedUserLimit) {
-    // użytkownik 10/10
-    statusLabel = "Limit użytkownika";
-    statusText = `Masz już ${activeUserCycles}/${MAX_USER_CYCLES} aktywnych cykli. To maksymalny limit w tym demie.`;
-    indicatorColor = "#ef4444"; // czerwony
+    // user 10/10
+    statusLabel = "User limit";
+    statusText = `You have ${activeUserCycles}/${MAX_USER_CYCLES} active cycles. This is the maximum limit in this demo.`;
+    indicatorColor = "#ef4444"; // red
   } else if (activeUserCycles > 0) {
     // 1–9/10
-    statusLabel = "Aktywny";
-    statusText = `Masz ${activeUserCycles}/${MAX_USER_CYCLES} aktywnych cykli. Możesz dołączyć do kolejnych.`;
-    indicatorColor = "#f97316"; // pomarańczowy
+    statusLabel = "Active";
+    statusText = `You have ${activeUserCycles}/${MAX_USER_CYCLES} active cycles. You can still join new ones.`;
+    indicatorColor = "#f97316"; // orange
   } else {
     // 0/10
-    statusLabel = "Gotowe";
+    statusLabel = "Ready";
     statusText =
-      "Jeszcze nie bierzesz udziału w żadnym cyklu. Możesz dołączyć do pierwszego.";
-    indicatorColor = "#22c55e"; // zielony
+      "You are not in any cycle yet. You can join your first one.";
+    indicatorColor = "#22c55e"; // green
   }
 
-  // Przycisk ma ten sam kolor co status
+  // Button colors follow the status
   let buttonBg = indicatorColor;
   let buttonBorder = indicatorColor;
   let buttonText = "#000000";
@@ -147,27 +147,48 @@ export default function ProdView() {
 
   return (
     <div className="mx-auto max-w-3xl p-4 space-y-6">
-      {/* Nagłówek z logo POP33 */}
-      <header className="flex flex-col items-center justify-center gap-4 text-center">
-        <PopLogoOrbit />
+      {/* Header – simple, product-style, no fake logo */}
+      <header className="flex flex-col items-center justify-center gap-2 text-center">
+        <h1 className="text-2xl font-bold tracking-tight text-slate-50">
+          POP33 DEMO
+        </h1>
+        <p className="text-xs sm:text-sm text-neutral-400">
+          Daily draw simulator - up to {MAX_USER_CYCLES} active tickets per user.
+        </p>
 
-
-        <div className="text-xs sm:text-sm text-neutral-400 sm:text-right">
+        <div className="mt-2 text-xs sm:text-sm text-neutral-400">
           <div>
-            Twój ID użytkownika:{" "}
+            Your user ID:{" "}
             <span className="font-mono text-neutral-200">{userId}</span>
           </div>
           <div className="mt-1 text-[11px] text-neutral-500">
-            ID jest lokalne dla tego demo i zapisane tylko w Twojej
-            przeglądarce.
+            This ID is local to this demo and stored only in your browser.
           </div>
         </div>
       </header>
 
-      {/* AKTUALNY CYKL */}
+
+      {/* Subscription status / high-level info (DEMO placeholder) */}
+      <section className="rounded-2xl border border-neutral-800 p-4 space-y-2 bg-neutral-950/40">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-sky-300">
+          Subscription status
+        </h2>
+        <p className="text-sm text-neutral-100">
+          Your monthly subscription gives you priority access to the 1,000,000 prize pool.{" "}
+          Each ticket represents a verified on-chain opportunity available only to active subscribers.{" "}
+          You can hold up to{" "}
+          <span className="font-semibold">{MAX_USER_CYCLES}</span>{" "}
+          tickets. Each ticket unlocks a full set of{" "}
+          <span className="font-semibold">30 upcoming draws</span>, activated once its participant pool is complete.{" "}
+          The more tickets you hold, the more parallel draw sets you participate in - each with its own independent chance to win.
+        </p>
+
+      </section>
+
+      {/* CURRENT CYCLE */}
       <section className="rounded-2xl border border-neutral-800 p-4 space-y-4 bg-neutral-950/40">
         <div className="flex items-center justify-between gap-2">
-          <div className="text-lg font-semibold">Aktualny cykl</div>
+          <div className="text-lg font-semibold">Current open cycle</div>
           {openCycle && (
             <span className="text-[11px] px-2 py-0.5 rounded-full border border-neutral-700 text-neutral-300">
               ID: <span className="font-mono">{openCycle.id}</span>
@@ -177,112 +198,105 @@ export default function ProdView() {
 
         {openCycle ? (
           <div className="text-sm opacity-80">
-            Uczestników: {openCycle.participants.length}/
+            Participants: {openCycle.participants.length}/
             {openCycle.maxParticipants}
           </div>
         ) : (
-          <div className="text-sm opacity-80">Brak otwartego cyklu</div>
+          <div className="text-sm opacity-80">No open cycle</div>
         )}
 
-        {/* Inteligentny przycisk + status */}
-        <div className="mt-2 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        {/* Smart button + status */}
+        <div className="mt-2 flex flex-col items-center gap-4">
           <button
-            className="px-5 py-2.5 rounded-xl font-semibold text-sm border transition"
-            style={joinButtonStyle}
             onClick={smartJoin}
             disabled={joinDisabled}
             title={joinTitle}
+            style={{
+              ...joinButtonStyle,
+              width: "80px",
+              height: "80px",
+              borderRadius: "9999px",
+              padding: 0,
+            }}
+            className="flex items-center justify-center font-semibold text-sm border transition duration-200 text-black select-none"
           >
-            {canJoinByStatus && !hasReachedUserLimit
-              ? "Weź udział"
-              : "Niedostępne"}
+            POP IT
           </button>
 
-          <div className="flex flex-col gap-1 text-xs">
+
+          <div className="flex flex-col items-center gap-2 text-xs text-center">
             <span
               className="font-semibold uppercase tracking-wide text-[11px]"
               style={{ color: indicatorColor }}
             >
               {statusLabel}
             </span>
-            <span className="opacity-80">{statusText}</span>
 
-            {/* Debug – na czas developmentu */}
-            <span className="opacity-50 text-[10px] font-mono">
-              debug: kind={smartJoinStatus.kind}
-              {smartJoinStatus.kind === "READY"
-                ? ` mode=${smartJoinStatus.mode}`
-                : smartJoinStatus.kind === "BLOCKED"
-                  ? ` reason=${smartJoinStatus.reason}`
-                  : ""}{" "}
-              | active={activeUserCycles}/{MAX_USER_CYCLES}
+            <span className="opacity-80 max-w-xl">
+              {statusText}
             </span>
 
-            {/* Legenda kolorów */}
-            <div className="mt-4 rounded-xl border border-neutral-800 bg-neutral-900/60 p-3 text-[11px] text-neutral-300 space-y-2">
+            {/* Color legend – zachowana, ale bardziej kompaktowa i „produkcyjna” */}
+            <div className="mt-3 w-full max-w-md rounded-xl border border-neutral-800 bg-neutral-900/70 p-3 text-[11px] text-neutral-300 space-y-2">
               <p className="font-semibold text-neutral-200">
-                Legenda kolorów przycisku wejścia do cyklu
+                Button colors
               </p>
 
-              <div className="flex flex-col gap-1.5">
+              <div className="flex flex-col gap-1.5 text-left">
                 <div className="flex items-center gap-2">
                   <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
-                  <span>zielony: start, 0/10 cykli, jeszcze nie dołączyłeś</span>
+                  <span>green – start, 0/10 tickets, you have not joined yet</span>
                 </div>
 
                 <div className="flex items-center gap-2">
                   <span className="h-2.5 w-2.5 rounded-full bg-orange-500" />
-                  <span>pomarańczowy: aktywny udział, 1–9/10 cykli</span>
+                  <span>orange – active participation, 1–9/10 tickets</span>
                 </div>
 
                 <div className="flex items-center gap-2">
                   <span className="h-2.5 w-2.5 rounded-full bg-red-500" />
-                  <span>
-                    czerwony: limit systemu osiągnięty (10/10 lub brak miejsc)
-                  </span>
+                  <span>red – system limit reached (no room for new cycles)</span>
                 </div>
 
                 <div className="flex items-center gap-2">
                   <span className="h-2.5 w-2.5 rounded-full bg-neutral-500" />
-                  <span>
-                    szary: Twój limit 10/10 osiągnięty – przycisk jest
-                    wyłączony
-                  </span>
+                  <span>gray – your personal limit 10/10 reached, button is disabled</span>
                 </div>
               </div>
             </div>
           </div>
+
         </div>
 
-        {/* Informacja pomocnicza o bieżącym cyklu dla użytkownika */}
+        {/* Helper info about the current cycle for the user */}
         {alreadyInOpenCycle && (
           <div className="mt-2 text-xs text-emerald-400">
-            Masz już udział w aktualnym otwartym cyklu.
+            You already have an entry in the current open cycle.
           </div>
         )}
         {isOpenCycleFull && openCycle && (
           <div className="mt-1 text-xs text-amber-400">
-            Bieżący cykl jest pełny. System otworzy nowy cykl, gdy będzie to
-            możliwe.
+            The current cycle is full. The system will open a new cycle when
+            possible.
           </div>
         )}
       </section>
 
-      {/* TWOJE CYKLE – odliczanie + pełna historia zwycięzców */}
+      {/* YOUR CYCLES – countdowns + full winners history */}
       <section className="rounded-2xl border border-neutral-800 p-4 space-y-4">
-        <div className="text-lg font-semibold">Twoje cykle</div>
+        <div className="text-lg font-semibold">Your cycles</div>
 
         {activeUserCycles > 0 && (
           <div className="text-xs opacity-80">
-            Aktywne cykle: {activeUserCycles}/{MAX_USER_CYCLES}
+            Active cycles: {activeUserCycles}/{MAX_USER_CYCLES}
           </div>
         )}
 
         {hasReachedUserLimit && (
           <div className="text-xs text-amber-400">
-            Osiągnąłeś maksymalną liczbę aktywnych cykli w tym demie (
-            {MAX_USER_CYCLES}). Gdy część cykli zostanie zakończona, będziesz
-            mógł dołączać do kolejnych.
+            You reached the maximum number of active cycles in this demo (
+            {MAX_USER_CYCLES}). When some cycles finish, you will be able to
+            join new ones.
           </div>
         )}
 
@@ -295,7 +309,7 @@ export default function ProdView() {
               const hasDrawHistory = drawHistory.length > 0;
 
               const hasNextDraw =
-                c.nextDrawAt && c.nextDrawAt > now; // jak w DevPanelu
+                c.nextDrawAt && c.nextDrawAt > now; // same logic as DevPanel
               const nextLeft = hasNextDraw
                 ? Math.ceil(((c.nextDrawAt as number) - now) / 1000)
                 : 0;
@@ -308,43 +322,43 @@ export default function ProdView() {
                   key={c.id}
                   className="rounded-xl border border-neutral-700 p-3 space-y-2 bg-neutral-950/30"
                 >
-                  {/* podstawowe info o cyklu */}
+                  {/* Basic cycle info */}
                   <div className="font-mono text-sm">{c.id}</div>
                   <div className="text-xs opacity-80">
-                    Uczestników: {c.participants.length}/{c.maxParticipants}
+                    Participants: {c.participants.length}/{c.maxParticipants}
                   </div>
 
-                  {/* Status z rozróżnieniem „oczekiwanie na losowanie” */}
+                  {/* Status with distinction "waiting for next draw" */}
                   <div className="text-xs opacity-80">
                     Status:{" "}
                     {isOpen
-                      ? "Otwarty"
+                      ? "Open"
                       : hasNextDraw
-                        ? "Zamknięty - oczekiwanie na kolejne losowanie"
+                        ? "Closed - waiting for the next draw"
                         : isFinished && hasDrawHistory
-                          ? "Zakończony - losowania odbyły się"
+                          ? "Finished - draws completed"
                           : isFinished
-                            ? "Zakończony"
+                            ? "Finished"
                             : c.status}
                   </div>
 
-                  {/* Odliczanie do najbliższego losowania */}
+                  {/* Countdown to the next draw */}
                   {hasNextDraw && (
                     <div className="mt-1 text-xs opacity-80">
-                      Najbliższe losowanie: {fmt(c.nextDrawAt as number)}
+                      Next draw: {fmt(c.nextDrawAt as number)}
                       {nextLeft > 0 && (
                         <div className="opacity-70">
-                          pozostało ~{nextLeft}s
+                          approx. {nextLeft}s left
                         </div>
                       )}
                     </div>
                   )}
 
-                  {/* Pełna historia zwycięzców – jak w DevPanelu */}
+                  {/* Full winners history, like in DevPanel */}
                   {hasDrawHistory && (
                     <div className="mt-2 text-xs space-y-2">
                       <div className="opacity-80">
-                        Historia zwycięzców (wszystkie losowania w tym cyklu):
+                        Winners history (all draws in this cycle):
                       </div>
                       <div className="flex flex-col gap-2">
                         {drawHistory.map((d) => {
@@ -358,8 +372,7 @@ export default function ProdView() {
                               className="border border-neutral-800 rounded-xl p-2"
                             >
                               <div className="opacity-80">
-                                Losowanie #{d.drawIndex ?? "?"} (
-                                {fmt(d.drawnAt)})
+                                Draw #{d.drawIndex ?? "?"} ({fmt(d.drawnAt)})
                               </div>
                               <div className="flex flex-wrap gap-1 mt-1">
                                 {d.winners.map((w: string) => (
@@ -373,13 +386,13 @@ export default function ProdView() {
                                     }
                                   >
                                     {shortenUserId(w)}
-                                    {w === userId ? " (Ty)" : ""}
+                                    {w === userId ? " (You)" : ""}
                                   </span>
                                 ))}
                               </div>
                               {youWonHere && (
                                 <div className="mt-1 text-[11px] text-emerald-400">
-                                  W tym losowaniu jesteś zwycięzcą (DEMO)
+                                  You are a winner in this simulated draw Congratulations!
                                 </div>
                               )}
                             </div>
@@ -389,11 +402,11 @@ export default function ProdView() {
                     </div>
                   )}
 
-                  {/* Cykl zakończony, ale brak historii losowań */}
+                  {/* Finished cycle without draw history */}
                   {isFinished && !hasDrawHistory && !hasNextDraw && (
                     <div className="mt-2 text-xs opacity-60">
-                      Zakończony - brak zapisanych danych o losowaniu (starszy
-                      cykl lub dane DEMO).
+                      Finished - no stored draw data (older cycle or DEMO
+                      data).
                     </div>
                   )}
                 </div>
@@ -402,7 +415,7 @@ export default function ProdView() {
           </div>
         ) : (
           <div className="text-sm opacity-70">
-            Jeszcze nie dołączyłeś do żadnego cyklu.
+            You have not joined any cycle yet.
           </div>
         )}
       </section>

@@ -2,6 +2,7 @@
 
 import React from "react";
 import { useNavigate } from "react-router-dom";
+import Header from "../components/Header";
 
 
 export default function Pop33Landing() {
@@ -14,39 +15,8 @@ export default function Pop33Landing() {
         <div className="min-h-screen bg-slate-950 text-slate-50 flex flex-col">
 
             {/* NAVBAR */}
-            <header className="border-b border-slate-800 bg-slate-950/80 backdrop-blur">
-                <nav className="mx-auto max-w-5xl px-4 py-4 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                        <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-emerald-500 to-violet-500 flex items-center justify-center text-xs font-bold">
-                            POP
-                        </div>
-                        <div className="flex flex-col leading-tight">
-                            <span className="text-sm font-semibold tracking-wide">
-                                POP33 DEMO
-                            </span>
-                            <span className="text-[11px] text-slate-400">
-                                People Over Profit · testnet
-                            </span>
-                        </div>
-                    </div>
+            <Header />
 
-                    <div className="flex items-center gap-2">
-                        <button
-                            className="hidden sm:inline-flex items-center justify-center rounded-full border border-slate-700 px-4 py-1.5 text-xs font-medium text-slate-100 hover:bg-slate-900 transition"
-                            onClick={goToDemoDev}
-                        >
-                            Zobacz jak to działa
-                        </button>
-                        <button
-                            className="inline-flex items-center justify-center rounded-full bg-emerald-500 px-4 sm:px-5 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-slate-950 hover:bg-emerald-400 transition"
-                            onClick={goToDemoProd}
-                        >
-                            Wejdź do wersji DEMO
-                        </button>
-
-                    </div>
-                </nav>
-            </header>
 
             {/* MAIN */}
             <main className="flex-1">
@@ -82,20 +52,25 @@ export default function Pop33Landing() {
                             </p>
 
                             <div className="flex flex-wrap items-center gap-3 mb-4">
+                                {/* PUBLICZNY PRZYCISK – widoczny zawsze */}
                                 <button
                                     className="inline-flex items-center justify-center rounded-full bg-emerald-500 px-6 py-2.5 text-sm font-semibold text-slate-950 hover:bg-emerald-400 transition"
                                     onClick={goToDemoProd}
                                 >
                                     Wejdź do wersji DEMO
                                 </button>
-                                <button
-                                    className="inline-flex items-center justify-center rounded-full border border-slate-700 px-6 py-2.5 text-sm font-semibold text-slate-100 hover:bg-slate-900 transition"
-                                    onClick={goToDemoDev}
-                                >
-                                    Zobacz jak to działa
-                                </button>
 
+                                {/* DEV-ONLY – widoczny tylko w buildzie developerskim (npm run dev) */}
+                                {import.meta.env.DEV && (
+                                    <button
+                                        className="inline-flex items-center justify-center rounded-full border border-slate-700 px-6 py-2.5 text-sm font-semibold text-slate-100 hover:bg-slate-900 transition"
+                                        onClick={goToDemoDev}
+                                    >
+                                        Zobacz jak to działa (DEV)
+                                    </button>
+                                )}
                             </div>
+
 
                             <p className="text-[11px] text-slate-400">
                                 To środowisko testowe. Nie przyjmujemy realnych depozytów.

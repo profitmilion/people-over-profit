@@ -12,6 +12,7 @@
     "dev:host": "vite --host"
   },
   "dependencies": {
+    "@headlessui/react": "^2.2.9",
     "@tanstack/react-query": "^5.90.7",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",

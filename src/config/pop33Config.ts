@@ -16,7 +16,7 @@ export const DEMO_SETTINGS: Pop33Settings = {
   entryCost: 33,
   maxEntries: 10,
   initialPoints: 1000,
-  isOnchainEnabled: false,
+  isOnchainEnabled: true,
   networkName: "Sepolia testnet",
 };
 

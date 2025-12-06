@@ -1,70 +1,49 @@
-import { useCycles } from "../../store/cyclesStore";
-import { Card } from "../../components/Card";
-import { Button } from "../../components/Button";
+import React from "react";
+import { useCycles } from "../../hooks/useCycles";
 
-export function CyclesList() {
-  const {
-    cycles,
-    autoOpenNext,
-    setAutoOpenNext,
-    openNext,
-    openParallel,
-    joinAnyOpen,
-    drawWinner,
-  } = useCycles();
-
-  const last = cycles[cycles.length - 1];
-  const hasOpen = cycles.some((c) => c.status === "open");
+const CyclesList: React.FC = () => {
+  const { cycles, joinFIFO, openNextAndJoin } = useCycles();
 
   return (
-    <div className="flex flex-col gap-4">
-      {/* Pasek akcji globalnych */}
-      <Card>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex gap-2">
-            <Button onClick={() => openNext()}>Open next</Button>
-            <Button variant="ghost" onClick={() => openParallel()}>Open parallel</Button>
-            <Button variant="ghost" onClick={() => joinAnyOpen()}>Join 33 (demo)</Button>
-          </div>
-
-          {/* Przełącznik Auto open next */}
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={autoOpenNext}
-              onChange={(e) => setAutoOpenNext(e.target.checked)}
-            />
-            <span className="text-[var(--text-dim)]">Auto open next</span>
-          </label>
+    <div className="mt-4 space-y-2">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-[var(--text-main)]">Lista cykli (demo)</h2>
+        <div className="flex gap-2 text-xs">
+          <button
+            type="button"
+            onClick={() => joinFIFO()}
+            className="px-2 py-1 rounded border border-[var(--border-subtle)] hover:bg-[var(--bg-soft)]"
+          >
+            Dołącz do bieżącego
+          </button>
+          <button
+            type="button"
+            onClick={() => openNextAndJoin()}
+            className="px-2 py-1 rounded border border-[var(--border-subtle)] hover:bg-[var(--bg-soft)]"
+          >
+            Otwórz nowy + dołącz
+          </button>
         </div>
-      </Card>
+      </div>
 
-      {/* Lista cykli */}
-      {cycles.map((c) => (
-        <Card key={c.id}>
-          <div className="flex items-center justify-between">
-            <div className="font-semibold">{c.name ?? `Cykl #${c.id}`}</div>
-            <div className="text-sm text-[var(--text-dim)]">
-              Status: {c.status} • {c.participants}/{c.capacity} • Losowań: {c.draws}/30
+      <div className="border border-[var(--border-soft)] rounded-md divide-y divide-[var(--border-soft)] text-xs">
+        {cycles.length === 0 ? (
+          <div className="p-2 text-[var(--text-muted)]">Brak cykli w DEMO.</div>
+        ) : (
+          cycles.map((c) => (
+            <div key={c.id} className="p-2 flex justify-between items-center">
+              <div>
+                <div className="font-mono text-[var(--text-main)]">{c.id}</div>
+                <div className="text-[var(--text-dim)]">
+                  Status: {c.status} • Uczestników: {c.participants.length}
+                </div>
+              </div>
             </div>
-          </div>
-
-          {/* Akcje specyficzne dla cyklu */}
-          {c.status === "closed" && c.draws < 30 && (
-            <div className="mt-3">
-              <Button onClick={() => drawWinner(c.id)}>Losuj zwycięzcę</Button>
-            </div>
-          )}
-        </Card>
-      ))}
-
-      {/* Podpowiedź gdy nic nie jest otwarte */}
-      {!hasOpen && last?.status === "closed" && (
-        <div className="text-sm text-[var(--text-dim)]">
-          Brak otwartych cykli — kliknij „Open next”, aby rozpocząć nowy,
-          lub włącz „Auto open next”.
-        </div>
-      )}
+          ))
+        )}
+      </div>
     </div>
   );
-}
+};
+
+export default CyclesList;

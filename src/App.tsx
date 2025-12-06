@@ -7,6 +7,7 @@ import Pop33Landing from "./pages/Pop33Landing";
 import Pop33Demo from "./pages/Pop33Demo";
 
 export default function App() {
+  console.log("ENV FRONTEND:", import.meta.env);
   return (
     <div className="app-bg bg-gradient-animate scanlines crt-noise">
       <BrowserRouter>

@@ -5,6 +5,7 @@ import { useLocation } from "react-router-dom";
 import Header from "../components/Header";
 import ProdView from "../components/ProdView";
 import DevPanel from "../components/DevPanel";
+import WinnersArchive from "../components/WinnersArchive"; // <- DODANY IMPORT
 
 type ViewMode = "prod" | "dev";
 
@@ -47,13 +48,18 @@ export default function Pop33Demo() {
                 This is where future millionaires are born
               </h2>
               <p className="text-[11px] text-neutral-500">
-                This is a POP33  environment. All data and draws are simulated.
+                This is a POP33 environment. All data and draws are simulated.
               </p>
-
             </div>
 
+            {/* Główna karta DEMO */}
             <div className="rounded-2xl border border-neutral-800 bg-neutral-950/80 p-3 md:p-4">
               <ProdView />
+            </div>
+
+            {/* NOWA SEKCJA – ARCHIWUM CYKLI (DEMO) */}
+            <div className="mt-4">
+              <WinnersArchive />
             </div>
           </section>
         )}

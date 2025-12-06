@@ -1,5 +1,6 @@
 // src/components/ProdView.tsx
 import { useMemo, useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { useCycles } from "../hooks/useCycles";
 import { Disclosure } from "@headlessui/react";
 
@@ -42,16 +43,32 @@ export default function ProdView() {
 
   const totalUserCycles = userCycles.length;
 
-  // How many cycles we show in "Your cycles" panel
-  const MAX_VISIBLE_USER_CYCLES = 10;
+  // How many cycles we show in "Your cycles" panel (latest list)
+  const MAX_VISIBLE_USER_CYCLES = 11;
 
-  // Visible cycles in UI – max 10, newest at the top
+  // How many archived cycles we show in the archive accordion (under "Show older drawings")
+  const MAX_VISIBLE_ARCHIVED_CYCLES = 22;
+
+  // Visible cycles in UI – max 11, newest at the top
   const visibleUserCycles =
-    totalUserCycles <= MAX_VISIBLE_USER_CYCLES ? [...userCycles].reverse() : userCycles.slice(-MAX_VISIBLE_USER_CYCLES).reverse();
+    totalUserCycles <= MAX_VISIBLE_USER_CYCLES
+      ? [...userCycles].reverse()
+      : userCycles.slice(-MAX_VISIBLE_USER_CYCLES).reverse();
 
-  // Archived cycles – everything older than the last 10
+  // Archived cycles – everything older than the last 11 (rest of user cycles)
   const archivedUserCycles =
-    totalUserCycles > MAX_VISIBLE_USER_CYCLES ? userCycles.slice(0, totalUserCycles - MAX_VISIBLE_USER_CYCLES).reverse() : [];
+    totalUserCycles > MAX_VISIBLE_USER_CYCLES
+      ? userCycles.slice(0, totalUserCycles - MAX_VISIBLE_USER_CYCLES).reverse()
+      : [];
+
+  // Cycles we actually render inside the Archive accordion (max 22)
+  const archiveDisplayCycles =
+    archivedUserCycles.length > MAX_VISIBLE_ARCHIVED_CYCLES
+      ? archivedUserCycles.slice(0, MAX_VISIBLE_ARCHIVED_CYCLES)
+      : archivedUserCycles;
+
+  // Czy mamy więcej archiwalnych cykli niż pokazujemy w accordionie
+  const hasMoreArchivedThanDisplayed = archivedUserCycles.length > MAX_VISIBLE_ARCHIVED_CYCLES;
 
   // ONLY ACTIVE cycles count toward the limit (status not "finished")
   const activeUserCycles = useMemo(
@@ -280,7 +297,7 @@ export default function ProdView() {
               </div>
             )}
 
-            {/* Visible (latest) cycles – accordion per cycle */}
+            {/* Visible (latest) cycles – accordion per cycle, max 11 */}
             <div className="space-y-2">
               {visibleUserCycles.map((c, index) => {
                 const now = nowTick;
@@ -349,7 +366,7 @@ export default function ProdView() {
                         {/* DETAILS PANEL – winners history etc. */}
                         <Disclosure.Panel
                           className="border-t border-neutral-800 px-3 py-3 text-xs space-y-3"
-                          style={{ backgroundColor: "transparent", }}
+                          style={{ backgroundColor: "transparent" }}
                         >
                           {hasDrawHistory && (
                             <div className="space-y-2">
@@ -431,7 +448,7 @@ export default function ProdView() {
               })}
             </div>
 
-            {/* ARCHIVE SECTION – older cycles with winners */}
+            {/* ARCHIVE SECTION – older cycles with winners (max 22 shown) */}
             {archivedUserCycles.length > 0 && (
               <div className="mt-4 space-y-2">
                 <div className="text-xs text-neutral-400">
@@ -457,7 +474,7 @@ export default function ProdView() {
                       </Disclosure.Button>
 
                       <Disclosure.Panel className="mt-2 space-y-2 text-xs">
-                        {archivedUserCycles.map((c) => {
+                        {archiveDisplayCycles.map((c) => {
                           const drawHistory = (c as any).drawHistory || [];
                           const hasDrawHistory = Array.isArray(drawHistory) && drawHistory.length > 0;
                           const finalWinners = (c as any).winners || [];
@@ -524,6 +541,21 @@ export default function ProdView() {
                             </div>
                           );
                         })}
+
+                        {/* jeśli w archiwum jest więcej niż 22 cykle – link do pełnego archiwum */}
+                        {hasMoreArchivedThanDisplayed && (
+                          <div className="mt-2 text-[11px] text-neutral-300 text-center">
+                            Older cycles are available in the full POP33 archive.{" "}
+                            <Link
+                              to="/archive"
+                              className="inline-flex items-center gap-1 underline text-neutral-100 hover:text-white"
+                            >
+                              Open full archive
+                              <span aria-hidden>→</span>
+                            </Link>
+                          </div>
+                        )}
+
                       </Disclosure.Panel>
                     </>
                   )}
@@ -535,6 +567,7 @@ export default function ProdView() {
           <div className="text-sm opacity-70 text-center">You have not joined any cycle yet.</div>
         )}
       </section>
+
       {/* FOOTER – simple demo disclaimer */}
       <footer className="mt-6 text-[11px] text-center text-neutral-500">
         POP33 DEMO – simulation only, no real funds or prizes.

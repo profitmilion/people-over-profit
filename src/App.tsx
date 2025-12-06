@@ -1,5 +1,5 @@
 // src/App.tsx
-
+import { ArchivePage } from "./pages/ArchivePage";
 import React from "react";
 import "./App.css";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
@@ -17,6 +17,7 @@ export default function App() {
 
           {/* Strona DEMO - Twój dotychczasowy widok Dev/Prod */}
           <Route path="/demo" element={<Pop33Demo />} />
+          <Route path="/archive" element={<ArchivePage />} />
         </Routes>
       </BrowserRouter>
     </div>

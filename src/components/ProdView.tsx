@@ -189,12 +189,18 @@ export default function ProdView() {
       <section className="rounded-2xl border border-neutral-800 p-4 space-y-4 bg-neutral-950/40">
         <div className="flex flex-col items-center gap-1">
           <div className="text-lg font-semibold text-center">Current open cycle</div>
-          {openCycle && (
-            <span className="text-[11px] px-2 py-0.5 rounded-full border border-neutral-700 text-neutral-300">
-              ID: <span className="font-mono">{openCycle.id}</span>
+
+          <span
+            className="text-[11px] px-2 py-0.5 rounded-full border border-neutral-700 text-neutral-300"
+          >
+            ID:{" "}
+            <span className="font-mono">
+              {openCycle ? openCycle.id : "WAITING"}
             </span>
-          )}
+          </span>
         </div>
+
+
 
         {openCycle ? (
           <div className="text-sm opacity-80 text-center">
@@ -217,44 +223,71 @@ export default function ProdView() {
               borderRadius: "9999px",
               padding: 0,
             }}
-            className="flex items-center justify-center font-semibold text-sm border transition duration-200 text-black select-none"
+            className="flex items-center justify-center font-semibold text-sm border select-none
+             transition-transform duration-150 ease-out
+             active:translate-y-0.5 active:scale-95"
           >
             POP IT
           </button>
 
           <div className="flex flex-col items-center gap-2 text-xs text-center">
-            <span className="font-semibold uppercase tracking-wide text-[11px]" style={{ color: indicatorColor }}>
-              {statusLabel}
-            </span>
+
 
             <span className="opacity-80 max-w-xl">{statusText}</span>
 
-            {/* Color legend */}
-            <div className="mt-3 w-full max-w-md rounded-xl border border-neutral-800 bg-neutral-900/70 p-3 text-[11px] text-neutral-300 space-y-2">
-              <p className="font-semibold text-neutral-200">Button colors</p>
 
-              <div className="flex flex-col gap-1.5 text-left">
-                <div className="flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
-                  <span>green – start, 0/10 tickets, you have not joined yet</span>
-                </div>
+            {/* Button colors – collapsible info, less noise on mobile */}
+            <Disclosure>
+              {({ open }) => (
+                <div
+                  className="mt-3 w-full max-w-md rounded-xl border border-neutral-800 p-3 text-[11px] text-neutral-300"
+                  style={{ backgroundColor: "transparent" }}
+                >
+                  <Disclosure.Button
+                    className="w-full flex items-center justify-center gap-2"
+                    style={{ backgroundColor: "transparent", color: "#e5e7eb" }}
+                  >
 
-                <div className="flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-orange-500" />
-                  <span>orange – active participation, 1–9/10 tickets</span>
-                </div>
+                    <span className="font-semibold text-neutral-200">
+                      Button colors (info)
+                    </span>
+                    <span className="inline-flex items-center gap-1 text-[10px] text-neutral-300">
 
-                <div className="flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-red-500" />
-                  <span>red – system limit reached (no room for new cycles)</span>
-                </div>
+                      <span
+                        className={
+                          "ml-1 opacity-70 transition-transform duration-150 " +
+                          (open ? "rotate-180" : "")
+                        }
+                      >
+                        ▼
+                      </span>
+                    </span>
+                  </Disclosure.Button>
 
-                <div className="flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-neutral-500" />
-                  <span>gray – your personal limit 10/10 reached, button is disabled</span>
+                  {open && (
+                    <div className="mt-2 flex flex-col gap-1.5 text-left">
+                      <div className="flex items-center gap-2">
+                        <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                        <span>green - start, 0/10 tickets, you have not joined yet</span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <span className="h-2.5 w-2.5 rounded-full bg-orange-500" />
+                        <span>orange - active participation, 1–9/10 tickets</span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <span className="h-2.5 w-2.5 rounded-full bg-red-500" />
+                        <span>
+                          red - limit reached (10/10 active tickets or system limit)
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
-            </div>
+              )}
+            </Disclosure>
+
           </div>
         </div>
 
@@ -271,32 +304,14 @@ export default function ProdView() {
         )}
       </section>
 
-      {/* YOUR CYCLES – accordion + archive */}
+      {/* YOUR CYCLES – only the lists, no extra text duplication */}
       <section className="rounded-2xl border border-neutral-800 p-4 pb-10 space-y-4 bg-neutral-950/40">
         <div className="flex flex-col items-center gap-1">
           <div className="text-lg font-semibold text-center">Your cycles</div>
-
-          {activeUserCycles > 0 && (
-            <div className="text-xs opacity-80 text-center">
-              Active cycles: {activeUserCycles}/{MAX_USER_CYCLES}
-            </div>
-          )}
         </div>
 
         {totalUserCycles > 0 ? (
           <div className="space-y-3">
-            <div className="text-[11px] sm:text-xs text-neutral-400 text-center">
-              Below you can see all cycles where you had at least one ticket. Newer cycles are shown at the top.
-              Older ones are grouped in the archive section for full auditability.
-            </div>
-
-            {hasReachedUserLimit && (
-              <div className="text-xs text-amber-400 text-center">
-                You reached the maximum number of active cycles in this demo ({MAX_USER_CYCLES}). Once some cycles
-                finish, you will be able to join new ones.
-              </div>
-            )}
-
             {/* Visible (latest) cycles – accordion per cycle, max 11 */}
             <div className="space-y-2">
               {visibleUserCycles.map((c, index) => {
@@ -334,7 +349,7 @@ export default function ProdView() {
                       >
                         {/* MAIN HEADER OF CYCLE – clickable, dark background */}
                         <Disclosure.Button
-                          className="w-full px-3 py-2 sm:px-4 sm:py-3 flex items-center justify-between text-left hover:bg-neutral-900 transition-colors"
+                          className="w-full px-3 py-2 sm:px-4 sm:py-3 flex items-center justify-center hover:bg-neutral-900 transition-colors"
                           style={{ backgroundColor: "transparent", color: "#e5e7eb" }}
                         >
                           <div className="flex flex-col gap-0.5 text-left">
@@ -459,8 +474,8 @@ export default function ProdView() {
                   {({ open }) => (
                     <>
                       <Disclosure.Button
-                        className="w-full text-left text-xs sm:text-sm px-3 py-2 rounded-lg border border-neutral-800 hover:bg-neutral-900/80 transition-colors flex items-center justify-between"
-                        style={{ backgroundColor: "transparent" }}
+                        className="w-full text-xs sm:text-sm px-3 py-2 rounded-lg border border-neutral-800 hover:bg-neutral-900/80 transition-colors flex items-center justify-center gap-2"
+                        style={{ backgroundColor: "transparent", color: "#e5e7eb" }}
                       >
                         <span>Show older drawings (archive)</span>
                         <span
@@ -542,7 +557,6 @@ export default function ProdView() {
                           );
                         })}
 
-                        {/* jeśli w archiwum jest więcej niż 22 cykle – link do pełnego archiwum */}
                         {hasMoreArchivedThanDisplayed && (
                           <div className="mt-2 text-[11px] text-neutral-300 text-center">
                             Older cycles are available in the full POP33 archive.{" "}
@@ -555,7 +569,6 @@ export default function ProdView() {
                             </Link>
                           </div>
                         )}
-
                       </Disclosure.Panel>
                     </>
                   )}
@@ -567,6 +580,7 @@ export default function ProdView() {
           <div className="text-sm opacity-70 text-center">You have not joined any cycle yet.</div>
         )}
       </section>
+
 
       {/* FOOTER – simple demo disclaimer */}
       <footer className="mt-6 text-[11px] text-center text-neutral-500">

@@ -1,11 +1,11 @@
 // src/pages/Pop33Demo.tsx
-
 import React, { useMemo } from "react";
 import { useLocation } from "react-router-dom";
 import Header from "../components/Header";
 import ProdView from "../components/ProdView";
 import DevPanel from "../components/DevPanel";
-import WinnersArchive from "../components/WinnersArchive"; // <- DODANY IMPORT
+import WinnersArchive from "../components/WinnersArchive";
+import { SectionFrame } from "../components/SectionFrame";
 
 type ViewMode = "prod" | "dev";
 
@@ -33,34 +33,40 @@ export default function Pop33Demo() {
   return (
     <div className="min-h-screen bg-black text-white flex flex-col">
       {/* Wspólny nagłówek miniapp */}
-      <Header />
+
+      <SectionFrame className="mb-3">
+        <Header />
+      </SectionFrame>
 
       {/* Główna zawartość strony DEMO */}
       <main className="max-w-5xl mx-auto w-full px-4 py-4 md:py-6 flex-1">
         {view === "dev" ? (
           // TRYB DEV – widok techniczny (tylko /demo?view=dev)
-          <DevPanel />
+          <SectionFrame>
+            <DevPanel />
+          </SectionFrame>
         ) : (
           // TRYB PROD – zwykły widok demo dla użytkownika (/demo)
           <section className="space-y-3">
-            <div className="flex flex-col gap-1">
+            {/* Sekcja tytułowa */}
+            <SectionFrame className="flex flex-col gap-1">
               <h2 className="text-lg font-semibold">
                 This is where future millionaires are born
               </h2>
               <p className="text-[11px] text-neutral-500">
                 This is a POP33 environment. All data and draws are simulated.
               </p>
-            </div>
+            </SectionFrame>
 
             {/* Główna karta DEMO */}
-            <div className="rounded-2xl border border-neutral-800 bg-neutral-950/80 p-3 md:p-4">
+            <SectionFrame className="p-3 md:p-4">
               <ProdView />
-            </div>
+            </SectionFrame>
 
-            {/* NOWA SEKCJA – ARCHIWUM CYKLI (DEMO) */}
-            <div className="mt-4">
+            {/* Sekcja – ARCHIWUM CYKLI (DEMO) */}
+            <SectionFrame className="mt-4">
               <WinnersArchive />
-            </div>
+            </SectionFrame>
           </section>
         )}
       </main>

@@ -1,6 +1,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import Button from "../components/Button";
+import { SectionFrame } from "../components/SectionFrame";
 
 function SectionDots() {
     return (
@@ -22,13 +23,12 @@ function MiniDots() {
     );
 }
 
-
 const Pop33Landing: React.FC = () => {
     return (
-        <div className="min-h-screen bg-slate-950 text-slate-50">
-            <main className="mx-auto flex max-w-5xl flex-col gap-20 px-4 py-16 md:px-6 md:py-20">
+        <div className="min-h-screen bg-slate-950 text-slate-50 flex flex-col">
+            <main className="mx-auto flex max-w-5xl flex-col gap-20 px-4 py-16 md:px-6 md:py-20 flex-1">
                 {/* HERO – główne wejście do demo */}
-                <section className="grid gap-12 md:grid-cols-2 md:items-center">
+                <SectionFrame className="grid gap-12 md:grid-cols-2 md:items-center">
                     {/* Lewa kolumna */}
                     <div className="space-y-7">
                         <div className="inline-flex items-center gap-2 rounded-full bg-slate-900/80 px-4 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-300">
@@ -38,43 +38,41 @@ const Pop33Landing: React.FC = () => {
 
                         <div className="space-y-4">
                             <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl md:text-5xl">
-                                One simple lottery & crowdfunding flow
+                                One simple lottery &amp; crowdfunding flow
                             </h1>
 
-                            {/* kropki tylko jako akcent pod głównym tytułem */}
                             <SectionDots />
 
                             <p className="max-w-xl text-sm leading-relaxed text-slate-300">
-                                POP33 is a transparent model that anyone can understand.
-                                Instead of a complicated gambling experience, this demo shows
-                                one repeatable flow: enter, wait for the draw, see the result.
+                                POP33 is a transparent model built around one repeatable flow:
+                                join the round, wait for the daily draw, see the result. This
+                                demo shows how simple the mechanics are before we connect Base
+                                blockchain, Farcaster wallets and the full-scale PMN economy.
                             </p>
                             <MiniDots />
                         </div>
 
-                        {/* lekką przerwę robimy odstępem, nie kropkami */}
                         <div className="h-4" />
 
                         {/* Kluczowe liczby / USP */}
                         <div className="grid gap-4 sm:grid-cols-3">
                             <InfoTile
-                                label="Entry (future)"
-                                value="33 USDC"
-                                note="In the live version: a single, simple entry to each cycle."
+                                label="Entry levels (beta)"
+                                value="0.33 – 3.33 – 13.33 – 33 USDC"
+                                note="We start low and move toward 33 USDC only when the community is ready."
                             />
                             <MiniDots />
                             <InfoTile
-                                label="Rhythm"
+                                label="Draw rhythm"
                                 value="30 draws / month"
-                                note="Target: daily draws in one global structure."
+                                note="The vision: a simple daily draw in one global structure."
                             />
                             <MiniDots />
                             <InfoTile
-                                label="Transparency"
+                                label="Transparent archive"
                                 value="Visible winners"
-                                note="Results stay available in a public-style archive."
+                                note="Results stay available in a public-style archive inside the app."
                             />
-
                         </div>
 
                         {/* GŁÓWNE CTA – POP IT */}
@@ -85,7 +83,6 @@ const Pop33Landing: React.FC = () => {
                                 </Button>
                             </Link>
 
-                            {/* tutaj zamiast kropek dajemy po prostu oddech */}
                             <p className="max-w-xs text-center text-[11px] text-slate-500 md:text-left mt-1">
                                 This is a front-end demo only. No real funds are used here.
                                 The goal is to preview the user journey before we connect
@@ -95,7 +92,7 @@ const Pop33Landing: React.FC = () => {
                         </div>
                     </div>
 
-                    {/* Prawa kolumna – 3 kroki skrócone, BEZ NUMERKÓW */}
+                    {/* Prawa kolumna – 3 kroki skrócone */}
                     <div className="relative">
                         <div className="absolute inset-0 -translate-y-2 translate-x-2 rounded-3xl bg-gradient-to-br from-emerald-500/25 via-sky-500/15 to-orange-500/25 blur-2xl" />
                         <div className="relative rounded-3xl bg-slate-900/90 p-6 shadow-2xl sm:p-8">
@@ -103,95 +100,96 @@ const Pop33Landing: React.FC = () => {
                                 How this demo works
                             </p>
 
-                            {/* delikatny akcent pod nagłówkiem sekcji */}
                             <SectionDots />
 
                             <div className="mt-4 space-y-5">
                                 <StepRow
-                                    title="Enter the demo cycle"
-                                    description="The user joins the active cycle. In this version we simulate the entry – no wallet, no real USDC."
+                                    title="Enter the demo round"
+                                    description="In production you would buy a ticket on Base. Here we simply simulate joining the active round."
                                 />
                                 <MiniDots />
                                 <StepRow
-                                    title="Demo draw is triggered"
-                                    description="When the cycle logic is ready, a demo draw assigns winners to that cycle using deterministic rules."
+                                    title="Wait for the draw"
+                                    description="The round moves toward a draw. In the live version this will be fully handled by smart contracts."
                                 />
                                 <MiniDots />
                                 <StepRow
-                                    title="Results stay visible"
-                                    description="Closed demo cycles can be browsed in the winners view, so you can see how the structure behaves over time."
+                                    title="See results & archive"
+                                    description="Each closed round leaves a visible trace in the winners archive, so anyone can review how it behaved."
                                 />
-                                <MiniDots />
+                                
                             </div>
-
-
                         </div>
                     </div>
-                </section>
+                </SectionFrame>
 
-                {/* separator między HERO a kolejną sekcją */}
-
-
-                {/* SEKCJA POD HERO – 3 kroki opisane szerzej, BEZ NUMERKÓW */}
-                <section className="space-y-6 rounded-3xl bg-slate-900/60 px-4 py-6 md:px-6 md:py-8">
+                {/* GŁÓWNA SEKCJA MARKETINGOWA – wizja + korzyści */}
+                <SectionFrame className="space-y-6 px-4 py-6 md:px-6 md:py-8">
                     <div className="space-y-3">
                         <h2 className="text-xl font-semibold tracking-tight">
-                            A transparent model that everyone can follow
+                            Why POP33 can become a community-scale win model
                         </h2>
 
                         <SectionDots />
 
                         <p className="max-w-2xl text-sm leading-relaxed text-slate-300">
-                            POP33 is not about hiding mechanics behind complex dashboards.
-                            It is about a simple structure that can be explained in a few
-                            sentences and repeated every day in the same way.
+                            POP33 is not just a lottery. It is a social-economic model built
+                            on fairness, shared value and transparent mechanics. The full
+                            vision only activates if we reach a real community cap and all
+                            conditions are met – but the direction is clear from day one.
                         </p>
                     </div>
-                    <MiniDots />
-                    <div className="mt-3 grid gap-4 md:grid-cols-3">
-                        <StepCard
-                            title="Click POP IT"
-                            body="From the landing page you enter the demo cycle. This is what a real user would do in the live version."
-                        />
-                        <MiniDots />
-                        <StepCard
-                            title="Follow the cycle"
-                            body="The cycle advances through its stages until the draw happens. In production this will be fully on-chain."
-                        />
-                        <MiniDots />
-                        <StepCard
-                            title="Check the outcome"
-                            body="After closing a cycle, results stay accessible so you can understand how winners were distributed over time."
-                        />
-                    </div>
-                </section>
 
-                {/* separator przed sekcją zwycięzców */}
-                <SectionDots />
-
-                {/* TEASER ZWYCIĘZCÓW */}
-                <section className="space-y-3 rounded-3xl bg-slate-900/60 px-4 py-5 text-sm shadow-sm md:flex md:items-center md:justify-between md:space-y-0 md:px-6">
-                    <div className="max-w-xl space-y-2">
-                        <p className="text-sm font-semibold text-slate-100">
-                            See winners (demo)
+                    {/* Duża karta – wizja / warunkowe obietnice */}
+                    <div className="mt-2 rounded-2xl bg-slate-900/85 p-4 shadow-sm md:p-5 space-y-2">
+                        <p className="text-sm font-semibold text-slate-50">
+                            Vision: million-scale community economy
                         </p>
-
-                        <p className="text-[11px] leading-relaxed text-slate-300">
-                            This view lets you explore demo winners from previous cycles.
-                            In the real POP33 product, this section will present actual
-                            user wins and support community auditability.
+                        <p className="text-xs leading-relaxed text-slate-300">
+                            If POP33 reaches the required cap and all conditions are met, the
+                            full model may unlock: up to 1 000 000 USD monthly for winners,
+                            sponsored free tickets for observers, ecosystem rewards for
+                            long-term participants and a growing PMN Profit Milion economy.
+                            This is a vision, not a guarantee, and it depends entirely on
+                            real adoption.
                         </p>
                     </div>
-                    <div className="mt-3 md:mt-0">
-                        <Link
-                            to="/archive"
-                            className="inline-flex items-center justify-center rounded-full px-5 py-2 text-xs font-semibold text-slate-100 hover:bg-slate-800 no-underline"
-                        >
-                            See winners (demo)
+
+                    {/* 4 mniejsze karty – konkretne korzyści */}
+                    <div className="mt-4 grid gap-4 md:grid-cols-2">
+                        <StepCard
+                            title="Fair by design"
+                            body="POP33 removes typical gambling traps: no VIP tiers, no endless upgrades, no uncontrolled spending. Everyone in a round has the same simple chance."
+                        />
+                        <StepCard
+                            title="Free tickets for observers"
+                            body="A small portion of every paid ticket can fund free entries for people who watch from the side. They can still join, play and win – even with zero balance."
+                        />
+                        <StepCard
+                            title="HODL & DCA potential"
+                            body="Parts of the model are planned to support long-term DCA / HODL mechanics for loyal users. Exact rules and risks will be described in the Whitepaper and Manifest."
+                        />
+                        <StepCard
+                            title="Scaling with users"
+                            body="We start with very small entry levels and only move toward the final 33 USDC tier when the community size and on-chain activity make it realistic and safe."
+                        />
+                    </div>
+
+                    {/* DRUGIE CTA – mocniej wyeksponowane, z większym odstępem */}
+                    <div className="mt-10 mb-12 flex justify-center md:justify-start">
+                        <Link to="/demo">
+                            <Button variant="pop" type="button">
+                                POP IT - start demo
+                            </Button>
                         </Link>
                     </div>
-                </section>
+                </SectionFrame>
             </main>
+
+            {/* Mały footer na samym dole */}
+            <footer className="border-t border-slate-900 py-3 text-center text-[11px] text-slate-600">
+                Created by ProfitMilion
+            </footer>
         </div>
     );
 };

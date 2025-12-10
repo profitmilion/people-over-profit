@@ -1,9 +1,9 @@
 // src/utils/contract.ts
-// Minimalny szkielet na teraz — żeby importy w CycleActions/LiveDraw działały.
-// Podmienisz adres i ABI na prawdziwe, gdy będziemy łączyć kontrakt.
 
-export const POP33_ADDRESS = "0x0000000000000000000000000000000000000000";
+export const POP33_ADDRESS = "0x8Ada9bFA520fac6C3BF3e3790263ACdfdC1D1f3d"
+;
 
+// Tymczasowo możesz zostawić stare ABI – za chwilę je zaktualizujemy
 export const POP33_ABI = [
   {
     type: "function",

@@ -2,6 +2,7 @@
 import { useMemo, useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useCycles } from "../hooks/useCycles";
+import { usePop33Onchain } from "../hooks/usePop33Onchain";
 import { Disclosure } from "@headlessui/react";
 
 const MAX_PARTICIPANTS = 100;
@@ -25,6 +26,17 @@ export default function ProdView() {
   const { smartJoin, smartJoinStatus, cycles, getOrCreateUserId, openCycle } = useCycles();
 
   const userId = useMemo(() => getOrCreateUserId(), [getOrCreateUserId]);
+
+  const {
+    canUseOnchain,
+    triggerOnchainJoin,
+    isPending: isOnchainPending,
+    isConfirming: isOnchainConfirming,
+    isConfirmed: isOnchainConfirmed,
+    txHash,
+    onchainError,
+  } = usePop33Onchain();
+
 
   // local clock for countdowns (same idea as DevPanel)
   const [nowTick, setNowTick] = useState<number>(() => Date.now());
@@ -90,6 +102,9 @@ export default function ProdView() {
 
   // Decide if the main button should be enabled
   const joinDisabled = hasReachedUserLimit || !canJoinByStatus;
+
+  const joinDisabledFinal = joinDisabled || isOnchainPending;
+
 
   // Tooltip text for the button
   let joinTitle = "Join the draw";
@@ -213,8 +228,14 @@ export default function ProdView() {
         {/* Smart button + status */}
         <div className="mt-2 flex flex-col items-center gap-4">
           <button
-            onClick={smartJoin}
-            disabled={joinDisabled}
+            onClick={() => {
+              smartJoin();
+              if (canUseOnchain) {
+                triggerOnchainJoin();
+              }
+            }}
+            disabled={joinDisabledFinal}
+
             title={joinTitle}
             style={{
               ...joinButtonStyle,
@@ -234,6 +255,31 @@ export default function ProdView() {
 
 
             <span className="opacity-80 max-w-xl">{statusText}</span>
+
+
+
+            {(isOnchainPending || isOnchainConfirming) && txHash && (
+              <div className="mt-1 text-[11px] text-sky-300 max-w-xl break-all">
+                On-chain transaction in progress:{" "}
+                <span className="font-mono">{txHash}</span>
+              </div>
+            )}
+
+            {isOnchainConfirmed && txHash && (
+              <div className="mt-1 text-[11px] text-emerald-400 max-w-xl break-all">
+                On-chain transaction confirmed:{" "}
+                <span className="font-mono">{txHash}</span>
+              </div>
+            )}
+
+            {onchainError && (
+              <div className="mt-1 text-[11px] text-red-400 max-w-xl">
+                On-chain error:{" "}
+                <span className="break-all">
+                  {(onchainError as Error).message ?? String(onchainError)}
+                </span>
+              </div>
+            )}
 
 
             {/* Button colors – collapsible info, less noise on mobile */}

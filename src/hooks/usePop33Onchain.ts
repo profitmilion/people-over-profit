@@ -8,6 +8,8 @@ import {
 import { POP33_ADDRESS, POP33_ABI } from "../utils/contract";
 import { DEMO_SETTINGS } from "../config/pop33Config";
 
+// W DEMO trzymamy jeszcze logikę entry value na przyszłość,
+// ale kontrakt Pop33DemoV2 jest nonpayable, więc aktualnie NIE wysyłamy value.
 const ENTRY_VALUE_WEI_ENV = import.meta.env.VITE_POP33_ENTRY_VALUE_WEI as
   | string
   | undefined;
@@ -25,6 +27,8 @@ function parseEntryValueWei(): bigint {
   }
 }
 
+// Aktualnie nieużywane w wywołaniu (kontrakt nonpayable),
+// zostaje na przyszłość, gdy wprowadzimy prawdziwe wpłaty.
 const ENTRY_VALUE_WEI = parseEntryValueWei();
 
 export function usePop33Onchain() {
@@ -61,7 +65,8 @@ export function usePop33Onchain() {
       address: POP33_ADDRESS as `0x${string}`,
       abi: POP33_ABI,
       functionName: "openNextAndJoin",
-      value: ENTRY_VALUE_WEI,
+      // DEMO: kontrakt Pop33DemoV2 jest nonpayable – nie wysyłamy value
+      // value: ENTRY_VALUE_WEI,
     });
   };
 

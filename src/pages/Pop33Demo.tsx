@@ -1,4 +1,6 @@
 // src/pages/Pop33Demo.tsx
+import { usePop33Stats } from "../hooks/usePop33Stats";
+import { useAccount } from "wagmi";
 import React, { useMemo } from "react";
 import { useLocation } from "react-router-dom";
 import Header from "../components/Header";
@@ -29,6 +31,17 @@ function useViewMode(): ViewMode {
 
 export default function Pop33Demo() {
   const view = useViewMode();
+
+  const { address, isConnected } = useAccount();
+
+  const {
+    totalJoins,
+    totalJoinsLoading,
+    currentCycleId,
+    currentCycleIdLoading,
+    activeCyclesOnchain,
+    activeCyclesLoading,
+  } = usePop33Stats();
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col">
@@ -67,6 +80,36 @@ export default function Pop33Demo() {
             <SectionFrame className="mt-4">
               <WinnersArchive />
             </SectionFrame>
+            {/* NOWA SEKCJA – ON-CHAIN STATS */}
+            <SectionFrame className="mt-4 p-4">
+              <h2 className="text-lg font-semibold mb-2">
+                On-chain stats (Base Sepolia demo)
+              </h2>
+
+              <div className="text-sm space-y-1">
+                <p>
+                  Total on-chain joins:{" "}
+                  {totalJoinsLoading ? "Loading..." : totalJoins.toString()}
+                </p>
+
+                <p>
+                  Current cycle ID on-chain:{" "}
+                  {currentCycleIdLoading
+                    ? "Loading..."
+                    : `C-${currentCycleId.toString().padStart(4, "0")}`}
+                </p>
+
+                {isConnected && (
+                  <p>
+                    Your active cycles on-chain:{" "}
+                    {activeCyclesLoading
+                      ? "Loading..."
+                      : activeCyclesOnchain.toString()}
+                  </p>
+                )}
+              </div>
+            </SectionFrame>
+
           </section>
         )}
       </main>

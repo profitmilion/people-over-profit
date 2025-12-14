@@ -1,7 +1,7 @@
 // src/pages/Pop33Demo.tsx
 import { usePop33Stats } from "../hooks/usePop33Stats";
 import { useAccount } from "wagmi";
-import React, { useMemo } from "react";
+import { useMemo } from "react";
 import { useLocation } from "react-router-dom";
 import Header from "../components/Header";
 import ProdView from "../components/ProdView";
@@ -34,16 +34,10 @@ function useViewMode(): ViewMode {
 export default function Pop33Demo() {
   const view = useViewMode();
 
-  const { address, isConnected } = useAccount();
+  const { isConnected } = useAccount();
 
-  const {
-    totalJoins,
-    totalJoinsLoading,
-    currentCycleId,
-    currentCycleIdLoading,
-    activeCyclesOnchain,
-    activeCyclesLoading,
-  } = usePop33Stats();
+  const { activeCyclesOnchain, activeCyclesLoading } = usePop33Stats();
+
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col">

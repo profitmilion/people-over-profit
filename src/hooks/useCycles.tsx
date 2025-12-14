@@ -42,14 +42,14 @@ function canOpenAnotherCycle(cycles: AppState["cycles"]): boolean {
 
 export type SmartJoinStatus =
   | {
-      kind: "READY";
-      mode: "JOIN_OPEN" | "OPEN_NEW";
-      targetCycleId?: CycleId;
-    }
+    kind: "READY";
+    mode: "JOIN_OPEN" | "OPEN_NEW";
+    targetCycleId?: CycleId;
+  }
   | {
-      kind: "BLOCKED";
-      reason: "LIMIT_REACHED";
-    };
+    kind: "BLOCKED";
+    reason: "LIMIT_REACHED";
+  };
 
 // Wybór "najlepszego" otwartego cyklu dla danego użytkownika:
 // - status "open"
@@ -120,7 +120,14 @@ const DEFAULTS = {
 
 // DEMO: odstęp między kolejnymi losowaniami w jednym cyklu (ms)
 // Docelowo: 24 * 60 * 60 * 1000 (24h)
-const DEMO_DRAW_INTERVAL_MS = 10_000;
+const DEFAULT_DEMO_DRAW_INTERVAL_MS = 3 * 60 * 60 * 1000; // 3h
+
+const DEMO_DRAW_INTERVAL_MS = (() => {
+  const raw = (import.meta as any)?.env?.VITE_DEMO_DRAW_INTERVAL_MS;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 10_000 ? n : DEFAULT_DEMO_DRAW_INTERVAL_MS;
+})();
+
 
 // DEMO: maksymalna liczba auto-losowań w jednym cyklu
 const MAX_AUTO_DRAWS_PER_CYCLE = 3;
@@ -151,43 +158,43 @@ function ensureInitialState(): AppState {
 
   const cycles: Cycle[] = Array.isArray(raw?.cycles)
     ? raw.cycles.map((c: any, idx: number) => {
-        const cycle: Cycle = {
-          id: c.id ?? (`C-${String(idx + 1).padStart(4, "0")}` as CycleId),
-          status: c.status ?? "open",
-          participants: Array.isArray(c.participants) ? c.participants : [],
-          maxParticipants:
-            typeof c.maxParticipants === "number"
-              ? c.maxParticipants
-              : DEFAULTS.MAX_PARTICIPANTS,
-          maxWinners:
-            typeof c.maxWinners === "number"
-              ? c.maxWinners
-              : DEFAULTS.MAX_WINNERS,
-          openedAt: typeof c.openedAt === "number" ? c.openedAt : Date.now(),
-          closedAt: typeof c.closedAt === "number" ? c.closedAt : undefined,
-          draw: c.draw,
-          drawHistory: Array.isArray(c.drawHistory) ? c.drawHistory : [],
-          drawCount: typeof c.drawCount === "number" ? c.drawCount : 0,
-          nextDrawAt: typeof c.nextDrawAt === "number" ? c.nextDrawAt : undefined,
-        };
+      const cycle: Cycle = {
+        id: c.id ?? (`C-${String(idx + 1).padStart(4, "0")}` as CycleId),
+        status: c.status ?? "open",
+        participants: Array.isArray(c.participants) ? c.participants : [],
+        maxParticipants:
+          typeof c.maxParticipants === "number"
+            ? c.maxParticipants
+            : DEFAULTS.MAX_PARTICIPANTS,
+        maxWinners:
+          typeof c.maxWinners === "number"
+            ? c.maxWinners
+            : DEFAULTS.MAX_WINNERS,
+        openedAt: typeof c.openedAt === "number" ? c.openedAt : Date.now(),
+        closedAt: typeof c.closedAt === "number" ? c.closedAt : undefined,
+        draw: c.draw,
+        drawHistory: Array.isArray(c.drawHistory) ? c.drawHistory : [],
+        drawCount: typeof c.drawCount === "number" ? c.drawCount : 0,
+        nextDrawAt: typeof c.nextDrawAt === "number" ? c.nextDrawAt : undefined,
+      };
 
-        // jeżeli nie było drawHistory, a było draw, dodajemy do historii
-        if (
-          (!cycle.drawHistory || cycle.drawHistory.length === 0) &&
-          cycle.draw
-        ) {
-          cycle.drawHistory = [cycle.draw];
-        }
+      // jeżeli nie było drawHistory, a było draw, dodajemy do historii
+      if (
+        (!cycle.drawHistory || cycle.drawHistory.length === 0) &&
+        cycle.draw
+      ) {
+        cycle.drawHistory = [cycle.draw];
+      }
 
-        // drawCount wyrównujemy z historią, jeśli jest
-        if (cycle.drawHistory && cycle.drawHistory.length > 0) {
-          cycle.drawCount = cycle.drawHistory.length;
-        } else {
-          cycle.drawCount = cycle.drawCount ?? 0;
-        }
+      // drawCount wyrównujemy z historią, jeśli jest
+      if (cycle.drawHistory && cycle.drawHistory.length > 0) {
+        cycle.drawCount = cycle.drawHistory.length;
+      } else {
+        cycle.drawCount = cycle.drawCount ?? 0;
+      }
 
-        return cycle;
-      })
+      return cycle;
+    })
     : [];
 
   const state: AppState = {
@@ -319,10 +326,11 @@ export function useCycles() {
 
   const cycles = state.cycles;
 
-  const openCycle = useMemo(
-    () => cycles.find((c) => c.status === "open"),
-    [cycles]
-  );
+  const openCycle = useMemo(() => {
+    const uid = state.lastUserId;
+    // Cykl, do którego system wpuści usera przy kliknięciu "POP IT"
+    return getBestJoinableCycle(cycles, uid) ?? cycles.find((c) => c.status === "open");
+  }, [cycles, state.lastUserId]);
 
   const lastCycleNumber = useMemo(() => {
     const last = cycles.length ? cycles[cycles.length - 1] : undefined;
@@ -334,10 +342,10 @@ export function useCycles() {
 
   const makeId = () =>
     typeof crypto !== "undefined" &&
-    typeof (crypto as any).randomUUID === "function"
+      typeof (crypto as any).randomUUID === "function"
       ? (crypto as any).randomUUID()
       : Math.random().toString(36).slice(2) +
-        Math.random().toString(36).slice(2);
+      Math.random().toString(36).slice(2);
 
   const getOrCreateUserId = useCallback((): UserId => {
     if (state.lastUserId) return state.lastUserId;
@@ -418,11 +426,10 @@ export function useCycles() {
 
       // 2) Nie ma otwartego cyklu – sprawdzamy limit
       if (!canOpenAnotherCycle(copy.cycles)) {
-        console.warn(
-          "Nie można otworzyć kolejnego cyklu – osiągnięto limit otwartych cykli."
-        );
-        return s;
+        console.warn("Nie można otworzyć kolejnego cyklu – osiągnięto limit otwartych cykli.");
+        return copy;
       }
+
 
       // 3) Otwieramy nowy cykl (open) i dołączamy
       const lastNum =

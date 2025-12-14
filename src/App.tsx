@@ -10,7 +10,7 @@ export default function App() {
   console.log("ENV FRONTEND:", import.meta.env);
   return (
     <div className="app-bg bg-gradient-animate crt-noise">
-      <BrowserRouter>q
+      <BrowserRouter>
         <Routes>
           {/* Strona główna - landing POP33 DEMO */}
           <Route path="/" element={<Pop33Landing />} />

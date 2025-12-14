@@ -8,6 +8,8 @@ import ProdView from "../components/ProdView";
 import DevPanel from "../components/DevPanel";
 import WinnersArchive from "../components/WinnersArchive";
 import { SectionFrame } from "../components/SectionFrame";
+import { ConnectButton } from "../components/ConnectButton";
+
 
 type ViewMode = "prod" | "dev";
 
@@ -62,14 +64,23 @@ export default function Pop33Demo() {
           // TRYB PROD – zwykły widok demo dla użytkownika (/demo)
           <section className="space-y-3">
             {/* Sekcja tytułowa */}
-            <SectionFrame className="flex flex-col gap-1">
+            {/* Sekcja tytułowa */}
+            <SectionFrame className="flex flex-col items-center text-center gap-2">
               <h2 className="text-lg font-semibold">
                 This is where future millionaires are born
               </h2>
-              <p className="text-[11px] text-neutral-500">
+
+              <div className="flex items-center justify-center">
+                <ConnectButton />
+              </div>
+
+              <p className="text-[11px] text-neutral-500 max-w-xl">
                 This is a POP33 environment. All data and draws are simulated.
               </p>
             </SectionFrame>
+
+
+
 
             {/* Główna karta DEMO */}
             <SectionFrame className="p-3 md:p-4">
@@ -82,33 +93,39 @@ export default function Pop33Demo() {
             </SectionFrame>
             {/* NOWA SEKCJA – ON-CHAIN STATS */}
             <SectionFrame className="mt-4 p-4">
-              <h2 className="text-lg font-semibold mb-2">
-                On-chain stats (Base Sepolia demo)
-              </h2>
+              <h2 className="text-lg font-semibold mb-2">On-chain status</h2>
 
               <div className="text-sm space-y-1">
                 <p>
-                  Total on-chain joins:{" "}
-                  {totalJoinsLoading ? "Loading..." : totalJoins.toString()}
+                  Wallet:{" "}
+                  {isConnected ? (
+                    <span className="text-emerald-300">Connected</span>
+                  ) : (
+                    <span className="text-neutral-400">Not connected</span>
+                  )}
                 </p>
 
                 <p>
-                  Current cycle ID on-chain:{" "}
-                  {currentCycleIdLoading
-                    ? "Loading..."
-                    : `C-${currentCycleId.toString().padStart(4, "0")}`}
+                  Your on-chain entry:{" "}
+                  {isConnected ? (
+                    activeCyclesLoading ? (
+                      "Loading..."
+                    ) : activeCyclesOnchain > 0n ? (
+                      <span className="text-emerald-300">Active</span>
+                    ) : (
+                      <span className="text-neutral-400">None</span>
+                    )
+                  ) : (
+                    <span className="text-neutral-400">Connect wallet to check</span>
+                  )}
                 </p>
 
-                {isConnected && (
-                  <p>
-                    Your active cycles on-chain:{" "}
-                    {activeCyclesLoading
-                      ? "Loading..."
-                      : activeCyclesOnchain.toString()}
-                  </p>
-                )}
+                <p className="text-[11px] text-neutral-500">
+                  Advanced details are available in dev view.
+                </p>
               </div>
             </SectionFrame>
+
 
           </section>
         )}

@@ -1,9 +1,11 @@
 // src/components/ProdView.tsx
+import { usePop33Stats } from "../hooks/usePop33Stats";
 import { useMemo, useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useCycles } from "../hooks/useCycles";
 import { usePop33Onchain } from "../hooks/usePop33Onchain";
 import { Disclosure } from "@headlessui/react";
+
 
 const MAX_PARTICIPANTS = 100;
 const MAX_USER_CYCLES = 10;
@@ -22,6 +24,18 @@ function shortenUserId(id: string, len = 4) {
   return id.slice(0, len) + "…" + id.slice(-len);
 }
 
+function shortenHash(hash?: string, len = 6) {
+  if (!hash) return "";
+  if (hash.length <= len * 2) return hash;
+  return hash.slice(0, len) + "…" + hash.slice(-len);
+}
+
+function getBaseSepoliaTxUrl(hash?: string) {
+  if (!hash) return "";
+  return `https://sepolia.basescan.org/tx/${hash}`;
+}
+
+
 export default function ProdView() {
   const { smartJoin, smartJoinStatus, cycles, getOrCreateUserId, openCycle } = useCycles();
 
@@ -37,6 +51,7 @@ export default function ProdView() {
     onchainError,
   } = usePop33Onchain();
 
+  const { refetchStats } = usePop33Stats();
 
   // local clock for countdowns (same idea as DevPanel)
   const [nowTick, setNowTick] = useState<number>(() => Date.now());
@@ -47,6 +62,12 @@ export default function ProdView() {
     }, 1000);
     return () => clearInterval(id);
   }, []);
+
+  useEffect(() => {
+    if (!isOnchainConfirmed) return;
+    refetchStats();
+  }, [isOnchainConfirmed, refetchStats]);
+
 
   // cycles where the user has at least one ticket (including historical)
   const userCycles = useMemo(() => {
@@ -103,7 +124,8 @@ export default function ProdView() {
   // Decide if the main button should be enabled
   const joinDisabled = hasReachedUserLimit || !canJoinByStatus;
 
-  const joinDisabledFinal = joinDisabled || isOnchainPending;
+  const joinDisabledFinal = joinDisabled || isOnchainPending || isOnchainConfirming;
+
 
 
   // Tooltip text for the button
@@ -176,15 +198,7 @@ export default function ProdView() {
           Daily draw simulator - up to {MAX_USER_CYCLES} active tickets per user.
         </p>
 
-        <div className="mt-2 text-xs sm:text-sm text-neutral-400">
-          <div>
-            Your user ID:{" "}
-            <span className="font-mono text-neutral-200">{userId}</span>
-          </div>
-          <div className="mt-1 text-[11px] text-neutral-500">
-            This ID is local to this demo and stored only in your browser.
-          </div>
-        </div>
+
       </header>
 
       {/* Subscription status / high-level info (DEMO placeholder) */}
@@ -230,10 +244,12 @@ export default function ProdView() {
           <button
             onClick={() => {
               smartJoin();
-              if (canUseOnchain) {
+
+              if (!joinDisabledFinal && canUseOnchain) {
                 triggerOnchainJoin();
               }
             }}
+
             disabled={joinDisabledFinal}
 
             title={joinTitle}
@@ -261,16 +277,41 @@ export default function ProdView() {
             {(isOnchainPending || isOnchainConfirming) && txHash && (
               <div className="mt-1 text-[11px] text-sky-300 max-w-xl break-all">
                 On-chain transaction in progress:{" "}
-                <span className="font-mono">{txHash}</span>
+                <a
+                  href={getBaseSepoliaTxUrl(txHash)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-mono underline text-sky-200 hover:text-sky-100"
+
+                  title={txHash}
+                >
+                  {shortenHash(txHash)}
+                </a>
+
               </div>
             )}
 
             {isOnchainConfirmed && txHash && (
-              <div className="mt-1 text-[11px] text-emerald-400 max-w-xl break-all">
-                On-chain transaction confirmed:{" "}
-                <span className="font-mono">{txHash}</span>
+              <div className="mt-2 flex items-center gap-3 text-[11px] text-emerald-400">
+                <span className="font-semibold uppercase tracking-wide">
+                  Confirmed
+                </span>
+
+                <a
+                  href={getBaseSepoliaTxUrl(txHash)}
+                  target="_blank"
+                  rel="noreferrer"
+                  title={txHash}
+                  style={{ color: "#6eade7ff" }}
+                  className="px-2 py-1 rounded-md border border-emerald-500/40 hover:border-emerald-400 transition-colors text-[11px] font-semibold no-underline"
+
+
+                >
+                  View on BaseScan
+                </a>
               </div>
             )}
+
 
             {onchainError && (
               <div className="mt-1 text-[11px] text-red-400 max-w-xl">

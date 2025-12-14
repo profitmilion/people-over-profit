@@ -1,41 +1,41 @@
 // src/utils/cycles.ts
-import type { Cycle } from "../types/core";
-
+import type { Cycle, UserId } from "../types/core";
 
 // Limity wersji demo (OFFLINE)
-const MAX_WINNERS = 3;
+const MAX_DRAWS_PER_CYCLE = 3;
 
 /**
- * Funkcja sprawdza, czy można jeszcze przeprowadzić losowanie
- * w danym cyklu.
- * - Cykl musi być zamknięty ("closed")
- * - Nie może mieć już wylosowanych 3 zwycięzców
- * - Musi mieć przynajmniej jednego uczestnika, który jeszcze nie wygrał
+ * Czy można wykonać kolejne losowanie w cyklu:
+ * - cykl musi być w fazie losowań ("drawing")
+ * - nie może przekroczyć limitu losowań w cyklu
+ * - musi istnieć przynajmniej jeden uczestnik, który jeszcze nie wygrał
  */
 export function canDraw(c: Cycle): boolean {
-  // W nowym modelu nie mamy już statusu "closed" – używamy "finished"
-  if (c.status !== "finished") return false;
+  if (!c) return false;
 
-  // Rzutujemy na any, żeby obsłużyć zarówno stare, jak i nowe struktury draw/winners
-  const anyCycle: any = c;
+  // Losowania wykonujemy tylko w fazie "drawing"
+  if (c.status !== "drawing") return false;
 
-  // Liczba losowań – próbujemy najpierw z draw.count, potem z ewentualnego starego pola draws
-  const drawsCount: number =
-    typeof anyCycle.draw?.count === "number"
-      ? anyCycle.draw.count
-      : typeof anyCycle.draws === "number"
-        ? anyCycle.draws
-        : 0;
+  const participants = Array.isArray(c.participants) ? c.participants : [];
+  if (participants.length === 0) return false;
 
-  // Lista zwycięzców – najpierw z draw.winners, potem z ewentualnego starego pola winners
-  const winners: any[] = Array.isArray(anyCycle.draw?.winners)
-    ? anyCycle.draw.winners
-    : Array.isArray(anyCycle.winners)
-      ? anyCycle.winners
-      : [];
+  // Liczba wykonanych losowań – źródło prawdy to drawHistory
+  const history = Array.isArray(c.drawHistory) ? c.drawHistory : [];
+  const drawsCount = history.length;
 
-  if (drawsCount >= MAX_WINNERS) return false;
-  if (c.participants.length <= winners.length) return false;
+  if (drawsCount >= MAX_DRAWS_PER_CYCLE) return false;
+
+  // Zbieramy wszystkich, którzy już wygrali w tym cyklu (po całej historii)
+  const alreadyWon = new Set<UserId>();
+  for (const d of history) {
+    if (Array.isArray(d?.winners)) {
+      for (const w of d.winners) alreadyWon.add(w);
+    }
+  }
+
+  // Czy jest jeszcze ktoś, kto może wygrać?
+  const hasCandidate = participants.some((p) => !alreadyWon.has(p.userId));
+  if (!hasCandidate) return false;
 
   return true;
 }

@@ -2,41 +2,34 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { loadState, saveState } from "../utils/storage";
 import { shuffle } from "../utils/rand";
-import type {
-  AppState,
-  Cycle,
-  CycleId,
-  UserId,
-  DrawInfo,
-} from "../types/core";
+import type { AppState, Cycle, CycleId, UserId, DrawInfo } from "../types/core";
 
 // ========== LIMIT OTWARTYCH CYKLI PO OSTATNIM ZAMKNIĘTYM ==========
 const MAX_OPEN_AFTER_LAST_CLOSED = 10;
 
+function parseCycleNumber(id: CycleId): number {
+  const m = /^C-(\d+)$/.exec(id as string);
+  return m ? parseInt(m[1], 10) : 0;
+}
+
 function countOpenAfterLastClosed(cycles: AppState["cycles"]): number {
   if (!cycles || cycles.length === 0) return 0;
 
-  const sorted = [...cycles].sort((a, b) => {
-    const aMatch = /^C-(\d+)$/.exec(a.id as string);
-    const bMatch = /^C-(\d+)$/.exec(b.id as string);
+  const sorted = [...cycles].sort(
+    (a, b) => parseCycleNumber(a.id) - parseCycleNumber(b.id)
+  );
 
-    const aNum = aMatch ? parseInt(aMatch[1], 10) : 0;
-    const bNum = bMatch ? parseInt(bMatch[1], 10) : 0;
+  let lastFinishedIndex = -1;
 
-    return aNum - bNum;
-  });
-
-  let lastClosedIndex = -1;
-
-  // szukamy OSTATNIEGO cyklu, który NIE jest "open"
+  // Szukamy OSTATNIEGO cyklu, który jest finalnie zamknięty ("finished")
   for (let i = sorted.length - 1; i >= 0; i--) {
-    if (sorted[i].status !== "open") {
-      lastClosedIndex = i;
+    if (sorted[i].status === "finished") {
+      lastFinishedIndex = i;
       break;
     }
   }
 
-  const sliceStart = lastClosedIndex === -1 ? 0 : lastClosedIndex + 1;
+  const sliceStart = lastFinishedIndex === -1 ? 0 : lastFinishedIndex + 1;
 
   return sorted.slice(sliceStart).filter((c) => c.status === "open").length;
 }
@@ -57,11 +50,6 @@ export type SmartJoinStatus =
       kind: "BLOCKED";
       reason: "LIMIT_REACHED";
     };
-
-function parseCycleNumber(id: CycleId): number {
-  const m = /^C-(\d+)$/.exec(id as string);
-  return m ? parseInt(m[1], 10) : 0;
-}
 
 // Wybór "najlepszego" otwartego cyklu dla danego użytkownika:
 // - status "open"
@@ -97,7 +85,7 @@ function computeSmartJoinStatus(state: AppState): SmartJoinStatus {
   const cycles = state.cycles ?? [];
   const uid = state.lastUserId; // może być undefined
 
-  // 1. Najpierw sprawdzamy, czy user może dołączyć do już otwartego cyklu
+  // 1) Najpierw sprawdzamy, czy user może dołączyć do już otwartego cyklu
   const joinable = getBestJoinableCycle(cycles, uid);
 
   if (joinable) {
@@ -108,7 +96,7 @@ function computeSmartJoinStatus(state: AppState): SmartJoinStatus {
     };
   }
 
-  // 2. Nie ma otwartego cyklu do dołączenia, sprawdzamy limit systemowy
+  // 2) Nie ma otwartego cyklu do dołączenia, sprawdzamy limit systemowy
   if (!canOpenAnotherCycle(cycles)) {
     return {
       kind: "BLOCKED",
@@ -116,7 +104,7 @@ function computeSmartJoinStatus(state: AppState): SmartJoinStatus {
     };
   }
 
-  // 3. Możemy otworzyć nowy cykl i do niego dołączyć
+  // 3) Możemy otworzyć nowy cykl i do niego dołączyć
   return {
     kind: "READY",
     mode: "OPEN_NEW",
@@ -127,7 +115,7 @@ function computeSmartJoinStatus(state: AppState): SmartJoinStatus {
 
 const DEFAULTS = {
   MAX_PARTICIPANTS: 100,
-  MAX_WINNERS: 1,
+  MAX_WINNERS: 1, // 1 zwycięzca na jedno losowanie
 };
 
 // DEMO: odstęp między kolejnymi losowaniami w jednym cyklu (ms)
@@ -148,7 +136,7 @@ function newCycleTemplate(idNum: number): Cycle {
     maxParticipants: DEFAULTS.MAX_PARTICIPANTS,
     maxWinners: DEFAULTS.MAX_WINNERS,
     openedAt: Date.now(),
-    closedAt: undefined,
+    closedAt: undefined, // ustawiamy dopiero po zakończeniu całego procesu losowań
     draw: undefined,
     drawHistory: [],
     drawCount: 0,
@@ -175,13 +163,12 @@ function ensureInitialState(): AppState {
             typeof c.maxWinners === "number"
               ? c.maxWinners
               : DEFAULTS.MAX_WINNERS,
-          openedAt:
-            typeof c.openedAt === "number" ? c.openedAt : Date.now(),
-          closedAt: c.closedAt,
+          openedAt: typeof c.openedAt === "number" ? c.openedAt : Date.now(),
+          closedAt: typeof c.closedAt === "number" ? c.closedAt : undefined,
           draw: c.draw,
           drawHistory: Array.isArray(c.drawHistory) ? c.drawHistory : [],
           drawCount: typeof c.drawCount === "number" ? c.drawCount : 0,
-          nextDrawAt: c.nextDrawAt,
+          nextDrawAt: typeof c.nextDrawAt === "number" ? c.nextDrawAt : undefined,
         };
 
         // jeżeli nie było drawHistory, a było draw, dodajemy do historii
@@ -225,13 +212,18 @@ function performDraw(cycle: Cycle, seed?: number) {
     return;
   }
 
+  // Losujemy tylko w fazie "drawing"
+  if (cycle.status !== "drawing") {
+    cycle.nextDrawAt = undefined;
+    return;
+  }
+
   // użytkownicy, którzy już wygrali w tym cyklu
   const alreadyWon = new Set<UserId>();
   if (Array.isArray(cycle.drawHistory)) {
     for (const d of cycle.drawHistory) {
-      for (const w of d.winners) {
-        alreadyWon.add(w);
-      }
+      if (!d || !Array.isArray(d.winners)) continue;
+      for (const w of d.winners) alreadyWon.add(w);
     }
   }
 
@@ -241,7 +233,10 @@ function performDraw(cycle: Cycle, seed?: number) {
   );
 
   if (candidateParticipants.length === 0) {
+    // nikt już nie może wygrać -> kończymy proces
     cycle.nextDrawAt = undefined;
+    cycle.status = "finished";
+    if (!cycle.closedAt) cycle.closedAt = Date.now();
     return;
   }
 
@@ -282,15 +277,16 @@ function performDraw(cycle: Cycle, seed?: number) {
   cycle.drawHistory = [...prevHistory, draw];
   cycle.drawCount = cycle.drawHistory.length;
 
-  // cykl uznajemy za zakończony z punktu widzenia losowania
-  cycle.status = "finished";
-
   const remainingCandidates = candidateParticipants.length - winners.length;
 
+  // Kontynuacja albo finalizacja serii losowań
   if (drawIndex < MAX_AUTO_DRAWS_PER_CYCLE && remainingCandidates > 0) {
+    cycle.status = "drawing";
     cycle.nextDrawAt = now + DEMO_DRAW_INTERVAL_MS;
   } else {
     cycle.nextDrawAt = undefined;
+    cycle.status = "finished";
+    if (!cycle.closedAt) cycle.closedAt = now;
   }
 }
 
@@ -299,29 +295,27 @@ function performDraw(cycle: Cycle, seed?: number) {
 export function useCycles() {
   const [state, setState] = useState<AppState>(() => ensureInitialState());
 
-  const persist = useCallback(
-    (updater: (s: AppState) => AppState | void) => {
-      setState((prev: AppState) => {
-        const draft: AppState = {
-          ...prev,
-          cycles: prev.cycles.map((c) => ({
-            ...c,
-            participants: c.participants.slice(),
-          })),
-        };
+  const persist = useCallback((updater: (s: AppState) => AppState | void) => {
+    setState((prev: AppState) => {
+      const draft: AppState = {
+        ...prev,
+        cycles: prev.cycles.map((c) => ({
+          ...c,
+          participants: c.participants.slice(),
+          drawHistory: Array.isArray(c.drawHistory) ? c.drawHistory.slice() : [],
+        })),
+      };
 
-        const maybeNext = updater(draft);
-        const next = (maybeNext ?? draft) as AppState;
+      const maybeNext = updater(draft);
+      const next = (maybeNext ?? draft) as AppState;
 
-        if (next !== prev) {
-          saveState(next);
-        }
+      if (next !== prev) {
+        saveState(next);
+      }
 
-        return next;
-      });
-    },
-    []
-  );
+      return next;
+    });
+  }, []);
 
   const cycles = state.cycles;
 
@@ -336,11 +330,7 @@ export function useCycles() {
     return Number.isFinite(parsed) ? parsed : 1;
   }, [cycles]);
 
-  // Nowy: status inteligentnego join, dla UI (przycisk, ikonka, sygnalizacja)
-  const smartJoinStatus = useMemo(
-    () => computeSmartJoinStatus(state),
-    [state]
-  );
+  const smartJoinStatus = useMemo(() => computeSmartJoinStatus(state), [state]);
 
   const makeId = () =>
     typeof crypto !== "undefined" &&
@@ -356,7 +346,7 @@ export function useCycles() {
     return uid;
   }, [state.lastUserId, persist]);
 
-  // PROD: dołączenie do najstarszego otwartego cyklu (pozostawiamy dla kompatybilności)
+  // PROD/DEMO: dołączenie do najstarszego otwartego cyklu (zostawione dla kompatybilności)
   const joinFIFO = useCallback(() => {
     const uid = getOrCreateUserId();
     persist((s) => {
@@ -365,6 +355,7 @@ export function useCycles() {
         cycles: s.cycles.map((c) => ({
           ...c,
           participants: c.participants.slice(),
+          drawHistory: Array.isArray(c.drawHistory) ? c.drawHistory.slice() : [],
         })),
       };
 
@@ -378,10 +369,10 @@ export function useCycles() {
 
       cur.participants.push({ userId: uid, joinedAt: Date.now() });
 
+      // Po zapełnieniu puli -> start fazy losowań
       if (cur.participants.length >= cur.maxParticipants) {
         const now = Date.now();
-        cur.status = "finished";
-        if (!cur.closedAt) cur.closedAt = now;
+        cur.status = "drawing";
 
         if (!cur.nextDrawAt && (cur.drawCount ?? 0) === 0) {
           cur.nextDrawAt = now + DEMO_DRAW_INTERVAL_MS;
@@ -392,7 +383,7 @@ export function useCycles() {
     });
   }, [getOrCreateUserId, persist]);
 
-  // PROD: otwórz kolejny cykl i dołącz (to będzie nasz „inteligentny join”)
+  // Inteligentny join: dołącz do najlepszego open; jeśli brak -> otwórz nowy
   const openNextAndJoin = useCallback(() => {
     const uid = getOrCreateUserId();
 
@@ -402,20 +393,20 @@ export function useCycles() {
         cycles: s.cycles.map((c) => ({
           ...c,
           participants: c.participants.slice(),
+          drawHistory: Array.isArray(c.drawHistory) ? c.drawHistory.slice() : [],
         })),
       };
 
       const now = Date.now();
 
-      // 1. Najpierw spróbuj dołączyć do najlepszego otwartego cyklu
+      // 1) Najpierw spróbuj dołączyć do najlepszego otwartego cyklu
       let cur = getBestJoinableCycle(copy.cycles, uid);
 
       if (cur) {
         cur.participants.push({ userId: uid, joinedAt: now });
 
         if (cur.participants.length >= cur.maxParticipants) {
-          cur.status = "finished";
-          if (!cur.closedAt) cur.closedAt = now;
+          cur.status = "drawing";
 
           if (!cur.nextDrawAt && (cur.drawCount ?? 0) === 0) {
             cur.nextDrawAt = now + DEMO_DRAW_INTERVAL_MS;
@@ -425,7 +416,7 @@ export function useCycles() {
         return copy;
       }
 
-      // 2. Nie ma otwartego cyklu – sprawdzamy limit
+      // 2) Nie ma otwartego cyklu – sprawdzamy limit
       if (!canOpenAnotherCycle(copy.cycles)) {
         console.warn(
           "Nie można otworzyć kolejnego cyklu – osiągnięto limit otwartych cykli."
@@ -433,7 +424,7 @@ export function useCycles() {
         return s;
       }
 
-      // 3. Otwieramy nowy cykl
+      // 3) Otwieramy nowy cykl (open) i dołączamy
       const lastNum =
         copy.cycles.length > 0
           ? Math.max(...copy.cycles.map((c) => parseCycleNumber(c.id)))
@@ -458,6 +449,9 @@ export function useCycles() {
           cycles: s.cycles.map((c) => ({
             ...c,
             participants: c.participants.slice(),
+            drawHistory: Array.isArray(c.drawHistory)
+              ? c.drawHistory.slice()
+              : [],
           })),
         };
 
@@ -483,8 +477,7 @@ export function useCycles() {
 
         if (cur.participants.length >= cur.maxParticipants) {
           const now = Date.now();
-          cur.status = "finished";
-          if (!cur.closedAt) cur.closedAt = now;
+          cur.status = "drawing";
 
           if (!cur.nextDrawAt && (cur.drawCount ?? 0) === 0) {
             cur.nextDrawAt = now + DEMO_DRAW_INTERVAL_MS;
@@ -517,6 +510,7 @@ export function useCycles() {
           cycles: prev.cycles.map((c) => ({
             ...c,
             participants: c.participants.slice(),
+            drawHistory: Array.isArray(c.drawHistory) ? c.drawHistory.slice() : [],
           })),
         };
 
@@ -524,6 +518,13 @@ export function useCycles() {
 
         for (const c of copy.cycles) {
           if (!c.nextDrawAt) continue;
+
+          // losujemy tylko w cyklu w fazie "drawing"
+          if (c.status !== "drawing") {
+            c.nextDrawAt = undefined;
+            changed = true;
+            continue;
+          }
 
           if (c.participants.length === 0) {
             c.nextDrawAt = undefined;
@@ -549,7 +550,7 @@ export function useCycles() {
     return () => clearInterval(id);
   }, []);
 
-  // RĘCZNE LOSOWANIE Z DEV PANELU
+  // RĘCZNE LOSOWANIE Z DEV PANELU (tylko dla "drawing")
   const runDraw = useCallback(
     (seed?: number) => {
       persist((s) => {
@@ -558,26 +559,26 @@ export function useCycles() {
           cycles: s.cycles.map((c) => ({
             ...c,
             participants: c.participants.slice(),
+            drawHistory: Array.isArray(c.drawHistory) ? c.drawHistory.slice() : [],
           })),
         };
 
-        // 1. najpierw losujemy w bieżącym OTWARTYM cyklu z uczestnikami
         let target =
           copy.cycles.find(
-            (c) => c.status === "open" && c.participants.length > 0
+            (c) => c.status === "drawing" && c.participants.length > 0
           ) ?? null;
 
-        // 2. jeśli brak otwartego z uczestnikami, bierzemy ostatni cykl z uczestnikami
         if (!target) {
           target =
             [...copy.cycles]
               .reverse()
-              .find((c) => c.participants.length > 0) ?? null;
+              .find((c) => c.status === "drawing" && c.participants.length > 0) ??
+            null;
         }
 
         if (!target) {
           console.warn(
-            "runDraw: brak cyklu z uczestnikami, nie ma czego losować"
+            "runDraw: brak cyklu w statusie 'drawing' z uczestnikami – nie ma czego losować"
           );
           return s;
         }

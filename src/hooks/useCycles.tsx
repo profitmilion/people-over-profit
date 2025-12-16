@@ -118,7 +118,7 @@ const DEFAULTS = {
   MAX_WINNERS: 1, // 1 zwycięzca na jedno losowanie
 };
 
-// DEMO: odstęp między kolejnymi losowaniami w jednym cyklu (ms)
+
 // Docelowo: 24 * 60 * 60 * 1000 (24h)
 const DEFAULT_DEMO_DRAW_INTERVAL_MS = 3 * 60 * 60 * 1000; // 3h
 
@@ -127,6 +127,16 @@ const DEMO_DRAW_INTERVAL_MS = (() => {
   const n = Number(raw);
   return Number.isFinite(n) && n >= 10_000 ? n : DEFAULT_DEMO_DRAW_INTERVAL_MS;
 })();
+
+// DEMO: opóźnienie pierwszego losowania po zamknięciu puli (ms)
+const DEFAULT_DEMO_FIRST_DRAW_DELAY_MS = 2 * 60 * 1000; // 2m (zmień na 60_000 jeśli ma być 1m)
+
+const DEMO_FIRST_DRAW_DELAY_MS = (() => {
+  const raw = (import.meta as any)?.env?.VITE_DEMO_FIRST_DRAW_DELAY_MS;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 1_000 ? n : DEFAULT_DEMO_FIRST_DRAW_DELAY_MS;
+})();
+
 
 
 // DEMO: maksymalna liczba auto-losowań w jednym cyklu
@@ -383,7 +393,8 @@ export function useCycles() {
         cur.status = "drawing";
 
         if (!cur.nextDrawAt && (cur.drawCount ?? 0) === 0) {
-          cur.nextDrawAt = now + DEMO_DRAW_INTERVAL_MS;
+          cur.nextDrawAt = now + DEMO_FIRST_DRAW_DELAY_MS;
+
         }
       }
 
@@ -417,7 +428,8 @@ export function useCycles() {
           cur.status = "drawing";
 
           if (!cur.nextDrawAt && (cur.drawCount ?? 0) === 0) {
-            cur.nextDrawAt = now + DEMO_DRAW_INTERVAL_MS;
+            cur.nextDrawAt = now + DEMO_FIRST_DRAW_DELAY_MS;
+
           }
         }
 
@@ -487,7 +499,8 @@ export function useCycles() {
           cur.status = "drawing";
 
           if (!cur.nextDrawAt && (cur.drawCount ?? 0) === 0) {
-            cur.nextDrawAt = now + DEMO_DRAW_INTERVAL_MS;
+            cur.nextDrawAt = now + DEMO_FIRST_DRAW_DELAY_MS;
+
           }
         }
 

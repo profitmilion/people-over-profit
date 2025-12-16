@@ -487,7 +487,8 @@ export default function ProdView() {
                                       <div className="opacity-80">
                                         Draw #{d.drawIndex ?? "?"} ({fmt(d.drawnAt)})
                                       </div>
-                                      <div className="flex flex-wrap gap-1 mt-1">
+                                      <div className="flex flex-wrap justify-center gap-1">
+
                                         {d.winners.map((w: string) => (
                                           <span
                                             key={w}
@@ -518,7 +519,7 @@ export default function ProdView() {
                           {!hasDrawHistory && hasFinalWinners && (
                             <div className="space-y-2">
                               <div className="opacity-80">Cycle winners (final result):</div>
-                              <div className="flex flex-wrap gap-1">
+                              <div className="flex flex-wrap justify-center gap-1">
                                 {finalWinners.map((w: string) => (
                                   <span
                                     key={w}
@@ -609,7 +610,8 @@ export default function ProdView() {
                                         <div className="opacity-80">
                                           Draw #{d.drawIndex ?? "?"} ({fmt(d.drawnAt)})
                                         </div>
-                                        <div className="flex flex-wrap gap-1 mt-1">
+                                        <div className="flex flex-wrap justify-center gap-1">
+
                                           {d.winners.map((w: string) => (
                                             <span
                                               key={w}
@@ -628,7 +630,7 @@ export default function ProdView() {
                               {!hasDrawHistory && hasFinalWinners && (
                                 <div className="mt-1 space-y-1">
                                   <div className="opacity-80">Cycle winners:</div>
-                                  <div className="flex flex-wrap gap-1">
+                                  <div className="flex flex-wrap justify-center gap-1">
                                     {finalWinners.map((w: string) => (
                                       <span
                                         key={w}

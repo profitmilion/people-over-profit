@@ -58,7 +58,7 @@ export default function Pop33Demo() {
           // TRYB PROD – zwykły widok demo dla użytkownika (/demo)
           <section className="space-y-3">
             {/* Sekcja tytułowa */}
-            {/* Sekcja tytułowa */}
+
             <SectionFrame className="flex flex-col items-center text-center gap-2">
               <h2 className="text-lg font-semibold">
                 This is where future millionaires are born
@@ -73,18 +73,6 @@ export default function Pop33Demo() {
               </p>
             </SectionFrame>
 
-
-
-
-            {/* Główna karta DEMO */}
-            <SectionFrame className="p-3 md:p-4">
-              <ProdView />
-            </SectionFrame>
-
-            {/* Sekcja – ARCHIWUM CYKLI (DEMO) */}
-            <SectionFrame className="mt-4">
-              <WinnersArchive />
-            </SectionFrame>
             {/* NOWA SEKCJA – ON-CHAIN STATS */}
             <SectionFrame className="mt-4 p-4">
               <h2 className="text-lg font-semibold mb-2">On-chain status</h2>
@@ -119,6 +107,18 @@ export default function Pop33Demo() {
                 </p>
               </div>
             </SectionFrame>
+
+
+            {/* Główna karta DEMO */}
+            <SectionFrame className="p-3 md:p-4">
+              <ProdView />
+            </SectionFrame>
+
+            {/* Sekcja – ARCHIWUM CYKLI (DEMO) */}
+            <SectionFrame className="mt-4">
+              <WinnersArchive />
+            </SectionFrame>
+
 
 
           </section>

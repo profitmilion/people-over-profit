@@ -120,13 +120,16 @@ const DEFAULTS = {
 
 
 // Docelowo: 24 * 60 * 60 * 1000 (24h)
-const DEFAULT_DEMO_DRAW_INTERVAL_MS = 3 * 60 * 60 * 1000; // 3h
+const DEFAULT_DEMO_DRAW_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24h
+
 
 const DEMO_DRAW_INTERVAL_MS = (() => {
   const raw = (import.meta as any)?.env?.VITE_DEMO_DRAW_INTERVAL_MS;
   const n = Number(raw);
   return Number.isFinite(n) && n >= 10_000 ? n : DEFAULT_DEMO_DRAW_INTERVAL_MS;
 })();
+
+
 
 // DEMO: opóźnienie pierwszego losowania po zamknięciu puli (ms)
 const DEFAULT_DEMO_FIRST_DRAW_DELAY_MS = 2 * 60 * 1000; // 2m (zmień na 60_000 jeśli ma być 1m)
@@ -139,8 +142,15 @@ const DEMO_FIRST_DRAW_DELAY_MS = (() => {
 
 
 
-// DEMO: maksymalna liczba auto-losowań w jednym cyklu
-const MAX_AUTO_DRAWS_PER_CYCLE = 3;
+// Demo: maksymalna liczba autolosowań w jednym cyklu (domyślnie 30)
+const DEFAULT_MAX_AUTO_DRAWS_PER_CYCLE = 30;
+
+const MAX_AUTO_DRAWS_PER_CYCLE = (() => {
+  const raw = (import.meta as any)?.env?.VITE_DEMO_MAX_AUTO_DRAWS_PER_CYCLE;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 1 ? n : DEFAULT_MAX_AUTO_DRAWS_PER_CYCLE;
+})();
+
 
 // ========== POMOCNICZE TWORZENIE CYKLU ==========
 

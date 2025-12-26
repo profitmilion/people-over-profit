@@ -63,13 +63,15 @@ export default function Pop33Demo() {
               <h2 className="text-lg font-semibold">
                 This is where future millionaires are born
               </h2>
-
+              <h3 className="text-lg font-semibold">
+                Testnet · No real funds · For testing purposes only
+              </h3>
               <div className="flex items-center justify-center">
                 <ConnectButton />
               </div>
 
               <p className="text-[11px] text-neutral-500 max-w-xl">
-                This is a POP33 environment. All data and draws are simulated.
+                This is the POP33 Base Sepolia testnet. On-chain data and actions.
               </p>
             </SectionFrame>
 
@@ -102,9 +104,7 @@ export default function Pop33Demo() {
                   )}
                 </p>
 
-                <p className="text-[11px] text-neutral-500">
-                  Advanced details are available in dev view.
-                </p>
+
               </div>
             </SectionFrame>
 

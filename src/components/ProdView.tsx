@@ -17,6 +17,25 @@ function fmt(ts?: number) {
   return d.toLocaleString();
 }
 
+function formatSecondsHuman(totalSec: number) {
+  const s = Math.max(0, Math.floor(totalSec));
+
+  const sec = s % 60;
+  const totalMin = Math.floor(s / 60);
+  const min = totalMin % 60;
+  const totalHr = Math.floor(totalMin / 60);
+  const hr = totalHr % 24;
+  const days = Math.floor(totalHr / 24);
+
+  const pad = (n: number) => String(n).padStart(2, "0");
+
+  if (days > 0) return `${days}d ${pad(hr)}:${pad(min)}:${pad(sec)}`;
+  if (totalHr > 0) return `${pad(totalHr)}:${pad(min)}:${pad(sec)}`;
+  if (totalMin > 0) return `${pad(min)}:${pad(sec)}`;
+  return `0:${pad(sec)}`;
+}
+
+
 // Shorten user ID for readability
 function shortenUserId(id: string, len = 4) {
   if (!id) return "";
@@ -202,17 +221,52 @@ export default function ProdView() {
       </header>
 
       {/* Subscription status / high-level info (DEMO placeholder) */}
-      <section className="rounded-2xl border border-neutral-800 p-4 space-y-2 bg-neutral-950/40">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-sky-300">Subscription status</h2>
-        <p className="text-sm text-neutral-100">
-          Your monthly subscription gives you priority access to the 1,000,000 prize pool. Each ticket represents a
-          verified on-chain opportunity available only to active subscribers. You can hold up to{" "}
-          <span className="font-semibold">{MAX_USER_CYCLES}</span> tickets. Each ticket unlocks a full set of{" "}
-          <span className="font-semibold">30 upcoming draws</span>, activated once its participant pool is complete.
-          The more tickets you hold, the more parallel draw sets you participate in - each with its own independent
-          chance to win.
-        </p>
+      <section className="rounded-2xl border border-neutral-800 p-4 bg-neutral-950/40 space-y-3">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-sky-300">
+          Subscription status
+        </h2>
+
+        <div className="text-sm text-neutral-100 space-y-2 leading-relaxed">
+          <p>
+            Your monthly subscription gives you priority access to the{" "}
+            <span className="font-semibold">1,000,000 prize pool</span>.
+          </p>
+
+          <p>
+            Each ticket represents a{" "}
+            <span className="font-semibold">verified on-chain entry</span>, available
+            only to active subscribers.
+          </p>
+
+          <ul className="list-disc list-inside space-y-1 text-neutral-200">
+            <li>
+              You can hold up to{" "}
+              <span className="font-semibold text-neutral-100">
+                {MAX_USER_CYCLES}
+              </span>{" "}
+              tickets
+            </li>
+            <li>
+              <span className="font-semibold text-neutral-100">
+                Daily draw (every ~24h)
+              </span>
+            </li>
+            <li>
+              One ticket ={" "}
+              <span className="font-semibold text-neutral-100">
+                up to 30 draws
+              </span>
+            </li>
+          </ul>
+
+          <p className="text-neutral-300">
+            Each ticket becomes active once its participant pool is complete. Holding
+            multiple tickets lets you participate in multiple draw sets in parallel –
+            each with its own independent chance to win.
+          </p>
+        </div>
       </section>
+
 
       {/* CURRENT CYCLE */}
       <section className="rounded-2xl border border-neutral-800 p-4 space-y-4 bg-neutral-950/40">
@@ -449,7 +503,11 @@ export default function ProdView() {
                               <span className="opacity-80">
                                 Next draw: {fmt(c.nextDrawAt as number)}
                                 {nextLeft > 0 && (
-                                  <span className="opacity-70"> – ~{nextLeft}s left</span>
+                                  <span className="opacity-70">
+                                    {" "}
+                                    – ~{formatSecondsHuman(nextLeft)} left
+                                  </span>
+
                                 )}
                               </span>
                             )}

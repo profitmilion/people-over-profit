@@ -65,6 +65,7 @@ export default function ProdView() {
 
   const {
     canUseOnchain,
+    onchainAvailability,
     triggerOnchainJoin,
     isPending: isOnchainPending,
     isConfirming: isOnchainConfirming,
@@ -72,6 +73,22 @@ export default function ProdView() {
     txHash,
     onchainError,
   } = usePop33Onchain();
+
+  const onchainUnavailableMessage = useMemo(() => {
+    switch (onchainAvailability) {
+      case "disabled":
+        return "On-chain mode is disabled.";
+      case "wallet-disconnected":
+      case "missing-address":
+        return "Connect your wallet to use the on-chain entry.";
+      case "wrong-network":
+        return "Switch your wallet to Base Sepolia to use the on-chain entry.";
+      case "invalid-contract":
+        return "The on-chain contract configuration is invalid.";
+      case "ready":
+        return null;
+    }
+  }, [onchainAvailability]);
 
   const { refetchStats } = usePop33Stats();
 
@@ -323,6 +340,12 @@ export default function ProdView() {
 
 
             <span className="opacity-80 max-w-xl">{statusText}</span>
+
+            {onchainUnavailableMessage && (
+              <span className="max-w-xl text-[11px] text-amber-300">
+                {onchainUnavailableMessage}
+              </span>
+            )}
 
 
 

@@ -2,9 +2,11 @@
 import { useMemo } from "react";
 import {
   useAccount,
+  useChainId,
   useWriteContract,
   useWaitForTransactionReceipt,
 } from "wagmi";
+import { isAddress } from "viem";
 import { POP33_ADDRESS, POP33_ABI } from "../utils/contract";
 import { DEMO_SETTINGS } from "../config/pop33Config";
 
@@ -32,8 +34,19 @@ function parseEntryValueWei(): bigint {
 const ENTRY_VALUE_WEI = parseEntryValueWei();
 void ENTRY_VALUE_WEI;
 
+const BASE_SEPOLIA_CHAIN_ID = 84532;
+
+export type OnchainAvailability =
+  | "disabled"
+  | "wallet-disconnected"
+  | "missing-address"
+  | "wrong-network"
+  | "invalid-contract"
+  | "ready";
+
 export function usePop33Onchain() {
-  const { isConnected } = useAccount();
+  const { address, isConnected } = useAccount();
+  const chainId = useChainId();
 
   const {
     data: txHash,
@@ -52,12 +65,17 @@ export function usePop33Onchain() {
 
   const isEnabled = DEMO_SETTINGS.isOnchainEnabled;
 
-  const onchainError = writeError ?? confirmError ?? null;
+  const onchainAvailability = useMemo<OnchainAvailability>(() => {
+    if (!isEnabled) return "disabled";
+    if (!isConnected) return "wallet-disconnected";
+    if (!address) return "missing-address";
+    if (!isAddress(POP33_ADDRESS)) return "invalid-contract";
+    if (chainId !== BASE_SEPOLIA_CHAIN_ID) return "wrong-network";
+    return "ready";
+  }, [address, chainId, isConnected, isEnabled]);
 
-  const canUseOnchain = useMemo(
-    () => isEnabled && isConnected && !!POP33_ADDRESS,
-    [isEnabled, isConnected]
-  );
+  const canUseOnchain = onchainAvailability === "ready";
+  const onchainError = writeError ?? confirmError ?? null;
 
   const triggerOnchainJoin = () => {
     if (!canUseOnchain) return;
@@ -75,6 +93,7 @@ export function usePop33Onchain() {
     isEnabled,
     isConnected,
     canUseOnchain,
+    onchainAvailability,
     triggerOnchainJoin,
     isPending,
     isConfirming,

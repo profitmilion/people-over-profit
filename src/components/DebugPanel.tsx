@@ -1,5 +1,8 @@
 import React from "react";
 import { useCycles } from "../hooks/useCycles";
+import type { Cycle } from "../types/core";
+
+type CycleWithLegacyWinners = Cycle & { winners?: string[] };
 
 const DebugPanel: React.FC = () => {
   const { cycles, joinFIFO, openNextAndJoin, runDraw, addFakeParticipants, resetDemo } = useCycles();
@@ -81,8 +84,8 @@ const DebugPanel: React.FC = () => {
           <div className="text-[var(--text-muted)]">Brak zakończonych cykli.</div>
         ) : (
           finished.map((c) => {
-            const anyCycle: any = c;
-            const winners = anyCycle.draw?.winners ?? anyCycle.winners ?? [];
+            const cycle = c as CycleWithLegacyWinners;
+            const winners = cycle.draw?.winners ?? cycle.winners ?? [];
             return (
               <div
                 key={c.id}

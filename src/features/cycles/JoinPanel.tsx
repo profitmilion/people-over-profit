@@ -33,7 +33,9 @@ export default function JoinPanel() {
       } else {
         setMessage(`Dołączono do cyklu #${currentCycle.id} jako uczestnik #${participantId}.`);
       }
-    } catch (err) {
+    } catch (error: unknown) {
+      const isKnownError = error instanceof Error;
+      void isKnownError;
       setMessage("Wystąpił błąd podczas dołączania do cyklu.");
     } finally {
       setIsBusy(false);

@@ -3,7 +3,9 @@ import React, { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { Disclosure } from "@headlessui/react";
 import { useCycles } from "../hooks/useCycles";
-import type { Cycle } from "../types/core";
+import type { Cycle, DrawInfo } from "../types/core";
+
+type CycleWithLegacyWinners = Cycle & { winners?: string[] };
 
 // Prosty formatter daty – taki sam jak w ProdView
 function fmt(ts?: number) {
@@ -29,8 +31,9 @@ function parseCycleNumber(id: string): number {
 // - cycle.drawHistory[].winners
 // - opcjonalnie cycle.winners (legacy / finalWinners)
 function getCycleWinnersStats(c: Cycle) {
-  const drawHistory = ((c as any).drawHistory ?? []) as any[];
-  const finalWinners = ((c as any).winners ?? []) as string[];
+  const cycle = c as CycleWithLegacyWinners;
+  const drawHistory: DrawInfo[] = cycle.drawHistory ?? [];
+  const finalWinners = cycle.winners ?? [];
 
   const unique = new Set<string>();
 
@@ -200,7 +203,7 @@ export const ArchivePage: React.FC = () => {
                             Winners history (all draws in this cycle):
                           </div>
                           <div className="flex flex-col gap-2">
-                            {drawHistory.map((d: any) => (
+                            {drawHistory.map((d: DrawInfo) => (
                               <div
                                 key={`${d.cycleId}-${d.drawIndex}-${d.drawnAt}`}
                                 className="border border-neutral-800 rounded-xl p-2"

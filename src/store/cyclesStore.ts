@@ -26,15 +26,32 @@ interface Actions {
 function normalizeStatus(s: unknown): Cycle["status"] {
   return s === "closed" ? "closed" : "open";
 }
-function normalizeCycle(x: any): Cycle {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function normalizeNumbers(value: unknown): number[] {
+  return Array.isArray(value) ? value.map((item) => Number(item)) : [];
+}
+
+function normalizeCycle(value: unknown): Cycle {
+  const x = isRecord(value) ? value : {};
   return {
-    id: Number(x?.id) || 0,
-    name: typeof x?.name === "string" ? x.name : undefined,
-    participants: Array.isArray(x?.participants) ? x.participants.map((n: any) => Number(n)) : [],
-    winners: Array.isArray(x?.winners) ? x.winners.map((n: any) => Number(n)) : [],
-    draws: Number(x?.draws) || 0,
-    status: normalizeStatus(x?.status),
+    id: Number(x.id) || 0,
+    name: typeof x.name === "string" ? x.name : undefined,
+    participants: normalizeNumbers(x.participants),
+    winners: normalizeNumbers(x.winners),
+    draws: Number(x.draws) || 0,
+    status: normalizeStatus(x.status),
   };
+}
+
+function persistCycles(cycles: Cycle[]): void {
+  try {
+    localStorage.setItem("pop33_cycles", JSON.stringify(cycles));
+  } catch {
+    return;
+  }
 }
 
 /** Wczytaj startowe dane, jeśli trzymasz w LocalStorage (bez błędów typów) */
@@ -66,7 +83,7 @@ export const useCycles = create<State & Actions>((set, get) => ({
     };
     const next = [...cycles, newCycle];
     set({ cycles: next });
-    try { localStorage.setItem("pop33_cycles", JSON.stringify(next)); } catch {}
+    persistCycles(next);
     return newId;
   },
 
@@ -90,7 +107,7 @@ export const useCycles = create<State & Actions>((set, get) => ({
     const next = [...cycles];
     next[idx] = updated;
     set({ cycles: next });
-    try { localStorage.setItem("pop33_cycles", JSON.stringify(next)); } catch {}
+    persistCycles(next);
     return newParticipantId;
   },
 
@@ -116,7 +133,7 @@ export const useCycles = create<State & Actions>((set, get) => ({
     const next = [...cycles];
     next[idx] = updated;
     set({ cycles: next });
-    try { localStorage.setItem("pop33_cycles", JSON.stringify(next)); } catch {}
+    persistCycles(next);
     return winner;
   },
 
@@ -128,6 +145,6 @@ export const useCycles = create<State & Actions>((set, get) => ({
     const next = [...cycles];
     next[idx] = updated;
     set({ cycles: next });
-    try { localStorage.setItem("pop33_cycles", JSON.stringify(next)); } catch {}
+    persistCycles(next);
   },
 }));

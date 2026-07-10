@@ -5,6 +5,9 @@ import { Link } from "react-router-dom";
 import { useCycles } from "../hooks/useCycles";
 import { usePop33Onchain } from "../hooks/usePop33Onchain";
 import { Disclosure } from "@headlessui/react";
+import type { Cycle, DrawInfo } from "../types/core";
+
+type CycleWithLegacyWinners = Cycle & { winners?: string[] };
 
 
 const MAX_PARTICIPANTS = 100;
@@ -166,30 +169,25 @@ export default function ProdView() {
   // =========================
 
   let statusText = "";
-  let statusLabel = "";
   let indicatorColor = "#6b7280"; // gray
 
   if (blockedBySystemLimit) {
-    statusLabel = "System limit";
     statusText = "The system reached the limit of open cycles. Please wait for the next round.";
     indicatorColor = "#ef4444"; // red
   } else if (hasReachedUserLimit) {
-    statusLabel = "User limit";
     statusText = `You have ${activeUserCycles}/${MAX_USER_CYCLES} active cycles. This is the maximum limit in this demo.`;
     indicatorColor = "#ef4444"; // red
   } else if (activeUserCycles > 0) {
-    statusLabel = "Active";
     statusText = `You have ${activeUserCycles}/${MAX_USER_CYCLES} active cycles. You can still join new ones.`;
     indicatorColor = "#f97316"; // orange
   } else {
-    statusLabel = "Ready";
     statusText = "You are not in any cycle yet. You can join your first one.";
     indicatorColor = "#22c55e"; // green
   }
 
   // Button colors follow the status
-  let buttonBg = indicatorColor;
-  let buttonBorder = indicatorColor;
+  const buttonBg = indicatorColor;
+  const buttonBorder = indicatorColor;
   let buttonText = "#000000";
   let buttonCursor: "pointer" | "not-allowed" = "pointer";
   let buttonOpacity = 1;
@@ -458,10 +456,11 @@ export default function ProdView() {
               {visibleUserCycles.map((c, index) => {
                 const now = nowTick;
 
-                const drawHistory = (c as any).drawHistory || [];
+                const cycle = c as CycleWithLegacyWinners;
+                const drawHistory: DrawInfo[] = cycle.drawHistory ?? [];
                 const hasDrawHistory = Array.isArray(drawHistory) && drawHistory.length > 0;
 
-                const finalWinners = (c as any).winners || [];
+                const finalWinners = cycle.winners ?? [];
                 const hasFinalWinners = Array.isArray(finalWinners) && finalWinners.length > 0;
 
                 const hasNextDraw = c.nextDrawAt && c.nextDrawAt > now;
@@ -532,7 +531,7 @@ export default function ProdView() {
                             <div className="space-y-2">
                               <div className="opacity-80">Winners history (all draws in this cycle):</div>
                               <div className="flex flex-col gap-2">
-                                {drawHistory.map((d: any) => {
+                                {drawHistory.map((d) => {
                                   const youWonHere =
                                     Array.isArray(d.winners) && d.winners.includes(userId);
 
@@ -636,9 +635,10 @@ export default function ProdView() {
 
                       <Disclosure.Panel className="mt-2 space-y-2 text-xs">
                         {archiveDisplayCycles.map((c) => {
-                          const drawHistory = (c as any).drawHistory || [];
+                          const cycle = c as CycleWithLegacyWinners;
+                          const drawHistory: DrawInfo[] = cycle.drawHistory ?? [];
                           const hasDrawHistory = Array.isArray(drawHistory) && drawHistory.length > 0;
-                          const finalWinners = (c as any).winners || [];
+                          const finalWinners = cycle.winners ?? [];
                           const hasFinalWinners = Array.isArray(finalWinners) && finalWinners.length > 0;
 
                           return (
@@ -659,7 +659,7 @@ export default function ProdView() {
                                 <div className="mt-1 space-y-1">
                                   <div className="opacity-80">Winners history:</div>
                                   <div className="flex flex-col gap-1">
-                                    {drawHistory.map((d: any) => (
+                                    {drawHistory.map((d) => (
                                       <div
                                         key={`${d.cycleId}-${d.drawIndex}-${d.drawnAt}`}
                                         className="border border-neutral-800 rounded-lg p-1"

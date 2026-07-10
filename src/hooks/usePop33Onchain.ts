@@ -30,6 +30,7 @@ function parseEntryValueWei(): bigint {
 // Aktualnie nieużywane w wywołaniu (kontrakt nonpayable),
 // zostaje na przyszłość, gdy wprowadzimy prawdziwe wpłaty.
 const ENTRY_VALUE_WEI = parseEntryValueWei();
+void ENTRY_VALUE_WEI;
 
 export function usePop33Onchain() {
   const { isConnected } = useAccount();

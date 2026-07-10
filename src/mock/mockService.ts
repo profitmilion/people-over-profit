@@ -24,14 +24,14 @@ export const mock = {
     if (c.participantsCount >= c.cap) throw new Error("Pełny cykl");
     c.participantsCount += 1;
     if (c.participantsCount === c.cap) c.state = "FULL";
-    touch(cycleId);
+    touch();
   },
   closeIfFull: async (cycleId: number) => {
     await delay(200);
     const c = find(cycleId);
     if (c.state !== "FULL") throw new Error("Cykl nie jest pełny");
     c.state = "CLOSED";
-    touch(cycleId);
+    touch();
   },
   startDraws: async (cycleId: number) => {
     await delay(200);
@@ -40,9 +40,9 @@ export const mock = {
     c.state = "DRAWING";
     c.drawsDone = 0;
     c.winners = [];
-    touch(cycleId);
+    touch();
   },
-  canDrawNow: async (_cycleId: number) => {
+  canDrawNow: async () => {
     await delay(50);
     return true; // demo
   },
@@ -55,7 +55,7 @@ export const mock = {
     c.winners.push(winnerIndex);
     c.drawsDone += 1;
     if (c.drawsDone === 30) c.state = "COMPLETED";
-    touch(cycleId);
+    touch();
     return winnerIndex;
   },
 };
@@ -65,7 +65,7 @@ function find(cycleId: number) {
   if (!c) throw new Error("Nie znaleziono cyklu");
   return c;
 }
-function touch(_cycleId: number) {
+function touch() {
   cycles = [...cycles];
 }
 function delay(ms: number) { return new Promise((r) => setTimeout(r, ms)); }

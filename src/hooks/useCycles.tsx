@@ -124,7 +124,7 @@ const DEFAULT_DEMO_DRAW_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24h
 
 
 const DEMO_DRAW_INTERVAL_MS = (() => {
-  const raw = (import.meta as any)?.env?.VITE_DEMO_DRAW_INTERVAL_MS;
+  const raw = import.meta.env.VITE_DEMO_DRAW_INTERVAL_MS;
   const n = Number(raw);
   return Number.isFinite(n) && n >= 10_000 ? n : DEFAULT_DEMO_DRAW_INTERVAL_MS;
 })();
@@ -135,7 +135,7 @@ const DEMO_DRAW_INTERVAL_MS = (() => {
 const DEFAULT_DEMO_FIRST_DRAW_DELAY_MS = 2 * 60 * 1000; // 2m (zmień na 60_000 jeśli ma być 1m)
 
 const DEMO_FIRST_DRAW_DELAY_MS = (() => {
-  const raw = (import.meta as any)?.env?.VITE_DEMO_FIRST_DRAW_DELAY_MS;
+  const raw = import.meta.env.VITE_DEMO_FIRST_DRAW_DELAY_MS;
   const n = Number(raw);
   return Number.isFinite(n) && n >= 1_000 ? n : DEFAULT_DEMO_FIRST_DRAW_DELAY_MS;
 })();
@@ -146,7 +146,7 @@ const DEMO_FIRST_DRAW_DELAY_MS = (() => {
 const DEFAULT_MAX_AUTO_DRAWS_PER_CYCLE = 30;
 
 const MAX_AUTO_DRAWS_PER_CYCLE = (() => {
-  const raw = (import.meta as any)?.env?.VITE_DEMO_MAX_AUTO_DRAWS_PER_CYCLE;
+  const raw = import.meta.env.VITE_DEMO_MAX_AUTO_DRAWS_PER_CYCLE;
   const n = Number(raw);
   return Number.isFinite(n) && n >= 1 ? n : DEFAULT_MAX_AUTO_DRAWS_PER_CYCLE;
 })();
@@ -177,7 +177,7 @@ function ensureInitialState(): AppState {
   const raw = loadState<AppState>({ cycles: [] as Cycle[] } as AppState);
 
   const cycles: Cycle[] = Array.isArray(raw?.cycles)
-    ? raw.cycles.map((c: any, idx: number) => {
+    ? raw.cycles.map((c, idx) => {
       const cycle: Cycle = {
         id: c.id ?? (`C-${String(idx + 1).padStart(4, "0")}` as CycleId),
         status: c.status ?? "open",
@@ -362,8 +362,8 @@ export function useCycles() {
 
   const makeId = () =>
     typeof crypto !== "undefined" &&
-      typeof (crypto as any).randomUUID === "function"
-      ? (crypto as any).randomUUID()
+      typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID()
       : Math.random().toString(36).slice(2) +
       Math.random().toString(36).slice(2);
 
@@ -429,7 +429,7 @@ export function useCycles() {
       const now = Date.now();
 
       // 1) Najpierw spróbuj dołączyć do najlepszego otwartego cyklu
-      let cur = getBestJoinableCycle(copy.cycles, uid);
+      const cur = getBestJoinableCycle(copy.cycles, uid);
 
       if (cur) {
         cur.participants.push({ userId: uid, joinedAt: now });

@@ -1,0 +1,174 @@
+# POP33 Product
+
+## Document status
+
+This is a working product overview. POP33 is under active development and is
+not a finished product. Unresolved matters are marked `TO DECIDE`.
+
+## Product vision
+
+POP33 is intended to be a transparent, community-oriented product combining
+crowdfunding-style participation with draw mechanics. It is designed around a
+repeatable cycle in which users fund positions in pools, pools collect the
+required participation, and completed pools proceed to draws and results.
+
+The broader project vision references Base, Farcaster, PMN, Auto-HODL, DCA,
+community redistribution, and governance. Their final scope and mechanics are
+`TO DECIDE` unless explicitly approved in `docs/BUSINESS_RULES.md`.
+
+## Product architecture principle
+
+The POP33 demo is intended to mirror the final product and future mainnet
+architecture as closely as practical. It must not be designed around different
+business logic or a disposable, substantially simplified user journey.
+
+Differences between the demo/testnet and the future product should be limited
+mainly to:
+
+- a test network instead of mainnet;
+- test tokens instead of real funds;
+- safety parameters appropriate for testing;
+- additional developer and diagnostic tools.
+
+The local browser simulation is a developer tool and historical prototype
+layer. It is not a separate target product model.
+
+## Approved participation model
+
+- The user participates through one primary participation action.
+- One successful use of that action and one user payment create one position.
+- The system automatically assigns the position to an appropriate open
+  pool/cycle; the user does not manually select a pool.
+- If no appropriate open pool exists, the system may open the next pool in
+  accordance with system limits.
+- One user or wallet may hold at most one active position in the same pool.
+- A subsequent position from that user must be assigned to another appropriate
+  pool.
+- A user may hold at most 10 active positions at the same time.
+- Subsequent successful uses of the primary action create subsequent positions
+  until that limit is reached.
+- Once the user has 10 active positions, creation of another position is
+  blocked.
+- A pool remains open and in its collection phase until it reaches its target
+  number of participants.
+- While the pool remains open, a participant may withdraw an individual
+  position.
+- Withdrawing before pool lock removes the participant from that pool, releases
+  one slot in the user's limit of 10 active positions, and returns the paid
+  stablecoin.
+- Once the pool is full and locked, withdrawal is no longer possible.
+- A position ceases to count toward the limit of 10 when the user withdraws it
+  from an open, unlocked pool or when its pool completes the entire approved
+  draw process and reaches `finished` status.
+- The first draw alone does not release the position from the limit.
+- Participation becomes available again when at least one position ceases to
+  be active.
+
+The exact automatic pool-allocation algorithm is `TO DECIDE`. The technical
+term remains `position`; the final user-facing name, such as `ticket`, `entry`,
+or `coupon`, is `TO DECIDE`.
+
+## Intended user journey
+
+1. A user connects a supported wallet.
+2. The user sees one primary participation action.
+3. One successful use of that action creates one paid position.
+4. The system automatically assigns the position to an appropriate open pool,
+   opening the next pool within system limits if necessary.
+5. Subsequent successful uses create subsequent positions in other appropriate
+   pools, up to the limit of 10 active positions.
+6. At 10 active positions, creation of another position is blocked.
+7. A slot becomes available after the user withdraws a position from an open,
+   unlocked pool or after that position's pool completes the full draw process
+   and reaches `finished` status. The first draw alone does not release it.
+8. Results remain available through the product's result/archive experience.
+
+## Current repository capabilities
+
+The repository currently provides:
+
+- a public landing page;
+- a demo participation interface;
+- wallet connection and Base Sepolia network support;
+- initial on-chain reads and writes;
+- a local cycle simulation used for development;
+- a developer panel;
+- draw history and an archive interface.
+
+Not every approved rule is implemented. Implementation coverage is tracked in
+`docs/STATUS.md`.
+
+## Intended users
+
+- community participants;
+- users new to Web3;
+- developers and testers;
+- future Farcaster users.
+
+Detailed personas, eligibility, and geographic availability are `TO DECIDE`.
+
+## Environments
+
+### Local development
+
+May include browser-local state, simulated participants, accelerated safety
+parameters, and developer controls. These tools should exercise the intended
+product model rather than define an alternative business model.
+
+### Base Sepolia demo
+
+The current integration targets Base Sepolia and uses a demo contract. It is an
+early implementation and does not yet cover all approved product behavior.
+
+### Future production
+
+Base mainnet is the intended direction reflected in the project configuration
+and vision. The production contract, launch scope, deployment process, and
+release criteria are `TO DECIDE`.
+
+## Current non-goals and limitations
+
+The current prototype does not yet:
+
+- represent final tokenomics;
+- implement confirmed production payments and refunds end to end;
+- implement the approved withdrawal flow;
+- prove production-grade randomness;
+- define legal classification or geographic availability;
+- represent audited, production-ready smart-contract behavior.
+
+## Product principles
+
+Existing project materials emphasize fairness, transparency, accessibility,
+community benefit, education, and equal opportunity. How principles not already
+captured by approved rules translate into enforceable mechanics is
+`TO DECIDE`.
+
+## Product evolution
+
+This documentation describes the currently approved direction of POP33, but it
+is not a complete or immutable specification of the final product. Development,
+testing, audits, and contact with users may reveal new functional requirements,
+edge cases, technical problems, security threats, payment, refund, or pool
+lifecycle problems, user needs, legal or operational requirements, and
+opportunities to improve product simplicity and usability.
+
+Approved rules are the current product baseline. They may be deliberately
+changed after analysis and an explicit decision by the creator. Newly
+discovered issues do not change approved rules by themselves.
+
+## Open product decisions
+
+- `TO DECIDE`: stablecoin and payment amount per position.
+- `TO DECIDE`: target participant count for a pool.
+- `TO DECIDE`: number, frequency, and scheduling of draws.
+- `TO DECIDE`: number and value of prizes.
+- `TO DECIDE`: randomness and verification mechanism.
+- `TO DECIDE`: behavior of incomplete or stalled pools.
+- `TO DECIDE`: exact automatic pool-allocation algorithm and its authoritative
+  on-chain enforcement.
+- `TO DECIDE`: final user-facing name for a `position`.
+- `TO DECIDE`: detailed Farcaster Mini App scope.
+- `TO DECIDE`: PMN, Auto-HODL, and DCA mechanics.
+- `TO DECIDE`: production rollout criteria.
+- `TO DECIDE`: legal, eligibility, and geographic requirements.

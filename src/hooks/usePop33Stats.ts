@@ -1,4 +1,5 @@
 // src/hooks/usePop33Stats.ts
+import { useCallback } from "react";
 import { useAccount, useReadContract } from "wagmi";
 import { POP33_ADDRESS, POP33_ABI } from "../utils/contract";
 
@@ -37,11 +38,19 @@ export function usePop33Stats() {
     args: [userAddress],
   });
 
-  const refetchStats = () => {
-    totalJoinsResult.refetch?.();
-    currentCycleIdResult.refetch?.();
-    activeCyclesResult.refetch?.();
-  };
+  const refetchTotalJoins = totalJoinsResult.refetch;
+  const refetchCurrentCycleId = currentCycleIdResult.refetch;
+  const refetchActiveCycles = activeCyclesResult.refetch;
+
+  const refetchStats = useCallback(() => {
+    refetchTotalJoins?.();
+    refetchCurrentCycleId?.();
+    refetchActiveCycles?.();
+  }, [
+    refetchActiveCycles,
+    refetchCurrentCycleId,
+    refetchTotalJoins,
+  ]);
 
   return {
     totalJoins: (totalJoinsResult.data ?? 0n) as bigint,

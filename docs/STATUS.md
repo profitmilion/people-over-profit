@@ -21,10 +21,10 @@ the current implementation.
 | Approved rule | Implementation status | Notes |
 | --- | --- | --- |
 | One payment creates one position in a specific pool/cycle | **partial** | The local prototype creates a participant entry and the contract exposes a join operation, but the current contract join is nonpayable and the end-to-end stablecoin flow is absent. |
-| One primary participation action creates one position per successful use | **partial** | The UI provides the primary `POP IT` action and the local layer creates a participant position, but the same flow still mixes local state with an on-chain transaction and does not perform a stablecoin payment. |
+| One primary participation action creates one position per successful use | **partial** | In `/demo`, `POP IT` now invokes only the Base Sepolia transaction and does not mutate local simulation state. The current contract join remains nonpayable, so the approved payment flow is still absent. |
 | Automatic assignment to an available pool | **partial** | The local smart-join flow selects an available cycle and may create the next cycle within its local system limit. The exact algorithm and authoritative on-chain enforcement remain unresolved. |
 | Maximum one active position per user in the same pool | **partial** | The local smart-join flow excludes an open cycle that already contains the local user ID. The contract does not yet authoritatively expose or enforce the complete approved rule through this repository's integration. |
-| Maximum 10 active positions per user | **partial** | The local/UI layer contains a limit of 10, counts the user's positions in cycles whose status is not `finished`, blocks the primary action at the limit, and re-enables it when a position ceases to be active through `finished`. The on-chain contract does not yet authoritatively enforce all parts of this rule. |
+| Maximum 10 active positions per user | **partial** | The frontend can read `getActiveCyclesCount(address)`, but the available ABI and missing contract source do not establish complete authoritative enforcement of the limit or lifecycle. `/demo` therefore does not invent a local substitute for this check. The developer simulation retains its separate local limit behavior. |
 | Position leaves the active limit when its pool reaches `finished` | **partial** | The local layer excludes positions in `finished` cycles from the active count and can re-enable participation. Authoritative on-chain lifecycle enforcement is not yet present. |
 | The first draw does not release an active position | **partial** | In the local lifecycle, a cycle remains non-`finished` through intermediate draws, so its position continues to count. Equivalent authoritative on-chain enforcement is not yet present. |
 | Pool remains open/in collection until target participation | **partial** | The local prototype keeps cycles open until its configured capacity is reached, but the authoritative on-chain lifecycle and final target value are not implemented here. |
@@ -33,7 +33,7 @@ the current implementation.
 | Withdrawal releases one slot from the user's active-position limit | **not implemented** | Requires active-position accounting and withdrawal implementation. |
 | Withdrawal returns the paid stablecoin | **not implemented** | The current join is nonpayable and no refund path is exposed. |
 | No withdrawal after the pool is full and locked | **not implemented** | The local prototype changes state when full, but there is no withdrawal operation or authoritative contract enforcement to test this restriction. |
-| Demo mirrors the final/mainnet product model | **partial** | Base Sepolia support exists, but local and on-chain flows remain mixed and approved position/withdrawal rules are missing. |
+| Demo mirrors the final/mainnet product model | **partial** | The `/demo` participation action is now Base Sepolia-only, while the browser-local simulation is confined to `/demo?view=dev`. Stablecoin payment, withdrawals, and complete authoritative position lifecycle rules remain missing. |
 | Demo differences limited mainly to network, test tokens, safety parameters, and developer tools | **partial** | This is the approved direction; the current historical simulation and unfinished contract integration have not yet fully converged on it. |
 
 ## Implemented
@@ -51,12 +51,23 @@ the current implementation.
 - On-chain `openNextAndJoin()` transaction call.
 - Basic on-chain aggregate and per-wallet reads.
 - Transaction pending, confirmation, and error states.
+- Separation of the Base Sepolia `POP IT` action from browser-local simulation
+  state.
+- A synchronous single-intent guard covering wallet approval, submission, and
+  confirmation to prevent rapid duplicate transaction requests.
+- Wallet network readiness is derived from the active connector account chain,
+  with a second `connector.getChainId()` check immediately before
+  `writeContractAsync`; unsupported networks cannot open a transaction request.
+- Local cycle presentation and controls confined to `/demo?view=dev` and
+  explicitly labelled as non-on-chain developer simulation.
+- The local simulation component no longer depends on wallet or on-chain
+  transaction status and its `POP IT` action is governed only by local state.
 
 ## Partial / in progress
 
 - alignment of the demo with the intended mainnet product architecture;
-- separation and coordination of local developer state and authoritative
-  on-chain state;
+- expansion of the authoritative on-chain user view beyond the currently
+  available aggregate, cycle ID, and active-cycle count reads;
 - contract-driven pool lifecycle;
 - stablecoin-based position creation;
 - authoritative on-chain enforcement of the 10-active-position limit;
@@ -96,14 +107,28 @@ newer code exists.
 - the Base Sepolia contract address is hard-coded in source;
 - declared environment variables are not consumed consistently;
 - `VITE_POP33_ENTRY_VALUE_WEI` is consumed but absent from `.env.example`;
-- the current `POP IT` action can update local simulation state and initiate an
-  on-chain transaction;
+- the Base Sepolia `POP IT` action is separated from local simulation state,
+  but complete contract-side enforcement of the approved 10-position limit
+  and lifecycle cannot be verified from the available ABI without contract
+  source;
 - the current contract join is nonpayable;
+- a transaction that remains pending for a very long time can keep the primary
+  action locked until a receipt or provider error is observed;
+- handling for replaced or cancelled transactions and controlled recovery from
+  prolonged pending state is not yet implemented;
+- automatic wallet network switching is not implemented; users must switch to
+  Base Sepolia explicitly in their wallet;
 - withdrawal/refund behavior is absent;
 - the README contains historical and Vite-template content;
 - some visible strings show character-encoding problems;
 - no automated test command is defined;
 - smart-contract source is not present in this repository.
+
+The previous wrong-network false positive was caused by using `useChainId()`
+with a wagmi configuration containing only Base Sepolia. An unsupported active
+connector network could therefore be represented as the configured chain. The
+Base Sepolia action now uses the actual connector account chain reactively in
+the UI and rechecks the connector directly before sending.
 
 ## Open decisions
 

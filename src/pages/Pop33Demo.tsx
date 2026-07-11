@@ -1,10 +1,9 @@
 // src/pages/Pop33Demo.tsx
-import { usePop33Stats } from "../hooks/usePop33Stats";
-import { useAccount } from "wagmi";
 import { useMemo } from "react";
 import { useLocation } from "react-router-dom";
 import Header from "../components/Header";
 import ProdView from "../components/ProdView";
+import OnchainProdView from "../components/OnchainProdView";
 import DevPanel from "../components/DevPanel";
 import WinnersArchive from "../components/WinnersArchive";
 import { SectionFrame } from "../components/SectionFrame";
@@ -34,11 +33,6 @@ function useViewMode(): ViewMode {
 export default function Pop33Demo() {
   const view = useViewMode();
 
-  const { isConnected } = useAccount();
-
-  const { activeCyclesOnchain, activeCyclesLoading } = usePop33Stats();
-
-
   return (
     <div className="min-h-screen bg-black text-white flex flex-col">
       {/* Wspólny nagłówek miniapp */}
@@ -51,9 +45,22 @@ export default function Pop33Demo() {
       <main className="max-w-5xl mx-auto w-full px-4 py-4 md:py-6 flex-1">
         {view === "dev" ? (
           // TRYB DEV – widok techniczny (tylko /demo?view=dev)
-          <SectionFrame>
-            <DevPanel />
-          </SectionFrame>
+          <section className="space-y-3">
+            <SectionFrame>
+              <p className="text-center text-sm font-semibold text-amber-300">
+                Local simulation — developer tool, not on-chain state.
+              </p>
+            </SectionFrame>
+            <SectionFrame>
+              <ProdView />
+            </SectionFrame>
+            <SectionFrame>
+              <DevPanel />
+            </SectionFrame>
+            <SectionFrame>
+              <WinnersArchive />
+            </SectionFrame>
+          </section>
         ) : (
           // TRYB PROD – zwykły widok demo dla użytkownika (/demo)
           <section className="space-y-3">
@@ -75,52 +82,9 @@ export default function Pop33Demo() {
               </p>
             </SectionFrame>
 
-            {/* NOWA SEKCJA – ON-CHAIN STATS */}
             <SectionFrame className="mt-4 p-4">
-              <h2 className="text-lg font-semibold mb-2">On-chain status</h2>
-
-              <div className="text-sm space-y-1">
-                <p>
-                  Wallet:{" "}
-                  {isConnected ? (
-                    <span className="text-emerald-300">Connected</span>
-                  ) : (
-                    <span className="text-neutral-400">Not connected</span>
-                  )}
-                </p>
-
-                <p>
-                  Your on-chain entry:{" "}
-                  {isConnected ? (
-                    activeCyclesLoading ? (
-                      "Loading..."
-                    ) : activeCyclesOnchain > 0n ? (
-                      <span className="text-emerald-300">Active</span>
-                    ) : (
-                      <span className="text-neutral-400">None</span>
-                    )
-                  ) : (
-                    <span className="text-neutral-400">Connect wallet to check</span>
-                  )}
-                </p>
-
-
-              </div>
+              <OnchainProdView />
             </SectionFrame>
-
-
-            {/* Główna karta DEMO */}
-            <SectionFrame className="p-3 md:p-4">
-              <ProdView />
-            </SectionFrame>
-
-            {/* Sekcja – ARCHIWUM CYKLI (DEMO) */}
-            <SectionFrame className="mt-4">
-              <WinnersArchive />
-            </SectionFrame>
-
-
-
           </section>
         )}
       </main>

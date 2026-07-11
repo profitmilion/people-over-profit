@@ -2,10 +2,10 @@
 import { useMemo } from "react";
 import {
   useAccount,
-  useChainId,
   useWriteContract,
   useWaitForTransactionReceipt,
 } from "wagmi";
+import { baseSepolia } from "wagmi/chains";
 import { isAddress } from "viem";
 import { POP33_ADDRESS, POP33_ABI } from "../utils/contract";
 import { DEMO_SETTINGS } from "../config/pop33Config";
@@ -34,7 +34,19 @@ function parseEntryValueWei(): bigint {
 const ENTRY_VALUE_WEI = parseEntryValueWei();
 void ENTRY_VALUE_WEI;
 
-const BASE_SEPOLIA_CHAIN_ID = 84532;
+export type OnchainJoinErrorCode =
+  | "wallet-disconnected"
+  | "wrong-network";
+
+export class OnchainJoinError extends Error {
+  constructor(
+    public readonly code: OnchainJoinErrorCode,
+    message: string
+  ) {
+    super(message);
+    this.name = "OnchainJoinError";
+  }
+}
 
 export type OnchainAvailability =
   | "disabled"
@@ -45,12 +57,16 @@ export type OnchainAvailability =
   | "ready";
 
 export function usePop33Onchain() {
-  const { address, isConnected } = useAccount();
-  const chainId = useChainId();
+  const {
+    address,
+    isConnected,
+    chainId: walletChainId,
+    connector,
+  } = useAccount();
 
   const {
     data: txHash,
-    writeContract,
+    writeContractAsync,
     isPending,
     error: writeError,
   } = useWriteContract();
@@ -70,20 +86,35 @@ export function usePop33Onchain() {
     if (!isConnected) return "wallet-disconnected";
     if (!address) return "missing-address";
     if (!isAddress(POP33_ADDRESS)) return "invalid-contract";
-    if (chainId !== BASE_SEPOLIA_CHAIN_ID) return "wrong-network";
+    if (walletChainId !== baseSepolia.id) return "wrong-network";
     return "ready";
-  }, [address, chainId, isConnected, isEnabled]);
+  }, [address, isConnected, isEnabled, walletChainId]);
 
   const canUseOnchain = onchainAvailability === "ready";
   const onchainError = writeError ?? confirmError ?? null;
 
-  const triggerOnchainJoin = () => {
-    if (!canUseOnchain) return;
+  const triggerOnchainJoin = async () => {
+    if (!isConnected || !address || !connector) {
+      throw new OnchainJoinError(
+        "wallet-disconnected",
+        "Connect your wallet to use POP IT."
+      );
+    }
 
-    writeContract({
+    const activeConnectorChainId = await connector.getChainId();
+    if (activeConnectorChainId !== baseSepolia.id) {
+      throw new OnchainJoinError(
+        "wrong-network",
+        "Switch your wallet network to Base Sepolia."
+      );
+    }
+
+    return writeContractAsync({
       address: POP33_ADDRESS as `0x${string}`,
       abi: POP33_ABI,
       functionName: "openNextAndJoin",
+      chainId: baseSepolia.id,
+      connector,
       // DEMO: kontrakt Pop33DemoV2 jest nonpayable – nie wysyłamy value
       // value: ENTRY_VALUE_WEI,
     });
@@ -92,6 +123,7 @@ export function usePop33Onchain() {
   return {
     isEnabled,
     isConnected,
+    walletChainId,
     canUseOnchain,
     onchainAvailability,
     triggerOnchainJoin,

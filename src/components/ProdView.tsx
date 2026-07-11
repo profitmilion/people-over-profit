@@ -1,9 +1,7 @@
 // src/components/ProdView.tsx
-import { usePop33Stats } from "../hooks/usePop33Stats";
 import { useMemo, useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useCycles } from "../hooks/useCycles";
-import { usePop33Onchain } from "../hooks/usePop33Onchain";
 import { Disclosure } from "@headlessui/react";
 import type { Cycle, DrawInfo } from "../types/core";
 
@@ -46,51 +44,10 @@ function shortenUserId(id: string, len = 4) {
   return id.slice(0, len) + "…" + id.slice(-len);
 }
 
-function shortenHash(hash?: string, len = 6) {
-  if (!hash) return "";
-  if (hash.length <= len * 2) return hash;
-  return hash.slice(0, len) + "…" + hash.slice(-len);
-}
-
-function getBaseSepoliaTxUrl(hash?: string) {
-  if (!hash) return "";
-  return `https://sepolia.basescan.org/tx/${hash}`;
-}
-
-
 export default function ProdView() {
   const { smartJoin, smartJoinStatus, cycles, getOrCreateUserId, openCycle } = useCycles();
 
   const userId = useMemo(() => getOrCreateUserId(), [getOrCreateUserId]);
-
-  const {
-    canUseOnchain,
-    onchainAvailability,
-    triggerOnchainJoin,
-    isPending: isOnchainPending,
-    isConfirming: isOnchainConfirming,
-    isConfirmed: isOnchainConfirmed,
-    txHash,
-    onchainError,
-  } = usePop33Onchain();
-
-  const onchainUnavailableMessage = useMemo(() => {
-    switch (onchainAvailability) {
-      case "disabled":
-        return "On-chain mode is disabled.";
-      case "wallet-disconnected":
-      case "missing-address":
-        return "Connect your wallet to use the on-chain entry.";
-      case "wrong-network":
-        return "Switch your wallet to Base Sepolia to use the on-chain entry.";
-      case "invalid-contract":
-        return "The on-chain contract configuration is invalid.";
-      case "ready":
-        return null;
-    }
-  }, [onchainAvailability]);
-
-  const { refetchStats } = usePop33Stats();
 
   // local clock for countdowns (same idea as DevPanel)
   const [nowTick, setNowTick] = useState<number>(() => Date.now());
@@ -101,12 +58,6 @@ export default function ProdView() {
     }, 1000);
     return () => clearInterval(id);
   }, []);
-
-  useEffect(() => {
-    if (!isOnchainConfirmed) return;
-    refetchStats();
-  }, [isOnchainConfirmed, refetchStats]);
-
 
   // cycles where the user has at least one ticket (including historical)
   const userCycles = useMemo(() => {
@@ -162,10 +113,6 @@ export default function ProdView() {
 
   // Decide if the main button should be enabled
   const joinDisabled = hasReachedUserLimit || !canJoinByStatus;
-
-  const joinDisabledFinal = joinDisabled || isOnchainPending || isOnchainConfirming;
-
-
 
   // Tooltip text for the button
   let joinTitle = "Join the draw";
@@ -313,13 +260,9 @@ export default function ProdView() {
           <button
             onClick={() => {
               smartJoin();
-
-              if (!joinDisabledFinal && canUseOnchain) {
-                triggerOnchainJoin();
-              }
             }}
 
-            disabled={joinDisabledFinal}
+            disabled={joinDisabled}
 
             title={joinTitle}
             style={{
@@ -340,63 +283,6 @@ export default function ProdView() {
 
 
             <span className="opacity-80 max-w-xl">{statusText}</span>
-
-            {onchainUnavailableMessage && (
-              <span className="max-w-xl text-[11px] text-amber-300">
-                {onchainUnavailableMessage}
-              </span>
-            )}
-
-
-
-            {(isOnchainPending || isOnchainConfirming) && txHash && (
-              <div className="mt-1 text-[11px] text-sky-300 max-w-xl break-all">
-                On-chain transaction in progress:{" "}
-                <a
-                  href={getBaseSepoliaTxUrl(txHash)}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="font-mono underline text-sky-200 hover:text-sky-100"
-
-                  title={txHash}
-                >
-                  {shortenHash(txHash)}
-                </a>
-
-              </div>
-            )}
-
-            {isOnchainConfirmed && txHash && (
-              <div className="mt-2 flex items-center gap-3 text-[11px] text-emerald-400">
-                <span className="font-semibold uppercase tracking-wide">
-                  Confirmed
-                </span>
-
-                <a
-                  href={getBaseSepoliaTxUrl(txHash)}
-                  target="_blank"
-                  rel="noreferrer"
-                  title={txHash}
-                  style={{ color: "#6eade7ff" }}
-                  className="px-2 py-1 rounded-md border border-emerald-500/40 hover:border-emerald-400 transition-colors text-[11px] font-semibold no-underline"
-
-
-                >
-                  View on BaseScan
-                </a>
-              </div>
-            )}
-
-
-            {onchainError && (
-              <div className="mt-1 text-[11px] text-red-400 max-w-xl">
-                On-chain error:{" "}
-                <span className="break-all">
-                  {(onchainError as Error).message ?? String(onchainError)}
-                </span>
-              </div>
-            )}
-
 
             {/* Button colors – collapsible info, less noise on mobile */}
             <Disclosure>

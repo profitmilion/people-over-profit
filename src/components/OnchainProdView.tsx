@@ -112,6 +112,7 @@ export default function OnchainProdView() {
     "wallet-disconnected": "Connect your wallet to use POP IT.",
     "missing-address": "Connect your wallet to use POP IT.",
     "wrong-network": "Switch your wallet network to Base Sepolia.",
+    "missing-contract": "The Base Sepolia contract address is not configured.",
     "invalid-contract": "The Base Sepolia contract configuration is invalid.",
     ready: null,
   }[onchainAvailability];

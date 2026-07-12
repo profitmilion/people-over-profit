@@ -3,6 +3,8 @@ import { useCallback } from "react";
 import { useAccount, useReadContract } from "wagmi";
 import { POP33_ADDRESS, POP33_ABI } from "../utils/contract";
 
+const FALLBACK_ADDRESS = "0x0000000000000000000000000000000000000000";
+
 /**
  * Hook do odczytu statystyk z kontraktu Pop33DemoV2:
  * - totalJoins: ile było wszystkich wejść do systemu
@@ -20,22 +22,25 @@ export function usePop33Stats() {
     "0x0000000000000000000000000000000000000000") as `0x${string}`;
 
   const totalJoinsResult = useReadContract({
-    address: POP33_ADDRESS as `0x${string}`,
+    address: POP33_ADDRESS ?? FALLBACK_ADDRESS,
     abi: POP33_ABI,
     functionName: "totalJoins",
+    query: { enabled: Boolean(POP33_ADDRESS) },
   });
 
   const currentCycleIdResult = useReadContract({
-    address: POP33_ADDRESS as `0x${string}`,
+    address: POP33_ADDRESS ?? FALLBACK_ADDRESS,
     abi: POP33_ABI,
     functionName: "getCurrentCycleId",
+    query: { enabled: Boolean(POP33_ADDRESS) },
   });
 
   const activeCyclesResult = useReadContract({
-    address: POP33_ADDRESS as `0x${string}`,
+    address: POP33_ADDRESS ?? FALLBACK_ADDRESS,
     abi: POP33_ABI,
     functionName: "getActiveCyclesCount",
     args: [userAddress],
+    query: { enabled: Boolean(POP33_ADDRESS) },
   });
 
   const refetchTotalJoins = totalJoinsResult.refetch;

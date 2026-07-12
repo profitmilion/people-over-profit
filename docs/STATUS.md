@@ -104,8 +104,9 @@ newer code exists.
 - several incompatible cycle models exist in parallel;
 - prototype participant and draw limits conflict across files;
 - entry amounts conflict across documentation, UI copy, and configuration;
-- the Base Sepolia contract address is hard-coded in source;
-- declared environment variables are not consumed consistently;
+- the canonical active `Pop33DemoV2` deployment on Base Sepolia is configured
+  through `VITE_POP33_CONTRACT_ADDRESS`; missing and invalid values disable
+  contract reads and writes with an explicit availability state;
 - `VITE_POP33_ENTRY_VALUE_WEI` is consumed but absent from `.env.example`;
 - the Base Sepolia `POP IT` action is separated from local simulation state,
   but complete contract-side enforcement of the approved 10-position limit

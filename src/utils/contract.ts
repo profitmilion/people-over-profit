@@ -1,8 +1,18 @@
 // src/utils/contract.ts
 
-// Adres aktualnie zdeployowanego kontraktu Pop33DemoV2 na Base Sepolia
-export const POP33_ADDRESS =
-  "0x9f55436afeb8B8F8E1495bD0Cd6052e233FBc966";
+import { isAddress } from "viem";
+
+const configuredAddress = import.meta.env.VITE_POP33_CONTRACT_ADDRESS?.trim();
+
+export const POP33_CONTRACT_CONFIG_ERROR = !configuredAddress
+  ? "missing"
+  : !isAddress(configuredAddress)
+    ? "invalid"
+    : null;
+
+export const POP33_ADDRESS = POP33_CONTRACT_CONFIG_ERROR
+  ? undefined
+  : (configuredAddress as `0x${string}`);
 
 // Minimalne ABI kontraktu Pop33DemoV2 – tylko to, czego potrzebujemy w UI.
 export const POP33_ABI = [
@@ -12,15 +22,6 @@ export const POP33_ABI = [
     name: "openNextAndJoin",
     stateMutability: "nonpayable",
     inputs: [],
-    outputs: [],
-  },
-
-  // --- DEMO „LOSOWANIA” (na razie stub) ---
-  {
-    type: "function",
-    name: "runDraw",
-    stateMutability: "nonpayable",
-    inputs: [{ name: "cycleId", type: "uint256" }],
     outputs: [],
   },
 

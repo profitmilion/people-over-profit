@@ -6,8 +6,11 @@ import {
   useWaitForTransactionReceipt,
 } from "wagmi";
 import { baseSepolia } from "wagmi/chains";
-import { isAddress } from "viem";
-import { POP33_ADDRESS, POP33_ABI } from "../utils/contract";
+import {
+  POP33_ADDRESS,
+  POP33_ABI,
+  POP33_CONTRACT_CONFIG_ERROR,
+} from "../utils/contract";
 import { DEMO_SETTINGS } from "../config/pop33Config";
 
 // W DEMO trzymamy jeszcze logikę entry value na przyszłość,
@@ -53,6 +56,7 @@ export type OnchainAvailability =
   | "wallet-disconnected"
   | "missing-address"
   | "wrong-network"
+  | "missing-contract"
   | "invalid-contract"
   | "ready";
 
@@ -83,9 +87,10 @@ export function usePop33Onchain() {
 
   const onchainAvailability = useMemo<OnchainAvailability>(() => {
     if (!isEnabled) return "disabled";
+    if (POP33_CONTRACT_CONFIG_ERROR === "missing") return "missing-contract";
+    if (POP33_CONTRACT_CONFIG_ERROR === "invalid") return "invalid-contract";
     if (!isConnected) return "wallet-disconnected";
     if (!address) return "missing-address";
-    if (!isAddress(POP33_ADDRESS)) return "invalid-contract";
     if (walletChainId !== baseSepolia.id) return "wrong-network";
     return "ready";
   }, [address, isConnected, isEnabled, walletChainId]);
@@ -101,6 +106,10 @@ export function usePop33Onchain() {
       );
     }
 
+    if (!POP33_ADDRESS) {
+      throw new Error("VITE_POP33_CONTRACT_ADDRESS is missing or invalid.");
+    }
+
     const activeConnectorChainId = await connector.getChainId();
     if (activeConnectorChainId !== baseSepolia.id) {
       throw new OnchainJoinError(
@@ -110,7 +119,7 @@ export function usePop33Onchain() {
     }
 
     return writeContractAsync({
-      address: POP33_ADDRESS as `0x${string}`,
+      address: POP33_ADDRESS,
       abi: POP33_ABI,
       functionName: "openNextAndJoin",
       chainId: baseSepolia.id,

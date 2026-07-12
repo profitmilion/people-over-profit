@@ -13,27 +13,16 @@ function SectionDots() {
     );
 }
 
-function MiniDots() {
-    return (
-        <div className="flex justify-center my-2">
-            <span className="text-slate-600 text-[9px] tracking-[0.25em]">
-                • • •
-            </span>
-        </div>
-    );
-}
-
 const Pop33Landing: React.FC = () => {
     return (
         <div className="min-h-screen bg-slate-950 text-slate-50 flex flex-col">
             <main className="mx-auto flex max-w-5xl flex-col gap-20 px-4 py-16 md:px-6 md:py-20 flex-1">
                 {/* HERO – główne wejście do demo */}
-                <SectionFrame className="grid gap-12 md:grid-cols-2 md:items-center">
+                <SectionFrame className="grid gap-12 min-[1600px]:grid-cols-2 min-[1600px]:items-center">
                     {/* Lewa kolumna */}
                     <div className="space-y-7">
-                        <div className="inline-flex items-center gap-2 rounded-full bg-slate-900/80 px-4 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-300">
-                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                            POP33 Demo • People Over Profit
+                        <div className="inline-flex items-center rounded-full bg-slate-900/80 px-4 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-300">
+                            POP33 Demo / People Over Profit
                         </div>
 
                         <div className="space-y-4">
@@ -41,15 +30,13 @@ const Pop33Landing: React.FC = () => {
                                 One simple lottery &amp; crowdfunding flow
                             </h1>
 
-                            <SectionDots />
-
                             <p className="max-w-xl text-sm leading-relaxed text-slate-300">
                                 POP33 is a transparent model built around one repeatable flow:
                                 join the round, wait for the daily draw, see the result. This
-                                demo shows how simple the mechanics are before we connect Base
-                                blockchain, Farcaster wallets and the full-scale PMN economy.
+                                The main demo now uses the POP33 contract on Base Sepolia.
+                                Farcaster integration and the full-scale PMN economy remain
+                                future development areas.
                             </p>
-                            <MiniDots />
                         </div>
 
                         <div className="h-4" />
@@ -61,13 +48,11 @@ const Pop33Landing: React.FC = () => {
                                 value="0.33 – 3.33 – 13.33 – 33 USDC"
                                 note="We start low and move toward 33 USDC only when the community is ready."
                             />
-                            <MiniDots />
                             <InfoTile
                                 label="Draw rhythm"
                                 value="30 draws / month"
                                 note="The vision: a simple daily draw in one global structure."
                             />
-                            <MiniDots />
                             <InfoTile
                                 label="Transparent archive"
                                 value="Visible winners"
@@ -76,19 +61,21 @@ const Pop33Landing: React.FC = () => {
                         </div>
 
                         {/* GŁÓWNE CTA – POP IT */}
-                        <div className="mt-6 flex flex-col items-center gap-3 md:items-start">
-                            <Link to="/demo">
-                                <Button variant="pop" type="button">
-                                    POP IT - start demo
+                        <div className="mt-6 flex flex-col items-center gap-3 min-[1600px]:items-start">
+                            <Link to="/demo" className="block min-w-0 w-full max-w-sm sm:w-auto">
+                                <Button
+                                    variant="pop"
+                                    type="button"
+                                    className="min-w-0 w-full whitespace-normal px-4 text-center text-sm sm:w-auto sm:px-10 sm:text-base"
+                                >
+                                    POP IT - open Base Sepolia demo
                                 </Button>
                             </Link>
 
-                            <p className="max-w-xs text-center text-[11px] text-slate-500 md:text-left mt-1">
-                                This is a front-end demo only. No real funds are used here.
-                                The goal is to preview the user journey before we connect
-                                smart contracts on Base and a Farcaster Miniapp.
+                            <p className="max-w-xs text-center text-[11px] text-slate-500 min-[1600px]:text-left mt-1">
+                                Base Sepolia testnet only. No real funds are used. The local
+                                browser simulation is available separately as a developer tool.
                             </p>
-                            <MiniDots />
                         </div>
                     </div>
 
@@ -97,25 +84,21 @@ const Pop33Landing: React.FC = () => {
                         <div className="absolute inset-0 -translate-y-2 translate-x-2 rounded-3xl bg-gradient-to-br from-emerald-500/25 via-sky-500/15 to-orange-500/25 blur-2xl" />
                         <div className="relative rounded-3xl bg-slate-900/90 p-6 shadow-2xl sm:p-8">
                             <p className="text-[13px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-                                How this demo works
+                                How the Base Sepolia demo works
                             </p>
-
-                            <SectionDots />
 
                             <div className="mt-4 space-y-5">
                                 <StepRow
-                                    title="Enter the demo round"
-                                    description="In production you would buy a ticket on Base. Here we simply simulate joining the active round."
+                                    title="Connect on Base Sepolia"
+                                    description="Connect a supported wallet and switch it to Base Sepolia before using the on-chain POP IT action."
                                 />
-                                <MiniDots />
                                 <StepRow
                                     title="Wait for the draw"
-                                    description="The round moves toward a draw. In the live version this will be fully handled by smart contracts."
+                                    description="The current testnet contract records the entry. Complete production payments and draw mechanics are still under development."
                                 />
-                                <MiniDots />
                                 <StepRow
                                     title="See results & archive"
-                                    description="Each closed round leaves a visible trace in the winners archive, so anyone can review how it behaved."
+                                    description="On-chain statistics are shown in the main demo. The local cycle archive belongs only to the separate DEV simulation."
                                 />
                                 
                             </div>
@@ -179,7 +162,7 @@ const Pop33Landing: React.FC = () => {
                     <div className="mt-10 mb-12 flex justify-center md:justify-start">
                         <Link to="/demo">
                             <Button variant="pop" type="button">
-                                POP IT - start demo
+                                POP IT - open Base Sepolia demo
                             </Button>
                         </Link>
                     </div>

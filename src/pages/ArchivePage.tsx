@@ -88,28 +88,31 @@ export const ArchivePage: React.FC = () => {
   }, [cycles]);
 
   return (
-    <div className="mx-auto max-w-4xl p-4 space-y-6">
-      <header className="flex flex-col items-center text-center gap-2">
+    <div className="mx-auto max-w-4xl p-4 sm:p-6 space-y-6">
+      <header className="flex flex-col items-center text-center gap-3 rounded-2xl border border-neutral-800 bg-neutral-950/50 p-5 sm:p-7">
+        <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-300">
+          Local DEV simulation
+        </span>
         <h1 className="text-2xl font-bold tracking-tight text-slate-50">
-          POP33 – full archive
+          POP33 – local simulation archive
         </h1>
         <p className="text-xs sm:text-sm text-neutral-400 max-w-2xl">
-          This page shows the full simulation archive of all cycles in this
-          POP33 demo. It is meant for transparency, auditing, and testing of the
-          draw logic.
+          This page contains browser-local cycle data from the developer
+          simulation. It is not on-chain state and is intended only for testing
+          the local draw workflow.
         </p>
 
         <div className="mt-1 text-[11px] text-neutral-500">
           <Link
-            to="/demo"
-            className="underline text-neutral-200 hover:text-white"
+            to="/demo?view=dev"
+            className="inline-flex items-center rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 font-medium text-neutral-200 no-underline transition-colors hover:border-neutral-500 hover:bg-neutral-800 hover:text-white"
           >
-            ← Back to demo view
+            ← Back to local DEV simulation
           </Link>
         </div>
       </header>
 
-      <section className="rounded-2xl border border-neutral-800 p-4 bg-neutral-950/40 space-y-3">
+      <section className="rounded-2xl border border-neutral-800 p-4 sm:p-5 bg-neutral-950/40 space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <div className="text-sm text-neutral-100">
             Total cycles in archive:{" "}
@@ -143,18 +146,18 @@ export const ArchivePage: React.FC = () => {
               <Disclosure key={c.id}>
                 {({ open }) => (
                   <div
-                    className="rounded-2xl border border-neutral-800 overflow-hidden"
+                    className="rounded-2xl border border-neutral-800 overflow-hidden bg-neutral-950/30"
                     style={{ backgroundColor: "transparent" }}
                   >
                     {/* GŁÓWNY NAGŁÓWEK CYKLU */}
                     <Disclosure.Button
-                      className="w-full px-3 py-2 sm:px-4 sm:py-3 flex items-center justify-center hover:bg-neutral-900 transition-colors"
+                      className="w-full px-4 py-3 sm:px-5 sm:py-4 flex items-center justify-between gap-4 text-left hover:bg-neutral-900/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 transition-colors"
                       style={{
                         backgroundColor: "transparent",
                         color: "#e5e7eb",
                       }}
                     >
-                      <div className="flex flex-col gap-0.5 text-left">
+                      <div className="flex flex-col gap-1 text-left">
                         <span className="font-mono text-sm">{c.id}</span>
                         <span className="opacity-80">
                           Participants: {c.participants.length}/

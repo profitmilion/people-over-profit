@@ -54,8 +54,8 @@ export default function DevPanel() {
 
   return (
     <div className="mx-auto max-w-5xl p-4 space-y-6">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
+      <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+        <div className="space-y-1">
           <div className="text-xl font-semibold">DEV panel</div>
           <div className="text-sm opacity-70">
             Uproszczony model: cykl zamyka się po zapełnieniu, pierwsze
@@ -64,11 +64,11 @@ export default function DevPanel() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="grid gap-3 sm:grid-cols-2 xl:flex xl:flex-wrap xl:justify-end">
           {/* FAKE uczestnicy */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 rounded-xl border border-neutral-800 bg-neutral-950/40 p-2">
             <input
-              className="w-20 rounded-xl border border-neutral-700 bg-transparent px-3 py-2 text-sm outline-none"
+              className="w-20 rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100 outline-none placeholder:text-neutral-600 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
               placeholder="liczba"
               value={fakeCount}
               onChange={(e) => setFakeCount(e.target.value)}
@@ -76,7 +76,8 @@ export default function DevPanel() {
               inputMode="numeric"
             />
             <button
-              className="px-4 py-2 rounded-xl border border-neutral-700 hover:bg-neutral-900"
+              type="button"
+              className="rounded-lg border border-emerald-600/70 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-300 transition-colors hover:bg-emerald-500/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
               onClick={onAddFake}
               title="Dodaj sztucznych uczestników do otwartego cyklu"
             >
@@ -85,9 +86,9 @@ export default function DevPanel() {
           </div>
 
           {/* Ręczne losowanie (debug) */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 rounded-xl border border-neutral-800 bg-neutral-950/40 p-2">
             <input
-              className="w-28 rounded-xl border border-neutral-700 bg-transparent px-3 py-2 text-sm outline-none"
+              className="w-28 rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100 outline-none placeholder:text-neutral-600 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"
               placeholder="seed (opc.)"
               value={seedInput}
               onChange={(e) => setSeedInput(e.target.value)}
@@ -95,7 +96,8 @@ export default function DevPanel() {
               inputMode="numeric"
             />
             <button
-              className="px-4 py-2 rounded-xl border border-amber-600 text-amber-500 hover:bg-amber-950/40"
+              type="button"
+              className="rounded-lg border border-amber-600/70 bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-300 transition-colors hover:bg-amber-500/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
               onClick={onDraw}
               title="Uruchom losowanie (ręczne)"
             >
@@ -104,7 +106,8 @@ export default function DevPanel() {
           </div>
 
           <button
-            className="px-4 py-2 rounded-xl border border-red-700 text-red-400 hover:bg-red-950/40"
+            type="button"
+            className="rounded-lg border border-red-700/80 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-300 transition-colors hover:bg-red-500/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400 sm:col-span-2 xl:self-center"
             onClick={resetDemo}
             title="Wyczyść i utwórz 1 pusty cykl"
           >
@@ -133,11 +136,11 @@ export default function DevPanel() {
       </div>
 
       {/* TABELA CYKLI */}
-      <div className="rounded-2xl border border-neutral-800 overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="overflow-x-auto rounded-2xl border border-neutral-800 bg-neutral-950/30">
+        <table className="min-w-[1050px] w-full text-sm">
           <thead className="bg-neutral-900/60">
-            <tr className="text-left">
-              <th className="px-4 py-3">ID</th>
+            <tr className="text-left text-xs uppercase tracking-wide text-neutral-400">
+              <th className="px-4 py-3 font-semibold">ID</th>
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3">Uczestnicy</th>
               <th className="px-4 py-3">Closed</th>
@@ -163,7 +166,7 @@ export default function DevPanel() {
               return (
                 <tr
                   key={c.id}
-                  className="border-t border-neutral-800 align-top"
+                  className="border-t border-neutral-800 align-top transition-colors hover:bg-neutral-900/50"
                 >
                   <td className="px-4 py-3 font-mono">{c.id}</td>
                   <td className="px-4 py-3">{c.status}</td>

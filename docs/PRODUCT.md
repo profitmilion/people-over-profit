@@ -41,6 +41,9 @@ layer. It is not a separate target product model.
   pool/cycle; the user does not manually select a pool.
 - If no appropriate open pool exists, the system may open the next pool in
   accordance with system limits.
+- At most 10 pools may be open simultaneously. Assignment selects the oldest
+  open pool in which the wallet has no active position; a new pool is created
+  only when no existing open pool qualifies.
 - One user or wallet may hold at most one active position in the same pool.
 - A subsequent position from that user must be assigned to another appropriate
   pool.
@@ -56,7 +59,16 @@ layer. It is not a separate target product model.
 - Withdrawing before pool lock removes the participant from that pool, releases
   one slot in the user's limit of 10 active positions, and returns the paid
   stablecoin.
+- After withdrawal, the wallet may join the same pool again while it remains
+  open. Re-entry creates a new unique position rather than reusing the old one.
 - Once the pool is full and locked, withdrawal is no longer possible.
+- Basic V1 pools contain 100 positions at 33 USDC each.
+- Each full Basic V1 pool allocates its 3,300 USDC across 10 sequential draws:
+  one different winning position and 330 USDC per draw, with no fees.
+- Winners claim credited prizes; winner selection does not automatically send
+  the prize.
+- The pool lifecycle is
+  `Open -> Locked -> Drawing -> Claimable -> Finished`.
 - A position ceases to count toward the limit of 10 when the user withdraws it
   from an open, unlocked pool or when its pool completes the entire approved
   draw process and reaches `finished` status.
@@ -64,7 +76,9 @@ layer. It is not a separate target product model.
 - Participation becomes available again when at least one position ceases to
   be active.
 
-The exact automatic pool-allocation algorithm is `TO DECIDE`. The technical
+Detailed Basic V1 behavior is specified in `docs/BASIC_V1_SPEC.md`. Active
+candidate sets are bounded to 100 positions per pool, while chronological join
+and withdrawal history is reconstructed primarily from events. The technical
 term remains `position`; the final user-facing name, such as `ticket`, `entry`,
 or `coupon`, is `TO DECIDE`.
 
@@ -119,6 +133,8 @@ product model rather than define an alternative business model.
 
 The current integration targets Base Sepolia and uses a demo contract. It is an
 early implementation and does not yet cover all approved product behavior.
+The future Basic V1 deployment must use a previously verified, standard,
+non-rebasing ERC-20 with exactly 6 decimals and the approved USDC address.
 
 ### Future production
 
@@ -159,14 +175,18 @@ discovered issues do not change approved rules by themselves.
 
 ## Open product decisions
 
-- `TO DECIDE`: stablecoin and payment amount per position.
-- `TO DECIDE`: target participant count for a pool.
-- `TO DECIDE`: number, frequency, and scheduling of draws.
-- `TO DECIDE`: number and value of prizes.
-- `TO DECIDE`: randomness and verification mechanism.
+- Basic V1 uses USDC, 33 USDC per position, 100 positions per pool, 10 draws,
+  and one 330 USDC prize in each draw.
+- `TO DECIDE`: exact Base Sepolia test USDC address.
+- Basic V1 Base Sepolia uses a 1-hour draw interval; a future mainnet deployment
+  is planned to use 24 hours.
+- `TO DECIDE`: randomness and verification mechanism; Chainlink VRF must be
+  evaluated in a future stage.
+- `TO DECIDE`: draw-trigger policy and possible Chainlink Automation use.
+- `TO DECIDE`: claim expiry and unclaimed-prize settlement.
 - `TO DECIDE`: behavior of incomplete or stalled pools.
-- `TO DECIDE`: exact automatic pool-allocation algorithm and its authoritative
-  on-chain enforcement.
+- Basic V1 uses the approved oldest-qualifying-pool algorithm with no more than
+  10 simultaneously open pools; the undeployed workspace enforces it on-chain.
 - `TO DECIDE`: final user-facing name for a `position`.
 - `TO DECIDE`: detailed Farcaster Mini App scope.
 - `TO DECIDE`: PMN, Auto-HODL, and DCA mechanics.

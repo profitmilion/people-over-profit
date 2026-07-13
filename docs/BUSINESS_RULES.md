@@ -28,16 +28,24 @@ automatically an approved business rule.
 11. Creation becomes available again when at least one position ceases to be
     active.
 
-The stablecoin, price per position, payment details, final user-facing name for
-a `position`, and exact automatic pool-allocation algorithm are `TO DECIDE`.
+For Basic V1, the payment asset is a previously verified, standard,
+non-rebasing 6-decimal USDC-compatible ERC-20 and one position costs 33 USDC.
+The exact Base Sepolia test USDC address, final user-facing name for a
+`position`, and payment integration details are `TO DECIDE`.
+
+Basic V1 may have at most 10 simultaneously open pools. `join()` selects the
+oldest open pool in which the wallet has no active position and creates a new
+pool only if no existing open pool qualifies. After withdrawal, the wallet may
+re-enter the same pool while it remains open; re-entry creates a new unique
+position ID and never reactivates the withdrawn record.
 
 ### Active-position lifecycle
 
 A position ceases to count toward the global limit of 10 only when:
 
 1. the user withdraws it from an open and unlocked pool; or
-2. its pool completes the entire approved draw process and reaches `finished`
-   status.
+2. its pool completes the entire approved draw and prize-settlement process and
+   reaches `finished` status.
 
 The first draw alone does not release a position from the active-position
 limit. A position remains active throughout the draw process until its pool
@@ -53,7 +61,39 @@ reaches `finished`.
    and locked.
 4. Once a pool is full and locked, withdrawal is not possible.
 
-The target participant count and handling of stalled pools are `TO DECIDE`.
+The Basic V1 target participant count is 100. Handling of stalled pools remains
+`TO DECIDE`.
+
+### Basic V1 draws and prizes
+
+1. A full Basic V1 pool contains 100 positions funded with 33 USDC each, for a
+   total of 3,300 USDC.
+2. A full pool has 10 sequential draw rounds.
+3. Each round selects exactly one winning position and assigns a prize of
+   330 USDC.
+4. A winning position is excluded from every later round in the same pool.
+5. Because one wallet may hold only one position in a pool, a completed pool
+   has 10 different winning wallets.
+6. Basic V1 has no fees or deductions; its 10 prizes total 3,300 USDC.
+7. Prizes use a claim model and are not transferred automatically during winner
+   selection.
+8. The Base Sepolia interval between scheduled rounds is 1 hour. The planned
+   future mainnet interval is 24 hours. The interval must be configured for the
+   deployment.
+9. Time passing does not execute a draw. An authorized automation or a safe
+   permissionless call may initiate an eligible round; the exact trigger policy
+   is `TO DECIDE`.
+10. A round cannot start before its scheduled time, before the preceding round
+    is complete, while it already has an active randomness request, or after it
+    has already been finalized.
+
+The approved target lifecycle is
+`Open -> Locked -> Drawing -> Claimable -> Finished`. `Locked` is entered by
+the 100th position. Withdrawals and refunds are prohibited from `Locked`
+onward. Positions remain active throughout `Locked`, `Drawing`, and
+`Claimable`, and are released only when the pool correctly reaches `Finished`.
+Detailed round records and the architecture constraints are defined in
+`docs/BASIC_V1_SPEC.md`.
 
 ### Withdrawal before pool lock
 
@@ -62,6 +102,11 @@ Withdrawing one position from an open pool must:
 1. remove that participant position from the pool;
 2. release one active-position slot in the user's limit of 10;
 3. return the stablecoin paid for that position.
+
+Each pool's on-chain active-position candidate set is bounded to 100 entries.
+Withdrawal removes an entry from that active set, while chronological history
+is reconstructed from join and withdrawal events and globally unique position
+records.
 
 Refund transaction details, fees, and failure handling are `TO DECIDE`.
 
@@ -92,8 +137,8 @@ rules above:
 - the developer panel can add simulated participants, trigger a draw, and reset
   local demo data;
 - the current Base Sepolia join function is nonpayable;
-- the current UI may perform a local join and an on-chain join from the same
-  action;
+- the current main demo join is on-chain only, while local joins are confined
+  to the developer simulation;
 - no withdrawal/refund operation is present in the inspected UI or contract
   ABI.
 
@@ -107,26 +152,29 @@ Current sources contain incompatible prototype values for:
 - lifecycle status names and state models;
 - network labels across configuration and UI copy.
 
-These conflicts do not modify the approved rules. Their final values remain
-`TO DECIDE`.
+These conflicting implementations are retained as historical or developer
+layers and do not modify the approved rules. For Basic V1, the authoritative
+target values are now 100 positions, 33 USDC per position, 10 draw rounds, and
+the `Open -> Locked -> Drawing -> Claimable -> Finished` lifecycle. Legacy
+values such as capacities of 10 or 30 and draw limits of 3 or 30 are not Basic
+V1 product rules.
 
 ## Decisions required
 
 ### Participation and payments
 
-- `TO DECIDE`: supported stablecoin.
-- `TO DECIDE`: payment amount per position.
+- Basic V1 uses USDC at 33 USDC per position.
+- `TO DECIDE`: exact Base Sepolia test USDC address.
 - `TO DECIDE`: whether positions may be transferred.
 - `TO DECIDE`: final user-facing name for a `position`.
 - `TO DECIDE`: eligibility, geography, and age requirements.
 
 ### Pools
 
-- `TO DECIDE`: target participant count.
-- `TO DECIDE`: pool creation policy.
-- `TO DECIDE`: number of simultaneously open pools.
-- `TO DECIDE`: exact automatic pool-allocation algorithm and its authoritative
-  on-chain enforcement.
+- Basic V1 target participant count is 100.
+- Basic V1 permits at most 10 simultaneously open pools. The contract selects
+  the oldest qualifying pool and creates a new one only when none qualifies.
+- The undeployed `Pop33BasicV1` workspace enforces this allocation on-chain.
 - `TO DECIDE`: behavior of incomplete or stalled pools.
 - `TO DECIDE`: whether any cancellation path exists besides individual
   withdrawal from an open pool.
@@ -141,11 +189,14 @@ These conflicts do not modify the approved rules. Their final values remain
 ### Draws and winners
 
 - `TO DECIDE`: randomness source and verification.
-- `TO DECIDE`: draw schedule.
-- `TO DECIDE`: draws per pool.
-- `TO DECIDE`: winners per draw.
-- `TO DECIDE`: whether one position can win more than once.
-- `TO DECIDE`: prize calculation and payout process.
+- Basic V1 uses 10 rounds, one winner and 330 USDC per round, with no repeated
+  winning position in one pool.
+- Basic V1 Base Sepolia rounds are scheduled hourly; the planned future
+  mainnet interval is 24 hours.
+- Basic V1 uses pull-based claims rather than automatic winner transfers.
+- `TO DECIDE`: exact claim expiry and unclaimed-prize settlement rules.
+- `TO DECIDE`: authorized automation or permissionless draw triggering and any
+  caller incentive.
 - `TO DECIDE`: failed draw and failed payout handling.
 
 ### Funds and allocation

@@ -1,6 +1,6 @@
 # POP33 Development Status
 
-Last reviewed: 2026-07-11
+Last reviewed: 2026-07-13
 
 Branch reviewed: `codex/pop33-recovery`
 
@@ -16,23 +16,38 @@ The demo is expected to converge on the same business flow and architecture as
 the future mainnet product. Several approved rules are not yet represented in
 the current implementation.
 
+The target Basic V1 parameters and lifecycle are now documented in
+`docs/BASIC_V1_SPEC.md`: 100 positions at 33 USDC, 10 sequential draws with 10
+different winning positions, 330 USDC per draw, pull-based claims, and
+`Open -> Locked -> Drawing -> Claimable -> Finished`.
+
+A separate, reproducible Hardhat 3 + TypeScript workspace now exists in
+`packages/contracts`. Its new, undeployed `Pop33BasicV1` contract implements
+only the approved Open/Locked foundation. The active frontend and its existing
+Base Sepolia deployment remain unchanged.
+
 ## Business-rule implementation matrix
 
 | Approved rule | Implementation status | Notes |
 | --- | --- | --- |
-| One payment creates one position in a specific pool/cycle | **partial** | The local prototype creates a participant entry and the contract exposes a join operation, but the current contract join is nonpayable and the end-to-end stablecoin flow is absent. |
+| One payment creates one position in a specific pool/cycle | **implemented in undeployed workspace** | `Pop33BasicV1` transfers exactly 33 USDC with `SafeERC20` and creates one indexed position. The active deployment and frontend do not use it yet. |
 | One primary participation action creates one position per successful use | **partial** | In `/demo`, `POP IT` now invokes only the Base Sepolia transaction and does not mutate local simulation state. The current contract join remains nonpayable, so the approved payment flow is still absent. |
-| Automatic assignment to an available pool | **partial** | The local smart-join flow selects an available cycle and may create the next cycle within its local system limit. The exact algorithm and authoritative on-chain enforcement remain unresolved. |
-| Maximum one active position per user in the same pool | **partial** | The local smart-join flow excludes an open cycle that already contains the local user ID. The contract does not yet authoritatively expose or enforce the complete approved rule through this repository's integration. |
-| Maximum 10 active positions per user | **partial** | The frontend can read `getActiveCyclesCount(address)`, but the available ABI and missing contract source do not establish complete authoritative enforcement of the limit or lifecycle. `/demo` therefore does not invent a local substitute for this check. The developer simulation retains its separate local limit behavior. |
+| Automatic assignment to an available pool | **implemented in undeployed workspace** | The approved algorithm selects the oldest qualifying open pool and creates another only when required, up to 10 open pools. Frontend integration is absent. |
+| Maximum one active position per user in the same pool | **implemented in undeployed workspace** | Indexed membership prevents a second active position in one pool and routes a subsequent join to another qualifying pool. |
+| Maximum 10 active positions per user | **implemented in undeployed workspace** | The new contract enforces the limit and withdrawal releases one slot. Equivalent behavior is not yet deployed or integrated. |
 | Position leaves the active limit when its pool reaches `finished` | **partial** | The local layer excludes positions in `finished` cycles from the active count and can re-enable participation. Authoritative on-chain lifecycle enforcement is not yet present. |
 | The first draw does not release an active position | **partial** | In the local lifecycle, a cycle remains non-`finished` through intermediate draws, so its position continues to count. Equivalent authoritative on-chain enforcement is not yet present. |
-| Pool remains open/in collection until target participation | **partial** | The local prototype keeps cycles open until its configured capacity is reached, but the authoritative on-chain lifecycle and final target value are not implemented here. |
-| Withdraw one position while its pool is open | **not implemented** | No withdrawal action is present in the inspected UI, local primary flow, or contract ABI. |
-| Withdrawal removes the position from the pool | **not implemented** | Requires product and contract implementation. |
-| Withdrawal releases one slot from the user's active-position limit | **not implemented** | Requires active-position accounting and withdrawal implementation. |
-| Withdrawal returns the paid stablecoin | **not implemented** | The current join is nonpayable and no refund path is exposed. |
-| No withdrawal after the pool is full and locked | **not implemented** | The local prototype changes state when full, but there is no withdrawal operation or authoritative contract enforcement to test this restriction. |
+| Pool remains open/in collection until target participation | **implemented in undeployed workspace** | The new contract keeps a pool Open through 99 active positions and locks atomically on the 100th. |
+| Withdraw one position while its pool is open | **implemented in undeployed workspace** | The position owner can withdraw only while the pool is Open. No frontend action exists yet. |
+| Withdrawal removes the position from active pool state | **implemented in undeployed workspace** | The historical record remains indexed while active membership and pool accounting are cleared. |
+| Withdrawal releases one slot from the user's active-position limit | **implemented in undeployed workspace** | Covered by contract tests, including reuse of the released slot. |
+| Withdrawal returns the paid stablecoin | **implemented in undeployed workspace** | The new contract returns exactly 33 USDC. The existing deployed demo contract remains nonpayable. |
+| No withdrawal after the pool is full and locked | **implemented in undeployed workspace** | The new contract reverts withdrawal after Locked and retains participant active-position counts. |
+| 100 positions at 33 USDC and no Basic V1 fees | **implemented in undeployed workspace** | Constants, escrow accounting, and boundary behavior are covered by automated tests. |
+| Ten sequential draws with different winning positions | **not implemented** | The local simulation has conflicting prototype draw counts. The deployed contract has no authoritative draw implementation. |
+| 330 USDC credited per round through claim accounting | **not implemented** | Winner selection, prize accounting, and claim are absent. |
+| Hourly Base Sepolia round eligibility after `lockedAt` | **not implemented** | The future trigger must enforce time, ordering, active-request, and one-execution-per-round invariants. |
+| `Open -> Locked -> Drawing -> Claimable -> Finished` | **not implemented** | The deployed contract does not implement the approved lifecycle. Active positions must remain active until `Finished`. |
 | Demo mirrors the final/mainnet product model | **partial** | The `/demo` participation action is now Base Sepolia-only, while the browser-local simulation is confined to `/demo?view=dev`. Stablecoin payment, withdrawals, and complete authoritative position lifecycle rules remain missing. |
 | Demo differences limited mainly to network, test tokens, safety parameters, and developer tools | **partial** | This is the approved direction; the current historical simulation and unfinished contract integration have not yet fully converged on it. |
 
@@ -62,6 +77,17 @@ the current implementation.
   explicitly labelled as non-on-chain developer simulation.
 - The local simulation component no longer depends on wallet or on-chain
   transaction status and its `POP IT` action is governed only by local state.
+- An isolated Hardhat 3 + TypeScript workspace under `packages/contracts`.
+- `Pop33BasicV1` Open/Locked source with SafeERC20, reentrancy protection,
+  custom errors, indexed events, and bounded getters.
+- A bounded, swap-and-pop active candidate set with at most 100 position IDs per
+  pool; chronological join/withdrawal history is reconstructed from events.
+- Constructor validation requiring deployed token bytecode and exactly 6
+  decimals for the approved standard, non-rebasing USDC model.
+- A six-decimal unrestricted `MockUSDC` clearly marked for tests only.
+- Automated Open/Locked contract coverage: 56 passing Mocha tests, including
+  bounded candidate sets, rollback behavior, open-pool index integrity, token
+  validation, pagination boundaries, re-entry, and donated-token surplus.
 
 ## Partial / in progress
 
@@ -69,7 +95,7 @@ the current implementation.
 - expansion of the authoritative on-chain user view beyond the currently
   available aggregate, cycle ID, and active-cycle count reads;
 - contract-driven pool lifecycle;
-- stablecoin-based position creation;
+- deployment and frontend integration of stablecoin-based position creation;
 - authoritative on-chain enforcement of the 10-active-position limit;
 - authoritative on-chain enforcement of automatic allocation, one position per
   user per pool, and the active-position lifecycle;
@@ -81,13 +107,14 @@ the current implementation.
 
 ## Not implemented
 
-- withdrawal of an individual position from an open pool;
-- removal of a withdrawn position from authoritative pool state;
-- release of the withdrawn position from the user's limit of 10;
-- stablecoin refund on withdrawal;
-- contract-enforced prohibition of withdrawal after pool lock;
+- deployment and frontend integration of Open-pool withdrawal;
+- deployment and frontend integration of authoritative withdrawal accounting;
+- deployment and frontend integration of the released active-position slot;
+- deployment and frontend integration of the 33 USDC refund;
+- deployment and frontend integration of withdrawal prohibition after lock;
 - end-to-end real or test stablecoin payment flow;
-- final business parameters for pool capacity, pricing, prizes, and draws.
+- the approved Basic V1 pool capacity, pricing, prize, draw, claim-accounting,
+  and lifecycle behavior.
 
 ## Legacy or alternative code retained
 
@@ -122,8 +149,10 @@ newer code exists.
 - withdrawal/refund behavior is absent;
 - the README contains historical and Vite-template content;
 - some visible strings show character-encoding problems;
-- no automated test command is defined;
-- smart-contract source is not present in this repository.
+- no automated test command is defined for the root frontend package; the
+  contracts workspace has its own passing test command;
+- source for the currently deployed demo contract is not present; source for
+  the new, undeployed Basic V1 foundation is in `packages/contracts`.
 
 The previous wrong-network false positive was caused by using `useChainId()`
 with a wagmi configuration containing only Base Sepolia. An unsupported active
@@ -133,14 +162,22 @@ the UI and rechecks the connector directly before sending.
 
 ## Open decisions
 
-- `TO DECIDE`: supported stablecoin and position price.
-- `TO DECIDE`: target pool capacity.
-- `TO DECIDE`: draw and prize parameters.
-- `TO DECIDE`: exact automatic pool-allocation algorithm and its authoritative
-  on-chain enforcement.
-- `TO DECIDE`: randomness and payout architecture.
+- Basic V1 uses USDC, 33 USDC per position, 100 positions, and ten 330 USDC
+  prizes with no fees.
+- `TO DECIDE`: exact Base Sepolia test USDC address.
+- Basic V1 uses at most 10 open pools; `join()` selects the oldest qualifying
+  pool and opens another only when no existing pool qualifies.
+- A wallet may re-enter the same still-open pool after withdrawal, receiving a
+  new globally unique position ID.
+- `TO DECIDE`: exact randomness provider and failure recovery; Chainlink VRF is
+  deferred for future analysis.
+- Basic V1 uses pull-based claim accounting; claim expiry and unclaimed-prize
+  settlement remain `TO DECIDE`.
+- `TO DECIDE`: authorized automation versus safe permissionless triggering and
+  possible Chainlink Automation use.
 - `TO DECIDE`: canonical configuration source.
-- `TO DECIDE`: contract repository and versioning process.
+- The Basic V1 contract workspace is `packages/contracts`; release and deployed
+  versioning policy remains `TO DECIDE`.
 - `TO DECIDE`: testing strategy.
 - `TO DECIDE`: production, security, and compliance milestones.
 

@@ -167,7 +167,8 @@ V1 product rules.
 ### Participation and payments
 
 - Basic V1 uses USDC at 33 USDC per position.
-- Demo V1's own dUSDC address is `not deployed`; the exact external Base
+- Demo V1's own dUSDC address is deployed and recorded in `docs/DEMO_V1.md`;
+  the exact external Base
   Sepolia test-USDC address remains `TO DECIDE` only for the alternative path.
 - `TO DECIDE`: whether positions may be transferred.
 - `TO DECIDE`: final user-facing name for a `position`.
@@ -192,7 +193,7 @@ participation for a production product.
 - Basic V1 target participant count is 100.
 - Basic V1 permits at most 10 simultaneously open pools. The contract selects
   the oldest qualifying pool and creates a new one only when none qualifies.
-- The undeployed `Pop33BasicV1` workspace enforces this allocation on-chain.
+- The deployed Demo V1 `Pop33BasicV1` contract enforces this allocation on-chain.
 - `TO DECIDE`: behavior of incomplete or stalled pools.
 - `TO DECIDE`: whether any cancellation path exists besides individual
   withdrawal from an open pool.

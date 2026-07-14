@@ -18,8 +18,8 @@ Unresolved implementation or product matters are marked `TO DECIDE`.
 - Payment asset interface: a standard, non-rebasing ERC-20 with exactly 6
   decimals. Fee-on-transfer and non-standard ERC-20 behavior are not supported.
 - Demo V1 asset: POP33 Demo USD (`dUSDC`), a POP33-owned faucet token with no
-  monetary value and no Circle affiliation. Its Base Sepolia address remains
-  `not deployed`. A preserved external-token deployment path and the future
+  monetary value and no Circle affiliation. Its deployed Base Sepolia address
+  is recorded in `docs/DEMO_V1.md`. A preserved external-token path and the future
   mainnet USDC asset are separate configurations.
 - Price per position: 33 USDC.
 - Positions per full pool: 100.
@@ -38,7 +38,7 @@ The draw interval must be an immutable deployment parameter or another
 explicitly controlled configuration value. Changing the network must not
 silently change the interval or any economic parameter.
 
-The undeployed Basic V1 workspace stores an immutable snapshot in every pool
+The Basic V1 contract stores an immutable snapshot in every pool
 for the entry price, position capacity, draw-round count, prize per round,
 total prize amount, and draw interval. The current contract has no runtime
 configuration setter: all newly created pools use the approved 33 USDC Basic
@@ -131,7 +131,7 @@ operation are `TO DECIDE`. The implementation must not reach `Finished` merely
 because the tenth winner was selected.
 
 Until an expiry or alternative settlement rule is approved, the current
-undeployed implementation uses the narrow safe finalization rule: the pool
+deployed Demo V1 implementation uses the narrow safe finalization rule: the pool
 enters `Finished` only after all 10 finalized round prizes have been claimed.
 The final claim atomically releases all 100 positions from active-position
 accounting. This is an implementation constraint for the present stage, not a
@@ -198,7 +198,7 @@ round, and active request ID before any result is accepted.
 
 ### Temporary lifecycle-testing draw mechanism
 
-The current undeployed workspace exposes a permissionless `executeDraw(poolId,
+The current deployed Demo V1 contract exposes a permissionless `executeDraw(poolId,
 roundNumber)` function so the full lifecycle can be tested before VRF and
 Automation are selected. It executes one eligible round synchronously, assigns
 a monotonically increasing temporary request ID, and selects one position from

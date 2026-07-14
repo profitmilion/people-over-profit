@@ -139,10 +139,10 @@ test USDC. A preserved alternative deployment path accepts a separately
 reviewed external six-decimal test token. Both are distinct from the intended
 future mainnet USDC payment asset.
 
-The planned first controlled `Pop33BasicV1` testnet release is named POP33 Demo
+The first controlled `Pop33BasicV1` testnet release is named POP33 Demo
 V1. Its explicitly non-production scope, test-token limitations, deployment
 status, and intended end-to-end demonstration are defined in `docs/DEMO_V1.md`.
-It has not yet been deployed or connected to the frontend.
+It is deployed on Base Sepolia but is not yet connected to the frontend.
 
 ### Future production
 
@@ -185,8 +185,8 @@ discovered issues do not change approved rules by themselves.
 
 - Basic V1 uses USDC, 33 USDC per position, 100 positions per pool, 10 draws,
   and one 330 USDC prize in each draw.
-- POP33 Demo V1 uses the own dUSDC contract; its Base Sepolia address remains
-  `not deployed` until an authorized deployment. Selection of any external
+- POP33 Demo V1 uses the deployed own dUSDC contract recorded in
+  `docs/DEMO_V1.md`. Selection of any external
   official test-USDC address remains `TO DECIDE` for the alternative path.
 - Basic V1 Base Sepolia uses a 1-hour draw interval; a future mainnet deployment
   is planned to use 24 hours.
@@ -196,7 +196,7 @@ discovered issues do not change approved rules by themselves.
 - `TO DECIDE`: claim expiry and unclaimed-prize settlement.
 - `TO DECIDE`: behavior of incomplete or stalled pools.
 - Basic V1 uses the approved oldest-qualifying-pool algorithm with no more than
-  10 simultaneously open pools; the undeployed workspace enforces it on-chain.
+  10 simultaneously open pools; the deployed Demo V1 contract enforces it on-chain.
 - `TO DECIDE`: final user-facing name for a `position`.
 - `TO DECIDE`: detailed Farcaster Mini App scope.
 - `TO DECIDE`: PMN, Auto-HODL, and DCA mechanics.

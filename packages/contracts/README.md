@@ -53,7 +53,6 @@ Intentionally not implemented:
 - Chainlink VRF or Automation;
 - asynchronous randomness request and fulfillment recovery;
 - claim expiry or alternative unclaimed-prize settlement;
-- an executed public-chain deployment;
 - automatic explorer verification;
 - network credentials or committed secrets.
 
@@ -71,16 +70,18 @@ npm run smoke:demo-v1
 
 `deploy:dry-run` and `smoke:demo-v1` create an isolated local `hardhatOp`
 network and never use Base Sepolia. The separately named
-Base Sepolia commands are prepared but must not be run without explicit
-deployment approval and all environment safety gates described in
-`../../docs/DEMO_V1.md`. The legacy-compatible `deploy:base-sepolia` path uses
-an external token; `deploy:base-sepolia:demo-token` deploys `dUSDC` and then
-`Pop33BasicV1` with independent confirmations.
+Base Sepolia commands must not be run without explicit deployment approval and
+all environment safety gates described in `../../docs/DEMO_V1.md`. The
+legacy-compatible `deploy:base-sepolia` path uses an external token. The
+`deploy:base-sepolia:demo-token` path was used for the recorded Demo V1 token;
+it must not be rerun without duplicate-deployment analysis. A transient RPC
+read immediately after the first receipt stopped the pair script, so the
+verified `Pop33BasicV1` deployment was safely resumed as a single transaction.
 
 The constructor accepts the payment-token address and a non-zero draw interval
 in seconds. It rejects addresses without bytecode, missing ERC-20 metadata, and
-tokens whose `decimals()` value is not exactly 6. Tests use 3,600 seconds for
-the planned Base Sepolia configuration.
+tokens whose `decimals()` value is not exactly 6. Tests and the recorded Base
+Sepolia deployment use 3,600 seconds.
 
 Every pool snapshots the current Basic V1 defaults when it is created: 33 USDC
 per position, 100 positions, ten rounds, 330 USDC per round, 3,300 USDC total,
@@ -101,7 +102,7 @@ the intended future mainnet payment asset. `Pop33BasicV1` has no administrative 
 fund withdrawal function. Funds in locked and drawing pools remain explicitly
 accounted and reserved for their round prizes until valid winner claims.
 
-A future deployment must use a previously verified, standard, non-rebasing
+A future production deployment must use a previously verified, standard, non-rebasing
 USDC contract. Fee-on-transfer, rebasing, and non-standard ERC-20 behavior are
 not supported. The exact-refund guarantee assumes that approved token model.
 The current permissionless `executeDraw()` mechanism is also test-only. It

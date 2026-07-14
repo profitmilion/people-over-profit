@@ -2,9 +2,9 @@
 
 ## Document status
 
-This document defines the scope and deployment-readiness plan for the first
-controlled POP33 Demo V1 deployment. It does not record an actual deployment
-and does not authorize a public-chain transaction.
+This document defines the scope and records the first controlled POP33 Demo V1
+deployment. The contracts are deployed, but frontend integration is pending;
+this record does not authorize any additional public-chain transaction.
 
 Approved product behavior remains governed by `BUSINESS_RULES.md` and
 `BASIC_V1_SPEC.md`. Open product decisions remain `TO DECIDE` and are collected
@@ -12,7 +12,7 @@ in `BUSINESS_RULES.md` rather than resolved here.
 
 ## Purpose and environment
 
-POP33 Demo V1 is planned for Base Sepolia, chain ID `84532`. It is a technical
+POP33 Demo V1 is deployed on Base Sepolia, chain ID `84532`. It is a technical
 testnet demonstration only:
 
 - it uses POP33 Demo USD (`dUSDC`), a POP33-owned test token with no monetary
@@ -27,9 +27,9 @@ testnet demonstration only:
 The Demo V1 token type is decided: `Pop33DemoUSDC`, with name `POP33 Demo USD`,
 symbol `dUSDC`, and six decimals. It is not issued by or affiliated with Circle,
 is not official Circle test USDC, and is not the intended future mainnet USDC
-payment asset. Its Base Sepolia address remains `not deployed` until an
-authorized deployment records a real address. The unrestricted `MockUSDC`
-remains a local test fixture and is not part of either public deployment path.
+payment asset. Its deployed Base Sepolia address is recorded below. The
+unrestricted `MockUSDC` remains a local test fixture and is not part of either
+public deployment path.
 
 ## Demo V1 technical configuration
 
@@ -174,14 +174,58 @@ automatic and no verification plugin is installed in this checkpoint.
 
 ## Deployment register
 
-No Demo V1 Base Sepolia deployment has been performed by this checkpoint. Do
-not replace `not deployed` with a guessed address.
+The following deployment was executed from the clean source commit recorded in
+the table. Runtime bytecode, creation inputs, constructor linkage, constants,
+and initial state were checked directly through Base Sepolia RPC.
 
 | Version | Network | Chain ID | Demo token contract | Pop33 contract | Source commit | Deployment date | Status | Randomness | Warnings and limitations |
 | --- | --- | ---: | --- | --- | --- | --- | --- | --- | --- |
-| POP33 Demo V1 dUSDC pair | Base Sepolia | 84532 | not deployed | not deployed | record reviewed HEAD at deployment | not deployed | planned | temporary block-derived selection | dUSDC has no value; faucet is per-address and multi-wallet bypassable; native gas required; no KYC; not production-safe |
+| POP33 Demo V1 dUSDC pair | Base Sepolia | 84532 | `0xA7FA084b34c888061757d4b5FBb08a7B53fee786` | `0x140DA1b29F0B00b003Cabe86AE1a473d6745f56F` | `1db086dd958cf34bb72bd8f7b8c9f93dab4361a0` | 2026-07-14 UTC | **DEPLOYED — FRONTEND INTEGRATION PENDING** | temporary block-derived selection | dUSDC has no value; faucet supply is uncapped and cooldown is multi-wallet bypassable; Base Sepolia ETH required; no VRF, Automation, KYC, or production safety |
 
-For every actual deployment, copy the row and record the exact deployed
+### Deployment transactions
+
+| Operation | Transaction | Block | UTC timestamp | Gas used |
+| --- | --- | ---: | --- | ---: |
+| Deploy `Pop33DemoUSDC` | `0xb0be0a64b72e528ea7772baf644c659f012b16a2f1237eb3e67085092ec382bb` | 44144783 | 2026-07-14 19:37:34 | 594011 |
+| Deploy `Pop33BasicV1` | `0x83a9ec10dcf85a4397e46645343ca10fc9d18e06ca37819cee0f4c2c34f49b05` | 44144873 | 2026-07-14 19:40:34 | 2748476 |
+| Test one `drip()` | `0x4cb69acb733286f837fde40c7f25c26efc1a4b362104699506f090813e55fb23` | 44144891 | 2026-07-14 19:41:10 | 91850 |
+
+Deployer: `0xCaeb6D19d6d85349a08172e0efb9bb8541E4BeFB`.
+Its Base Sepolia balance changed from `0.015087090763689408 ETH` before the
+three writes to `0.015065960297864528 ETH` afterward. At deployment time the
+account carried the standard EIP-7702 delegation marker targeting the public
+MetaMask delegator `0x63c0c19a282a1B52b07dD5a65b58948A07DAE32B`. The missing
+outbound nonce associated with that authorization and all four earlier
+contract creations were reviewed; none was a prior deployment of this bytecode.
+
+Verified token state:
+
+- name `POP33 Demo USD`, symbol `dUSDC`, decimals `6`;
+- `DRIP_AMOUNT = 330000000` units (330 dUSDC);
+- `DRIP_COOLDOWN = 86400` seconds;
+- the test drip increased the deployer's balance from `0` to `330000000`
+  units, emitted `DemoTokensDripped`, and set `nextDripAt` to `1784144470`.
+
+Verified POP33 state:
+
+- `paymentToken = 0xA7FA084b34c888061757d4b5FBb08a7B53fee786`;
+- `ENTRY_PRICE = 33000000`, `MAX_POSITIONS_PER_POOL = 100`;
+- `DRAW_ROUNDS = 10`, `PRIZE_PER_ROUND = 330000000`;
+- `TOTAL_PRIZE_AMOUNT = 3300000000`, `DRAW_INTERVAL = 3600`;
+- pool 1 is `Open`, with zero active positions and zero escrow;
+- `positionCount = 0`; no approve, join, draw, or claim was performed.
+
+Explorer source publication is **PENDING**. Runtime bytecode and getters are
+verified on-chain, but the source is not yet published in BaseScan and the
+verification plugin is not installed. After a separate review and installation
+of the Hardhat verification plugin, the exact intended commands are:
+
+```text
+npx hardhat verify --network baseSepolia 0xA7FA084b34c888061757d4b5FBb08a7B53fee786 330000000 86400
+npx hardhat verify --network baseSepolia 0x140DA1b29F0B00b003Cabe86AE1a473d6745f56F 0xA7FA084b34c888061757d4b5FBb08a7B53fee786 3600
+```
+
+For every later deployment, copy the row and record the exact deployed
 addresses, reviewed source commit, UTC date, and one of `planned`, `active`, or
 `archived`. Never overwrite an older deployment row.
 

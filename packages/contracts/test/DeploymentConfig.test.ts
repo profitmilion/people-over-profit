@@ -2,6 +2,10 @@ import { expect } from "chai";
 
 import {
   BASE_SEPOLIA_DEPLOY_CONFIRMATION,
+  BASE_SEPOLIA_DEMO_POP33_CONFIRMATION,
+  BASE_SEPOLIA_DEMO_TOKEN_CONFIRMATION,
+  assertDemoPop33DeploymentConfirmation,
+  readBaseSepoliaDemoTokenDeploymentConfig,
   readBaseSepoliaDeploymentConfig,
 } from "../scripts/lib/demo-v1-config.js";
 
@@ -11,6 +15,16 @@ const VALID_ENV: NodeJS.ProcessEnv = {
   BASE_SEPOLIA_USDC_ADDRESS: "0x0000000000000000000000000000000000000001",
   POP33_DEMO_DRAW_INTERVAL_SECONDS: "3600",
   POP33_BASE_SEPOLIA_DEPLOY_CONFIRM: BASE_SEPOLIA_DEPLOY_CONFIRMATION,
+};
+
+const VALID_DEMO_TOKEN_ENV: NodeJS.ProcessEnv = {
+  BASE_SEPOLIA_RPC_URL: VALID_ENV.BASE_SEPOLIA_RPC_URL,
+  BASE_SEPOLIA_DEPLOYER_PRIVATE_KEY: VALID_ENV.BASE_SEPOLIA_DEPLOYER_PRIVATE_KEY,
+  POP33_DEMO_DRAW_INTERVAL_SECONDS: "3600",
+  POP33_DEMO_DRIP_AMOUNT_UNITS: "330000000",
+  POP33_DEMO_DRIP_COOLDOWN_SECONDS: "86400",
+  POP33_BASE_SEPOLIA_TOKEN_DEPLOY_CONFIRM: BASE_SEPOLIA_DEMO_TOKEN_CONFIRMATION,
+  POP33_BASE_SEPOLIA_POP33_DEPLOY_CONFIRM: BASE_SEPOLIA_DEMO_POP33_CONFIRMATION,
 };
 
 function withEnv(overrides: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
@@ -111,5 +125,67 @@ describe("Base Sepolia deployment configuration", function () {
         withEnv({ POP33_BASE_SEPOLIA_DEPLOY_CONFIRM: "yes" }),
       ),
     ).to.throw(`must equal ${BASE_SEPOLIA_DEPLOY_CONFIRMATION}`);
+  });
+});
+
+describe("Base Sepolia demo-token pair deployment configuration", function () {
+  function withDemoEnv(overrides: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+    return { ...VALID_DEMO_TOKEN_ENV, ...overrides };
+  }
+
+  it("accepts exact Demo V1 faucet parameters without returning secrets", function () {
+    const config = readBaseSepoliaDemoTokenDeploymentConfig(VALID_DEMO_TOKEN_ENV);
+
+    expect(config).to.deep.equal({
+      drawIntervalSeconds: 3_600n,
+      dripAmount: 330_000_000n,
+      dripCooldownSeconds: 86_400n,
+    });
+    expect(config).not.to.have.property("privateKey");
+    expect(config).not.to.have.property("rpcUrl");
+  });
+
+  it("rejects missing or blank pair-deployment values", function () {
+    for (const name of Object.keys(VALID_DEMO_TOKEN_ENV)) {
+      expect(() =>
+        readBaseSepoliaDemoTokenDeploymentConfig(withDemoEnv({ [name]: " " })),
+      ).to.throw(`${name} is required and cannot be empty.`);
+    }
+  });
+
+  it("rejects malformed or non-Demo faucet parameters", function () {
+    expect(() =>
+      readBaseSepoliaDemoTokenDeploymentConfig(
+        withDemoEnv({ POP33_DEMO_DRIP_AMOUNT_UNITS: "330000000.5" }),
+      ),
+    ).to.throw("must be a positive integer");
+    expect(() =>
+      readBaseSepoliaDemoTokenDeploymentConfig(
+        withDemoEnv({ POP33_DEMO_DRIP_AMOUNT_UNITS: "33" }),
+      ),
+    ).to.throw("must equal 330000000 for Demo V1");
+    expect(() =>
+      readBaseSepoliaDemoTokenDeploymentConfig(
+        withDemoEnv({ POP33_DEMO_DRIP_COOLDOWN_SECONDS: "3600" }),
+      ),
+    ).to.throw("must equal 86400 for Demo V1");
+  });
+
+  it("requires two distinct exact deployment confirmations", function () {
+    expect(() =>
+      readBaseSepoliaDemoTokenDeploymentConfig(
+        withDemoEnv({ POP33_BASE_SEPOLIA_TOKEN_DEPLOY_CONFIRM: "yes" }),
+      ),
+    ).to.throw(`must equal ${BASE_SEPOLIA_DEMO_TOKEN_CONFIRMATION}`);
+    expect(() =>
+      readBaseSepoliaDemoTokenDeploymentConfig(
+        withDemoEnv({ POP33_BASE_SEPOLIA_POP33_DEPLOY_CONFIRM: "yes" }),
+      ),
+    ).to.throw(`must equal ${BASE_SEPOLIA_DEMO_POP33_CONFIRMATION}`);
+    expect(() =>
+      assertDemoPop33DeploymentConfirmation(
+        withDemoEnv({ POP33_BASE_SEPOLIA_POP33_DEPLOY_CONFIRM: "stale" }),
+      ),
+    ).to.throw(`must equal ${BASE_SEPOLIA_DEMO_POP33_CONFIRMATION}`);
   });
 });

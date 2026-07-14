@@ -28,10 +28,13 @@ automatically an approved business rule.
 11. Creation becomes available again when at least one position ceases to be
     active.
 
-For Basic V1, the payment asset is a previously verified, standard,
-non-rebasing 6-decimal USDC-compatible ERC-20 and one position costs 33 USDC.
-The exact Base Sepolia test USDC address, final user-facing name for a
-`position`, and payment integration details are `TO DECIDE`.
+For Basic V1, the payment asset must satisfy the standard, non-rebasing
+6-decimal ERC-20 interface and one position costs 33 token units. Demo V1 uses
+POP33 Demo USD (`dUSDC`), a POP33-owned faucet token with no monetary value and
+no Circle affiliation. Official Circle test USDC, the preserved external-token
+deployment variant, and future mainnet USDC are distinct assets. The final
+user-facing name for a `position` and payment integration details are
+`TO DECIDE`.
 
 Basic V1 may have at most 10 simultaneously open pools. `join()` selects the
 oldest open pool in which the wallet has no active position and creates a new
@@ -164,7 +167,8 @@ V1 product rules.
 ### Participation and payments
 
 - Basic V1 uses USDC at 33 USDC per position.
-- `TO DECIDE`: exact Base Sepolia test USDC address.
+- Demo V1's own dUSDC address is `not deployed`; the exact external Base
+  Sepolia test-USDC address remains `TO DECIDE` only for the alternative path.
 - `TO DECIDE`: whether positions may be transferred.
 - `TO DECIDE`: final user-facing name for a `position`.
 - `TO DECIDE`: eligibility, geography, and age requirements.

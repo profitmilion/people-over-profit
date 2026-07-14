@@ -29,13 +29,15 @@ explicit prize accounting, pull-based claims, and position release at
 `Finished`. The active frontend and its existing Base Sepolia deployment remain
 unchanged.
 
-The workspace is now prepared for a later controlled Demo V1 deployment: its
-Base Sepolia path validates environment values, chain ID, deployer funding, and
-the selected six-decimal token before submission; separate local commands
-perform a deployment dry-run and a full lifecycle smoke test. No Base Sepolia
-deployment or public-chain transaction has been performed. The product scope,
-deployment register, safety gates, and frontend integration plan are recorded
-in `docs/DEMO_V1.md`.
+The workspace is now prepared for a later controlled Demo V1 deployment. It
+includes the POP33-owned, six-decimal POP33 Demo USD (`dUSDC`) faucet token and
+keeps the existing external-token deployment variant separate. The new pair
+path validates environment values, chain ID, conservative deployer gas reserves,
+two independent confirmations, deployed bytecode, fixed faucet parameters, and
+the linkage between dUSDC and `Pop33BasicV1`. Local commands deploy the same
+pair and exercise the faucet through the full lifecycle. No Base Sepolia
+deployment or public-chain transaction has been performed. The frontend remains
+unchanged.
 
 ## Business-rule implementation matrix
 
@@ -108,18 +110,19 @@ in `docs/DEMO_V1.md`.
   checks-effects-interactions, `SafeERC20`, and `ReentrancyGuard`.
 - `Finished` after all ten prizes are claimed, with atomic bounded release of
   all 100 pool positions.
-- Automated contract coverage: 78 passing Mocha tests. The prior 69 lifecycle
-  tests remain intact, and nine deployment-configuration tests cover required
-  values, HTTPS/local endpoint restrictions, secret formats, token addresses,
-  draw interval, and the explicit confirmation phrase.
+- Automated contract coverage: 91 passing Mocha tests. The prior lifecycle and
+  external deployment-configuration coverage remains intact; added tests cover
+  dUSDC identity, decimals, fixed faucet amount and cooldown, per-address timing,
+  absence of owner/arbitrary mint/sale/native-value paths, Basic V1 compatibility,
+  and the two-confirmation deployment configuration.
 - A named Hardhat `baseSepolia` OP network using configuration variables, with
   no committed credentials.
-- A guarded Base Sepolia deployment script that validates chain ID `84532`,
-  deployer funding, token bytecode and decimals, constructor parameters, and
-  post-deployment state without logging RPC or private-key values.
-- A local-only deployment dry-run that deploys `MockUSDC` and `Pop33BasicV1`
-  to a fresh `hardhatOp` network and validates the initial pool snapshot.
-- A local Demo V1 smoke command covering 100 joins, ten unique winning
+- A guarded external-token Base Sepolia deployment script plus a separately
+  named dUSDC/Pop33 two-contract script. The latter uses two explicit
+  confirmations and rechecks the second immediately before transaction two.
+- A local-only deployment dry-run that deploys `Pop33DemoUSDC` and
+  `Pop33BasicV1` to a fresh `hardhatOp` network and validates both contracts.
+- A local Demo V1 smoke command covering 100 faucet drips, 100 joins, ten unique winning
   positions, ten claims, `Finished`, and complete prize/escrow reconciliation.
 - A planned deployment register and a technical frontend integration plan in
   `docs/DEMO_V1.md`.
@@ -137,8 +140,9 @@ in `docs/DEMO_V1.md`.
 - consistent configuration across UI, hooks, and environment variables;
 - deployment and frontend integration of the new on-chain draw and claim flow;
 - production randomness and asynchronous request/fulfillment recovery;
-- selection and independent review of the exact Base Sepolia test-token
-  address;
+- actual deployment and independent recording of both dUSDC and Pop33 Base
+  Sepolia addresses; selection of an external test-token address remains open
+  only for the preserved alternative deployment path;
 - execution and recording of the first controlled Base Sepolia deployment;
 - unified cycle and position domain model;
 - Farcaster integration;
@@ -155,7 +159,7 @@ in `docs/DEMO_V1.md`.
 - deployment and frontend integration of the approved Basic V1 pool capacity,
   pricing, prize, draw, claim-accounting, and lifecycle behavior.
 - an actual `Pop33BasicV1` deployment on Base Sepolia; its register status is
-  `planned` and contains no fictional contract or token address.
+  `planned` and contains no fictional Pop33 or dUSDC address.
 
 ## Legacy or alternative code retained
 
@@ -194,9 +198,14 @@ newer code exists.
   contracts workspace has its own passing test command;
 - source for the currently deployed demo contract is not present; source for
   the new, undeployed Basic V1 foundation is in `packages/contracts`.
-- the prepared deployment script cannot determine whether a technically valid
-  six-decimal token address is the product-approved Base Sepolia test token;
-  that address requires explicit human review before deployment;
+- the preserved external-token deployment script cannot determine whether a
+  technically valid six-decimal address is product-approved; it still requires
+  explicit human review;
+- dUSDC's cooldown is per address, not per person, and is bypassable with
+  multiple wallets; its faucet supply is intentionally uncapped and must never
+  be represented as money or official Circle test USDC;
+- dUSDC does not sponsor gas: every faucet and POP33 write still requires Base
+  Sepolia ETH. Paymaster/sponsorship is a separate future milestone;
 - the undeployed contract's temporary draw entropy uses caller and block
   attributes and can be biased; it is suitable only for lifecycle tests and
   must be replaced by a verified randomness flow before production;
@@ -219,7 +228,8 @@ the UI and rechecks the connector directly before sending.
 
 - Basic V1 uses USDC, 33 USDC per position, 100 positions, and ten 330 USDC
   prizes with no fees.
-- `TO DECIDE`: exact Base Sepolia test USDC address.
+- Demo V1 uses own dUSDC, whose address is not deployed. `TO DECIDE`: exact
+  external Base Sepolia test-USDC address if the alternative path is selected.
 - Basic V1 uses at most 10 open pools; `join()` selects the oldest qualifying
   pool and opens another only when no existing pool qualifies.
 - A wallet may re-enter the same still-open pool after withdrawal, receiving a

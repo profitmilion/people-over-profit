@@ -15,10 +15,12 @@ Unresolved implementation or product matters are marked `TO DECIDE`.
 ## Basic V1 parameters
 
 - Network for the first deployment: Base Sepolia.
-- Payment asset: a previously verified, standard, non-rebasing USDC-compatible
-  ERC-20 with exactly 6 decimals. Fee-on-transfer and non-standard ERC-20
-  behavior are not supported.
-- Exact Base Sepolia USDC contract address: `TO DECIDE`.
+- Payment asset interface: a standard, non-rebasing ERC-20 with exactly 6
+  decimals. Fee-on-transfer and non-standard ERC-20 behavior are not supported.
+- Demo V1 asset: POP33 Demo USD (`dUSDC`), a POP33-owned faucet token with no
+  monetary value and no Circle affiliation. Its Base Sepolia address remains
+  `not deployed`. A preserved external-token deployment path and the future
+  mainnet USDC asset are separate configurations.
 - Price per position: 33 USDC.
 - Positions per full pool: 100.
 - Maximum simultaneously open pools: 10.
@@ -293,7 +295,9 @@ facts indexable:
 
 ## Matters still to decide
 
-- exact Base Sepolia test USDC address and faucet/distribution process;
+- exact external Base Sepolia test-USDC address, if the alternative external
+  path is used; dUSDC distribution is fixed at 330 tokens per address per 24
+  hours for Demo V1;
 - handling of incomplete or stalled open pools;
 - Chainlink VRF version, subscription/funding model, and failure recovery;
 - authorized automation versus permissionless triggering, including incentives;

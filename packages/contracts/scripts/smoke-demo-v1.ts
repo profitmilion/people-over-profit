@@ -21,7 +21,12 @@ for (let index = 0; index < Number(DEMO_V1_PARAMETERS.positionsPerPool); index +
   participantByAddress.set(participant.address.toLowerCase(), participant);
 
   await networkHelpers.setBalance(participant.address, parseEther("1"));
-  await (await token.mint(participant.address, DEMO_V1_PARAMETERS.entryPrice)).wait();
+  await (await token.connect(participant).drip()).wait();
+  assert.equal(
+    await token.balanceOf(participant.address),
+    DEMO_V1_PARAMETERS.dripAmount,
+    "Each participant must receive exactly one faucet drip.",
+  );
   await (
     await token
       .connect(participant)
@@ -58,13 +63,17 @@ assert.equal(
 );
 assert.equal((await pop33.getPool(1)).status, 3n, "Pool must be Claimable.");
 
-let totalWinnerBalance = 0n;
 for (let roundNumber = 1; roundNumber <= Number(DEMO_V1_PARAMETERS.drawRoundCount); roundNumber += 1) {
   const drawRound = await pop33.getDrawRound(1, roundNumber);
   const winner = participantByAddress.get(drawRound.winner.toLowerCase());
   assert.ok(winner, `Missing local signer for round ${roundNumber} winner.`);
   await (await pop33.connect(winner).claim(1, roundNumber)).wait();
-  totalWinnerBalance += await token.balanceOf(winner.address);
+  assert.equal(
+    await token.balanceOf(winner.address),
+    DEMO_V1_PARAMETERS.dripAmount - DEMO_V1_PARAMETERS.entryPrice +
+      DEMO_V1_PARAMETERS.prizePerRound,
+    `Round ${roundNumber} winner balance must include one prize.`,
+  );
 }
 
 const finishedPool = await pop33.getPool(1);
@@ -75,7 +84,17 @@ assert.equal(await pop33.totalEscrowed(), 0n);
 assert.equal(await pop33.totalPrizesAssigned(), DEMO_V1_PARAMETERS.totalPrizeAmount);
 assert.equal(await pop33.totalPrizesClaimed(), DEMO_V1_PARAMETERS.totalPrizeAmount);
 assert.equal(await token.balanceOf(await pop33.getAddress()), 0n);
-assert.equal(totalWinnerBalance, DEMO_V1_PARAMETERS.totalPrizeAmount);
+
+let totalParticipantBalance = 0n;
+for (const participant of participants) {
+  totalParticipantBalance += await token.balanceOf(participant.address);
+}
+assert.equal(
+  totalParticipantBalance,
+  DEMO_V1_PARAMETERS.dripAmount * DEMO_V1_PARAMETERS.positionsPerPool,
+  "All faucet issuance must remain accounted for after entries and prizes.",
+);
+assert.equal(totalParticipantBalance, await token.totalSupply());
 
 for (const participant of participants) {
   assert.equal(await pop33.activePositionsByUser(participant.address), 0n);
@@ -83,6 +102,7 @@ for (const participant of participants) {
 
 console.log("LOCAL DEMO V1 SMOKE TEST PASSED");
 console.log("  Positions: 100");
+console.log("  Faucet drips: 100 x 330 dUSDC");
 console.log("  Unique winners: 10");
 console.log("  Claims: 10");
 console.log("  Final status: Finished");

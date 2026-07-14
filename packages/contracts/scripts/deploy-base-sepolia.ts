@@ -8,6 +8,8 @@ import {
   deployPop33BasicV1,
   printDeploymentResult,
   printDeploymentSummary,
+  requireBaseSepoliaDeploymentBalance,
+  requireEstimatedDeploymentBalance,
   validatePaymentToken,
   verifyPop33BasicV1Deployment,
 } from "./lib/deployment.js";
@@ -26,12 +28,15 @@ if (currentNetwork.chainId !== BASE_SEPOLIA_CHAIN_ID) {
 }
 
 const [deployer] = await ethers.getSigners();
-const deployerBalance = await ethers.provider.getBalance(deployer.address);
-if (deployerBalance === 0n) {
-  throw new Error("Refusing deployment: deployer has no native token for gas.");
-}
+await requireBaseSepoliaDeploymentBalance(ethers, deployer.address);
 
 await validatePaymentToken(ethers, deploymentConfig.paymentTokenAddress);
+await requireEstimatedDeploymentBalance(
+  ethers,
+  deployer.address,
+  "Pop33BasicV1",
+  [deploymentConfig.paymentTokenAddress, deploymentConfig.drawIntervalSeconds],
+);
 
 const summary = {
   networkName: "Base Sepolia",
@@ -42,6 +47,7 @@ const summary = {
 };
 
 printDeploymentSummary(summary);
+console.log("Deployment variant: existing external 6-decimal payment token.");
 console.log("All validation passed. Submitting the Pop33BasicV1 deployment transaction.");
 
 const pop33 = await deployPop33BasicV1(

@@ -6,10 +6,13 @@ import {
 } from "./demo-v1-config.js";
 import {
   type DynamicContract,
+  deployPop33DemoUSDC,
   deployPop33BasicV1,
+  printDemoTokenDeploymentResult,
+  printDemoTokenPairDeploymentSummary,
   printDeploymentResult,
   printDeploymentSummary,
-  validatePaymentToken,
+  verifyPop33DemoUSDCDeployment,
   verifyPop33BasicV1Deployment,
 } from "./deployment.js";
 
@@ -33,10 +36,27 @@ export async function deployLocalDemoV1(
     );
   }
 
-  const token = (await ethers.deployContract("MockUSDC")) as DynamicContract;
-  await token.waitForDeployment();
+  const token = (await deployPop33DemoUSDC(
+    ethers,
+    DEMO_V1_PARAMETERS.dripAmount,
+    DEMO_V1_PARAMETERS.dripCooldownSeconds,
+  )) as DynamicContract;
   const paymentTokenAddress = await token.getAddress();
-  await validatePaymentToken(ethers, paymentTokenAddress);
+  await verifyPop33DemoUSDCDeployment(
+    ethers,
+    token,
+    DEMO_V1_PARAMETERS.dripAmount,
+    DEMO_V1_PARAMETERS.dripCooldownSeconds,
+  );
+
+  const tokenSummary = {
+    networkName: "hardhatOp (local only)",
+    chainId: currentNetwork.chainId,
+    deployer: deployer.address,
+    dripAmount: DEMO_V1_PARAMETERS.dripAmount,
+    dripCooldownSeconds: DEMO_V1_PARAMETERS.dripCooldownSeconds,
+    drawIntervalSeconds: DEMO_V1_PARAMETERS.drawIntervalSeconds,
+  };
 
   const summary = {
     networkName: "hardhatOp (local only)",
@@ -45,7 +65,11 @@ export async function deployLocalDemoV1(
     paymentTokenAddress,
     drawIntervalSeconds: DEMO_V1_PARAMETERS.drawIntervalSeconds,
   };
-  if (logOutput) printDeploymentSummary(summary);
+  if (logOutput) {
+    printDemoTokenPairDeploymentSummary(tokenSummary);
+    await printDemoTokenDeploymentResult(token, tokenSummary);
+    printDeploymentSummary(summary);
+  }
 
   const pop33 = await deployPop33BasicV1(
     ethers,

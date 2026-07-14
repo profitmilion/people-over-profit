@@ -29,6 +29,7 @@ the patched majors; do not use `npm audit fix --force` for this workspace.
 Implemented:
 
 - mintable six-decimal test token for local tests;
+- six-decimal POP33 Demo USD (`dUSDC`) faucet token for Demo V1;
 - paid positions at 33 USDC;
 - automatic deterministic pool allocation;
 - one active position per wallet per pool;
@@ -70,9 +71,11 @@ npm run smoke:demo-v1
 
 `deploy:dry-run` and `smoke:demo-v1` create an isolated local `hardhatOp`
 network and never use Base Sepolia. The separately named
-`deploy:base-sepolia` command is prepared but must not be run without explicit
+Base Sepolia commands are prepared but must not be run without explicit
 deployment approval and all environment safety gates described in
-`../../docs/DEMO_V1.md`.
+`../../docs/DEMO_V1.md`. The legacy-compatible `deploy:base-sepolia` path uses
+an external token; `deploy:base-sepolia:demo-token` deploys `dUSDC` and then
+`Pop33BasicV1` with independent confirmations.
 
 The constructor accepts the payment-token address and a non-zero draw interval
 in seconds. It rejects addresses without bytecode, missing ERC-20 metadata, and
@@ -88,8 +91,13 @@ created pools.
 
 ## Safety notes
 
-`MockUSDC` is unrestricted and mintable. It is for local automated tests only
-and is not a production token. `Pop33BasicV1` has no administrative participant-
+`MockUSDC` remains an unrestricted local-test fixture. `Pop33DemoUSDC` is a
+testnet-only faucet token with no monetary value: each address can mint exactly
+330 dUSDC through `drip()` once per 24 hours. It has no owner, administrator,
+sale, native-token withdrawal, or arbitrary public mint function. The per-address
+cooldown does not prevent multi-wallet use and the supply is intentionally
+uncapped for demonstration purposes. Neither token is official Circle USDC or
+the intended future mainnet payment asset. `Pop33BasicV1` has no administrative participant-
 fund withdrawal function. Funds in locked and drawing pools remain explicitly
 accounted and reserved for their round prizes until valid winner claims.
 
@@ -112,11 +120,11 @@ artifacts and must not be included in a production deployment path.
 
 ## Deployment preparation
 
-`scripts/deploy-base-sepolia.ts` validates the Base Sepolia chain, deployer,
-test-token contract, six-decimal metadata, constructor interval, and an explicit
-confirmation phrase before sending a transaction. Its summaries never include
-the private key or RPC URL. It validates all contract constants and the initial
-pool snapshot after deployment and does not perform explorer verification.
+`scripts/deploy-base-sepolia.ts` preserves the external-token variant.
+`scripts/deploy-base-sepolia-demo-token.ts` prepares the two-contract dUSDC
+variant. Both validate Base Sepolia, deployer gas reserves, fixed parameters,
+bytecode and post-deployment state without printing private keys or RPC URLs.
+Neither performs explorer verification.
 
 `packages/contracts/.env.example` contains names and safe placeholders only.
 Hardhat reads values from the process environment; the example file is not

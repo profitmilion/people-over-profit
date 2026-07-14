@@ -133,8 +133,11 @@ product model rather than define an alternative business model.
 
 The current integration targets Base Sepolia and uses a demo contract. It is an
 early implementation and does not yet cover all approved product behavior.
-The future Basic V1 deployment must use a previously verified, standard,
-non-rebasing ERC-20 with exactly 6 decimals and the approved USDC address.
+POP33 Demo V1 is prepared to use the POP33-owned, six-decimal faucet token
+POP33 Demo USD (`dUSDC`). It has no monetary value and is not official Circle
+test USDC. A preserved alternative deployment path accepts a separately
+reviewed external six-decimal test token. Both are distinct from the intended
+future mainnet USDC payment asset.
 
 The planned first controlled `Pop33BasicV1` testnet release is named POP33 Demo
 V1. Its explicitly non-production scope, test-token limitations, deployment
@@ -182,7 +185,9 @@ discovered issues do not change approved rules by themselves.
 
 - Basic V1 uses USDC, 33 USDC per position, 100 positions per pool, 10 draws,
   and one 330 USDC prize in each draw.
-- `TO DECIDE`: exact Base Sepolia test USDC address.
+- POP33 Demo V1 uses the own dUSDC contract; its Base Sepolia address remains
+  `not deployed` until an authorized deployment. Selection of any external
+  official test-USDC address remains `TO DECIDE` for the alternative path.
 - Basic V1 Base Sepolia uses a 1-hour draw interval; a future mainnet deployment
   is planned to use 24 hours.
 - `TO DECIDE`: randomness and verification mechanism; Chainlink VRF must be

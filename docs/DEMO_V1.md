@@ -15,7 +15,8 @@ in `BUSINESS_RULES.md` rather than resolved here.
 POP33 Demo V1 is planned for Base Sepolia, chain ID `84532`. It is a technical
 testnet demonstration only:
 
-- it uses test USDC-compatible tokens with no monetary value;
+- it uses POP33 Demo USD (`dUSDC`), a POP33-owned test token with no monetary
+  value;
 - it is not a production product or a service offering real prizes;
 - it does not accept real payments and provides no economic guarantees;
 - its current winner-selection mechanism is temporary, manipulable, and not
@@ -23,9 +24,12 @@ testnet demonstration only:
 - it has no KYC, proof-of-personhood, or multi-account protection;
 - it does not establish a legal or production operating model.
 
-The exact six-decimal Base Sepolia test-token address is `TO DECIDE` and must be
-verified before deployment. The local `MockUSDC` is unrestricted and must never
-be deployed or presented as the selected public test token.
+The Demo V1 token type is decided: `Pop33DemoUSDC`, with name `POP33 Demo USD`,
+symbol `dUSDC`, and six decimals. It is not issued by or affiliated with Circle,
+is not official Circle test USDC, and is not the intended future mainnet USDC
+payment asset. Its Base Sepolia address remains `not deployed` until an
+authorized deployment records a real address. The unrestricted `MockUSDC`
+remains a local test fixture and is not part of either public deployment path.
 
 ## Demo V1 technical configuration
 
@@ -34,12 +38,14 @@ All token amounts are stored in the smallest six-decimal token units.
 | Parameter | Demo V1 value |
 | --- | ---: |
 | Positions per pool | 100 |
-| Position price | 33,000,000 units (33 test USDC) |
-| Full pool | 3,300,000,000 units (3,300 test USDC) |
+| Position price | 33,000,000 units (33 dUSDC) |
+| Full pool | 3,300,000,000 units (3,300 dUSDC) |
 | Draw rounds | 10 |
-| Prize per round | 330,000,000 units (330 test USDC) |
+| Prize per round | 330,000,000 units (330 dUSDC) |
 | Different winning positions | 10 |
 | Base Sepolia draw interval | 3,600 seconds |
+| Faucet drip | 330,000,000 units (330 dUSDC) |
+| Faucet cooldown | 86,400 seconds (24 hours) per address |
 
 The winning position is removed only from the remaining candidate set of its
 own pool. Positions in other pools are unaffected. The contract enforces one
@@ -56,14 +62,17 @@ prizes have been claimed.
 After the frontend integration milestone, Demo V1 should support:
 
 1. connecting a wallet on Base Sepolia;
-2. approving and paying test USDC for a position;
-3. filling a pool with 100 positions;
-4. observing the transition to `Locked`;
-5. executing ten scheduled rounds;
-6. displaying the ten winning positions and wallets;
-7. claiming all ten credited prizes;
-8. observing the transition to `Finished`;
-9. displaying the completed pool and round history in an on-chain archive.
+2. seeing the connected network, native gas balance, dUSDC balance, and next
+   faucet availability;
+3. using a clearly labelled `Pobierz środki testowe` action that calls `drip()`;
+4. approving and paying dUSDC for a position;
+5. filling a pool with 100 positions;
+6. observing the transition to `Locked`;
+7. executing ten scheduled rounds;
+8. displaying the ten winning positions and wallets;
+9. claiming all ten credited prizes;
+10. observing the transition to `Finished`;
+11. displaying the completed pool and round history in an on-chain archive.
 
 This checkpoint does not implement that frontend flow.
 
@@ -78,7 +87,7 @@ npm run deploy:dry-run
 ```
 
 This command explicitly creates the local `hardhatOp` simulated network. It
-does not read an external RPC or use Base Sepolia. It deploys `MockUSDC`,
+does not read an external RPC or use Base Sepolia. It deploys `Pop33DemoUSDC`,
 deploys `Pop33BasicV1`, and verifies:
 
 - local chain ID `31337`;
@@ -97,23 +106,29 @@ into the deployment register or frontend configuration.
 npm run smoke:demo-v1
 ```
 
-The smoke test independently deploys the local token and contract, creates and
-funds 100 local wallets, executes approvals and joins, confirms `Locked`, moves
+The smoke test independently deploys the local token and contract, creates 100
+local wallets, gives them native gas only through local network helpers, calls
+`drip()` for every wallet, executes approvals and joins, confirms `Locked`, moves
 local time through all ten schedules, verifies ten unique winning positions,
 confirms `Claimable`, performs all ten claims, and confirms `Finished`. It also
 requires assigned prizes, claimed prizes, token balance, and accounted escrow
 to reconcile to zero remaining prize funds.
 
-### Planned Base Sepolia deployment
+### Planned Base Sepolia deployments
 
 ```text
 npm run deploy:base-sepolia
+npm run deploy:base-sepolia:external-token
+npm run deploy:base-sepolia:demo-token
 ```
 
-Do not run this command until every item in the pre-deployment checklist is
-complete and the deployment is explicitly authorized. The command is separate
-from the local dry-run, connects only to the named `baseSepolia` Hardhat
-network, and refuses to deploy unless all safety checks pass.
+Do not run these commands until every checklist item is complete and the
+deployment is explicitly authorized. `deploy:base-sepolia` is retained as an
+alias for `deploy:base-sepolia:external-token`; both deploy only
+`Pop33BasicV1` against a reviewed pre-existing token. The separate
+`deploy:base-sepolia:demo-token` path deploys `Pop33DemoUSDC`, validates it,
+rechecks an independent confirmation, and then deploys `Pop33BasicV1` against
+the new address. No command silently substitutes one token model for another.
 
 Required process environment variables:
 
@@ -124,6 +139,10 @@ Required process environment variables:
 | `BASE_SEPOLIA_USDC_ADDRESS` | no | reviewed six-decimal test-token address |
 | `POP33_DEMO_DRAW_INTERVAL_SECONDS` | no | must equal `3600` |
 | `POP33_BASE_SEPOLIA_DEPLOY_CONFIRM` | no | must equal the documented explicit confirmation phrase |
+| `POP33_DEMO_DRIP_AMOUNT_UNITS` | no | pair path only; must equal `330000000` |
+| `POP33_DEMO_DRIP_COOLDOWN_SECONDS` | no | pair path only; must equal `86400` |
+| `POP33_BASE_SEPOLIA_TOKEN_DEPLOY_CONFIRM` | no | pair path token confirmation; exact documented phrase |
+| `POP33_BASE_SEPOLIA_POP33_DEPLOY_CONFIRM` | no | pair path POP33 confirmation; exact documented phrase and rechecked before transaction two |
 | `BASESCAN_API_KEY` | yes | optional and unused until a separate verification command exists |
 
 `packages/contracts/.env.example` documents names and safe placeholders. It is
@@ -136,12 +155,17 @@ Before submitting a deployment transaction, the script validates:
 - required values are present and non-blank;
 - RPC uses HTTPS, contains no URL credentials, and is not a local endpoint;
 - the private key has a valid non-zero 32-byte format;
-- the token address is valid and non-zero;
+- the external token address is valid and non-zero when that variant is used;
 - draw interval is exactly the approved Demo V1 value;
-- the explicit deployment confirmation phrase matches;
+- the applicable explicit confirmation phrase or both independent pair-path
+  confirmation phrases match;
 - the connected chain ID is exactly `84532`;
-- the deployer has native gas funds;
-- the token address contains bytecode and exposes exactly six decimals.
+- the deployer retains a conservative native-gas reserve and a buffered
+  estimate for the contract about to be deployed;
+- each deployed or external token address contains bytecode and exposes exactly
+  six decimals;
+- pair-path token metadata, faucet constants, POP33 constants, constructor
+  linkage, and initial pool state match the reviewed parameters.
 
 The pre-transaction summary excludes the RPC URL and private key. After
 deployment, the script validates contract state and prints the contract,
@@ -150,12 +174,12 @@ automatic and no verification plugin is installed in this checkpoint.
 
 ## Deployment register
 
-No Pop33BasicV1 Base Sepolia deployment has been performed by this checkpoint.
-Do not replace `not deployed` or `TO DECIDE` with a guessed address.
+No Demo V1 Base Sepolia deployment has been performed by this checkpoint. Do
+not replace `not deployed` with a guessed address.
 
-| Version | Network | Chain ID | Contract | Token | Source commit | Deployment date | Status | Randomness | Warnings and limitations |
+| Version | Network | Chain ID | Demo token contract | Pop33 contract | Source commit | Deployment date | Status | Randomness | Warnings and limitations |
 | --- | --- | ---: | --- | --- | --- | --- | --- | --- | --- |
-| POP33 Demo V1 | Base Sepolia | 84532 | not deployed | `TO DECIDE` | record reviewed HEAD at deployment | not deployed | planned | temporary block-derived selection | test tokens only; no KYC or multi-account protection; not production-safe |
+| POP33 Demo V1 dUSDC pair | Base Sepolia | 84532 | not deployed | not deployed | record reviewed HEAD at deployment | not deployed | planned | temporary block-derived selection | dUSDC has no value; faucet is per-address and multi-wallet bypassable; native gas required; no KYC; not production-safe |
 
 For every actual deployment, copy the row and record the exact deployed
 addresses, reviewed source commit, UTC date, and one of `planned`, `active`, or
@@ -182,20 +206,24 @@ deployment is deliberately retired.
 
 ### Required writes
 
-1. Read token allowance and call the payment token's `approve()` for exactly
+1. Call dUSDC `drip()` from `Pobierz środki testowe` only when the cooldown
+   permits it.
+2. Read token allowance and call the payment token's `approve()` for exactly
    the required position price when necessary.
-2. Call `join()` without native value.
-3. Expose `withdraw(positionId)` only for the position owner while its pool is
+3. Call `join()` without native value. A wallet-supported approve-plus-join
+   batch may be offered, but a clear sequential fallback is required.
+4. Expose `withdraw(positionId)` only for the position owner while its pool is
    `Open`.
-4. Treat `executeDraw(poolId, roundNumber)` as a clearly labelled temporary
+5. Treat `executeDraw(poolId, roundNumber)` as a clearly labelled temporary
    demo action or controlled operator action; the trigger policy remains
    `TO DECIDE`.
-5. Enable `claim(poolId, roundNumber)` only for the finalized, unclaimed round
+6. Enable `claim(poolId, roundNumber)` only for the finalized, unclaimed round
    winner.
 
 ### Required reads
 
-- payment-token address, decimals, user balance, and allowance;
+- payment-token address, name, symbol, decimals, user balance, and allowance;
+- dUSDC `DRIP_AMOUNT`, `DRIP_COOLDOWN`, and `nextDripAt(user)`;
 - `ENTRY_PRICE`, pool capacity, round count, prize values, and draw interval;
 - `poolCount`, `positionCount`, `totalEscrowed`, assigned and claimed totals;
 - `getPool()`, `getPosition()`, `getDrawRound()`;
@@ -207,7 +235,7 @@ deployment is deliberately retired.
 
 ### Events and presentation
 
-The event/indexing layer must consume `PoolCreated`,
+The event/indexing layer must consume dUSDC `DemoTokensDripped` plus `PoolCreated`,
 `PoolConfigurationSnapshotted`, `PositionJoined`, `PositionWithdrawn`,
 `PoolLocked`, `PoolStatusChanged`, `DrawRoundExecuted`,
 `WinningPositionAssigned`, and `PrizeClaimed`.
@@ -231,19 +259,30 @@ example:
 
 The current legacy variables must remain intact until the migration is tested.
 
+### Native gas and transaction UX
+
+The dUSDC faucet does not remove the need for Base Sepolia ETH. Users require
+native gas for `drip`, `approve`, `join`, `withdraw`, `executeDraw`, and `claim`.
+The UI must detect an insufficient native balance before presenting a write as
+ready and explain that dUSDC cannot pay network fees. A Paymaster or sponsored
+transaction flow is a separate future milestone; this plan does not assume a
+specific Farcaster wallet, relayer, or third-party ETH faucet.
+
 ## Pre-deployment checklist for Base Sepolia
 
 Before any real deployment transaction:
 
-1. explicitly approve the exact Base Sepolia test-token address and confirm it
-   is a standard, non-rebasing, non-fee token with six decimals;
+1. choose explicitly between the preserved external-token path and the dUSDC
+   pair path; for dUSDC review its name, symbol, six decimals, 330-token drip,
+   24-hour per-address cooldown, uncapped supply, and multi-wallet limitation;
 2. review and sign off all Demo V1 warnings and the temporary randomness risk;
 3. select and fund a dedicated deployer wallet with only the required test ETH;
 4. review the final source commit and confirm the worktree is clean;
 5. run compile, all contract tests, both TypeScript checks, local dry-run,
    local smoke test, root lint/build, contract production audit, and diff check;
 6. review constructor arguments and the pre-transaction script summary;
-7. explicitly authorize the deployment and set the confirmation phrase;
+7. explicitly authorize the selected deployment and set its confirmation
+   phrase; the pair path requires separate confirmations for both transactions;
 8. run the Base Sepolia command once and retain its transaction receipt;
 9. validate deployed bytecode and all getters independently;
 10. record the real addresses, commit, UTC date, transaction, and limitations

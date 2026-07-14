@@ -136,6 +136,11 @@ early implementation and does not yet cover all approved product behavior.
 The future Basic V1 deployment must use a previously verified, standard,
 non-rebasing ERC-20 with exactly 6 decimals and the approved USDC address.
 
+The planned first controlled `Pop33BasicV1` testnet release is named POP33 Demo
+V1. Its explicitly non-production scope, test-token limitations, deployment
+status, and intended end-to-end demonstration are defined in `docs/DEMO_V1.md`.
+It has not yet been deployed or connected to the frontend.
+
 ### Future production
 
 Base mainnet is the intended direction reflected in the project configuration

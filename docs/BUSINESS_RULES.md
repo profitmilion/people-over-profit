@@ -168,6 +168,20 @@ V1 product rules.
 - `TO DECIDE`: whether positions may be transferred.
 - `TO DECIDE`: final user-facing name for a `position`.
 - `TO DECIDE`: eligibility, geography, and age requirements.
+- `TO DECIDE`: whether one person may hold only one product account.
+- `TO DECIDE`: whether one identity may control multiple participating wallets.
+- `TO DECIDE`: the maximum number of positions one person, rather than one
+  wallet, may acquire in one pool.
+- `TO DECIDE`: whether one person may win at most once in a pool when multiple
+  wallets can belong to that person.
+- `TO DECIDE`: protection against multi-account and multi-wallet participation.
+- `TO DECIDE`: wallet-loss and access-recovery policy. The current contract
+  cannot redirect a position or prize from a lost wallet.
+
+The current rules and contract limits are wallet-level, not identity-level.
+Demo V1 has no identity registry, KYC, proof-of-personhood, or multi-account
+protection. These limitations do not approve unrestricted identity-level
+participation for a production product.
 
 ### Pools
 
@@ -194,7 +208,12 @@ V1 product rules.
 - Basic V1 Base Sepolia rounds are scheduled hourly; the planned future
   mainnet interval is 24 hours.
 - Basic V1 uses pull-based claims rather than automatic winner transfers.
+- Demo V1 retains pull-based claims. `TO DECIDE`: whether a future production
+  version should retain `claim` or use an approved automatic payout model.
+- `TO DECIDE`: the deadline, if any, for claiming a credited prize.
 - `TO DECIDE`: exact claim expiry and unclaimed-prize settlement rules.
+- `TO DECIDE`: whether and how a pool may finish independently of unclaimed
+  prizes. Demo V1 currently requires all ten claims before `Finished`.
 - `TO DECIDE`: authorized automation or permissionless draw triggering and any
   caller incentive.
 - `TO DECIDE`: failed draw and failed payout handling.
@@ -206,6 +225,9 @@ V1 product rules.
 - `TO DECIDE`: prize-pool allocation.
 - `TO DECIDE`: development and community allocation.
 - `TO DECIDE`: reserve, Auto-HODL, DCA, and PMN mechanics.
+- `TO DECIDE`: controlled configuration and rollout of future position-price
+  levels `0.33 -> 3.30 -> 13.30 -> 33 USDC`. Any approved change must apply
+  only to newly created pools and must not mutate an existing pool snapshot.
 
 ### Governance, compliance, and security
 
@@ -214,4 +236,8 @@ V1 product rules.
 - `TO DECIDE`: contract upgrade and emergency-control policy.
 - `TO DECIDE`: legal classification and required legal review.
 - `TO DECIDE`: KYC/AML requirements.
+- `TO DECIDE`: whether KYC, proof-of-personhood, or another identity mechanism
+  is required before any real-value use.
+- `TO DECIDE`: the legal model and required legal review before accepting real
+  funds or offering real-value prizes.
 - `TO DECIDE`: audit requirements and incident response.

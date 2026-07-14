@@ -29,6 +29,14 @@ explicit prize accounting, pull-based claims, and position release at
 `Finished`. The active frontend and its existing Base Sepolia deployment remain
 unchanged.
 
+The workspace is now prepared for a later controlled Demo V1 deployment: its
+Base Sepolia path validates environment values, chain ID, deployer funding, and
+the selected six-decimal token before submission; separate local commands
+perform a deployment dry-run and a full lifecycle smoke test. No Base Sepolia
+deployment or public-chain transaction has been performed. The product scope,
+deployment register, safety gates, and frontend integration plan are recorded
+in `docs/DEMO_V1.md`.
+
 ## Business-rule implementation matrix
 
 | Approved rule | Implementation status | Notes |
@@ -100,8 +108,21 @@ unchanged.
   checks-effects-interactions, `SafeERC20`, and `ReentrancyGuard`.
 - `Finished` after all ten prizes are claimed, with atomic bounded release of
   all 100 pool positions.
-- Automated contract coverage: 69 passing Mocha tests, preserving the prior 56
-  and adding lifecycle, timing, uniqueness, claim, balance, and snapshot cases.
+- Automated contract coverage: 78 passing Mocha tests. The prior 69 lifecycle
+  tests remain intact, and nine deployment-configuration tests cover required
+  values, HTTPS/local endpoint restrictions, secret formats, token addresses,
+  draw interval, and the explicit confirmation phrase.
+- A named Hardhat `baseSepolia` OP network using configuration variables, with
+  no committed credentials.
+- A guarded Base Sepolia deployment script that validates chain ID `84532`,
+  deployer funding, token bytecode and decimals, constructor parameters, and
+  post-deployment state without logging RPC or private-key values.
+- A local-only deployment dry-run that deploys `MockUSDC` and `Pop33BasicV1`
+  to a fresh `hardhatOp` network and validates the initial pool snapshot.
+- A local Demo V1 smoke command covering 100 joins, ten unique winning
+  positions, ten claims, `Finished`, and complete prize/escrow reconciliation.
+- A planned deployment register and a technical frontend integration plan in
+  `docs/DEMO_V1.md`.
 
 ## Partial / in progress
 
@@ -116,6 +137,9 @@ unchanged.
 - consistent configuration across UI, hooks, and environment variables;
 - deployment and frontend integration of the new on-chain draw and claim flow;
 - production randomness and asynchronous request/fulfillment recovery;
+- selection and independent review of the exact Base Sepolia test-token
+  address;
+- execution and recording of the first controlled Base Sepolia deployment;
 - unified cycle and position domain model;
 - Farcaster integration;
 - production readiness.
@@ -130,6 +154,8 @@ unchanged.
 - end-to-end real or test stablecoin payment flow;
 - deployment and frontend integration of the approved Basic V1 pool capacity,
   pricing, prize, draw, claim-accounting, and lifecycle behavior.
+- an actual `Pop33BasicV1` deployment on Base Sepolia; its register status is
+  `planned` and contains no fictional contract or token address.
 
 ## Legacy or alternative code retained
 
@@ -168,6 +194,9 @@ newer code exists.
   contracts workspace has its own passing test command;
 - source for the currently deployed demo contract is not present; source for
   the new, undeployed Basic V1 foundation is in `packages/contracts`.
+- the prepared deployment script cannot determine whether a technically valid
+  six-decimal token address is the product-approved Base Sepolia test token;
+  that address requires explicit human review before deployment;
 - the undeployed contract's temporary draw entropy uses caller and block
   attributes and can be biased; it is suitable only for lifecycle tests and
   must be replaced by a verified randomness flow before production;
@@ -213,6 +242,10 @@ the UI and rechecks the connector directly before sending.
 
 - `cd packages/contracts && npm run compile`
 - `cd packages/contracts && npm test`
+- `cd packages/contracts && npm run deploy:dry-run`
+- `cd packages/contracts && npm run smoke:demo-v1`
+- `cd packages/contracts && npx tsc --noEmit`
+- `npx tsc --noEmit`
 - `npm run lint`
 - `npm run build`
 - `git diff --check`

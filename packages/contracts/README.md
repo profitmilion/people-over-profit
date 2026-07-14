@@ -52,7 +52,9 @@ Intentionally not implemented:
 - Chainlink VRF or Automation;
 - asynchronous randomness request and fulfillment recovery;
 - claim expiry or alternative unclaimed-prize settlement;
-- deployment scripts or network credentials.
+- an executed public-chain deployment;
+- automatic explorer verification;
+- network credentials or committed secrets.
 
 The target behavior is defined in `../../docs/BASIC_V1_SPEC.md`.
 
@@ -62,7 +64,15 @@ The target behavior is defined in `../../docs/BASIC_V1_SPEC.md`.
 npm ci
 npm run compile
 npm test
+npm run deploy:dry-run
+npm run smoke:demo-v1
 ```
+
+`deploy:dry-run` and `smoke:demo-v1` create an isolated local `hardhatOp`
+network and never use Base Sepolia. The separately named
+`deploy:base-sepolia` command is prepared but must not be run without explicit
+deployment approval and all environment safety gates described in
+`../../docs/DEMO_V1.md`.
 
 The constructor accepts the payment-token address and a non-zero draw interval
 in seconds. It rejects addresses without bytecode, missing ERC-20 metadata, and
@@ -96,5 +106,18 @@ Claims use checks-effects-interactions, `SafeERC20`, and `ReentrancyGuard`.
 With claim expiry and unclaimed-prize settlement still `TO DECIDE`, a pool
 reaches `Finished` only when all ten prizes have been claimed. The final claim
 releases the bounded set of 100 positions atomically.
+
 The `Pop33BasicV1Harness` and all contracts under `contracts/mocks` are test-only
 artifacts and must not be included in a production deployment path.
+
+## Deployment preparation
+
+`scripts/deploy-base-sepolia.ts` validates the Base Sepolia chain, deployer,
+test-token contract, six-decimal metadata, constructor interval, and an explicit
+confirmation phrase before sending a transaction. Its summaries never include
+the private key or RPC URL. It validates all contract constants and the initial
+pool snapshot after deployment and does not perform explorer verification.
+
+`packages/contracts/.env.example` contains names and safe placeholders only.
+Hardhat reads values from the process environment; the example file is not
+loaded automatically. Real `.env` files remain ignored.

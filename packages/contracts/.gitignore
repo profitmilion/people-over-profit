@@ -3,3 +3,6 @@ cache/
 coverage/
 node_modules/
 types/
+.env
+.env.*
+!.env.example

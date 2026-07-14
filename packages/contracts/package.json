@@ -7,7 +7,10 @@
   "scripts": {
     "clean": "hardhat clean",
     "compile": "hardhat compile",
-    "test": "hardhat test"
+    "test": "hardhat test",
+    "deploy:dry-run": "hardhat run scripts/deploy-local.ts",
+    "deploy:base-sepolia": "hardhat run scripts/deploy-base-sepolia.ts --network baseSepolia",
+    "smoke:demo-v1": "hardhat run scripts/smoke-demo-v1.ts"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-ethers": "4.0.14",

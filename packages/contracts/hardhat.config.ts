@@ -1,4 +1,4 @@
-import { defineConfig } from "hardhat/config";
+import { configVariable, defineConfig } from "hardhat/config";
 import hardhatEthers from "@nomicfoundation/hardhat-ethers";
 import hardhatEthersChaiMatchers from "@nomicfoundation/hardhat-ethers-chai-matchers";
 import hardhatMocha from "@nomicfoundation/hardhat-mocha";
@@ -18,6 +18,20 @@ export default defineConfig({
         enabled: true,
         runs: 200,
       },
+    },
+  },
+  networks: {
+    hardhatOp: {
+      type: "edr-simulated",
+      chainType: "op",
+      chainId: 31_337,
+    },
+    baseSepolia: {
+      type: "http",
+      chainType: "op",
+      chainId: 84_532,
+      url: configVariable("BASE_SEPOLIA_RPC_URL"),
+      accounts: [configVariable("BASE_SEPOLIA_DEPLOYER_PRIVATE_KEY")],
     },
   },
   test: {

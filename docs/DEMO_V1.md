@@ -3,8 +3,9 @@
 ## Document status
 
 This document defines the scope and records the first controlled POP33 Demo V1
-deployment. The contracts are deployed, but frontend integration is pending;
-this record does not authorize any additional public-chain transaction.
+deployment and its separate frontend integration. The contracts and local
+frontend integration are complete; this record does not authorize any
+additional public-chain transaction or a public frontend release.
 
 Approved product behavior remains governed by `BUSINESS_RULES.md` and
 `BASIC_V1_SPEC.md`. Open product decisions remain `TO DECIDE` and are collected
@@ -59,7 +60,7 @@ prizes have been claimed.
 
 ## Intended end-to-end demonstration
 
-After the frontend integration milestone, Demo V1 should support:
+The separate `#/demo-v1` frontend supports:
 
 1. connecting a wallet on Base Sepolia;
 2. seeing the connected network, native gas balance, dUSDC balance, and next
@@ -74,7 +75,9 @@ After the frontend integration milestone, Demo V1 should support:
 10. observing the transition to `Finished`;
 11. displaying the completed pool and round history in an on-chain archive.
 
-This checkpoint does not implement that frontend flow.
+The `#/archive-v1` route reads pools and all ten round records per pool from
+contract getters. It does not replace the legacy `#/demo` or browser-local
+`#/archive` routes.
 
 ## Deployment tooling
 
@@ -180,7 +183,7 @@ and initial state were checked directly through Base Sepolia RPC.
 
 | Version | Network | Chain ID | Demo token contract | Pop33 contract | Source commit | Deployment date | Status | Randomness | Warnings and limitations |
 | --- | --- | ---: | --- | --- | --- | --- | --- | --- | --- |
-| POP33 Demo V1 dUSDC pair | Base Sepolia | 84532 | `0xA7FA084b34c888061757d4b5FBb08a7B53fee786` | `0x140DA1b29F0B00b003Cabe86AE1a473d6745f56F` | `1db086dd958cf34bb72bd8f7b8c9f93dab4361a0` | 2026-07-14 UTC | **DEPLOYED — FRONTEND INTEGRATION PENDING** | temporary block-derived selection | dUSDC has no value; faucet supply is uncapped and cooldown is multi-wallet bypassable; Base Sepolia ETH required; no VRF, Automation, KYC, or production safety |
+| POP33 Demo V1 dUSDC pair | Base Sepolia | 84532 | `0xA7FA084b34c888061757d4b5FBb08a7B53fee786` | `0x140DA1b29F0B00b003Cabe86AE1a473d6745f56F` | `1db086dd958cf34bb72bd8f7b8c9f93dab4361a0` | 2026-07-14 UTC | **DEPLOYED — LOCALLY INTEGRATED, NOT PUBLICLY RELEASED** | temporary block-derived selection | dUSDC has no value; faucet supply is uncapped and cooldown is multi-wallet bypassable; Base Sepolia ETH required; no VRF, Automation, KYC, or production safety |
 
 ### Deployment transactions
 
@@ -229,9 +232,41 @@ For every later deployment, copy the row and record the exact deployed
 addresses, reviewed source commit, UTC date, and one of `planned`, `active`, or
 `archived`. Never overwrite an older deployment row.
 
-## Frontend integration plan for the next checkpoint
+## Frontend integration implementation
 
-### Existing legacy integration to preserve during migration
+The integration is intentionally isolated from the legacy deployment:
+
+- `src/demo-v1/config.ts` validates the four `VITE_POP33_DEMO_V1_*` variables;
+- `src/demo-v1/abi.ts` contains only the typed token and Basic V1 functions and
+  events needed by this interface;
+- `src/hooks/useDemoV1Data.ts` performs bounded getter reads;
+- `src/hooks/useDemoV1Actions.ts` rechecks the connector chain immediately
+  before every write, simulates the call, submits it, waits for its receipt,
+  and distinguishes signature, confirmation, rejection, revert, wrong-network,
+  token-balance, and native-gas states;
+- `#/demo-v1` exposes faucet, exact sequential approval and join, eligible
+  withdrawal, permissionless test draw, and winner-only claim controls;
+- `#/archive-v1` reconstructs up to 50 pools and ten rounds per pool from
+  getters without browser-local winner data.
+
+No faucet, approval, join, withdrawal, draw, or claim is sent automatically.
+The approve/join control approves exactly one current entry when allowance is
+insufficient, waits for confirmation, and only then requests the join.
+
+Known frontend limitations:
+
+- the archive is getter-based and capped at 50 pools; backend indexing is `TO DECIDE`;
+- getters do not retain historical transaction hashes, so only transactions
+  submitted in the current UI session receive direct receipt links;
+- replaced/cancelled and indefinitely pending transaction recovery is not yet
+  specialized beyond wallet/RPC errors;
+- the draw trigger remains permissionless and its temporary block-derived
+  selection is explicitly unsuitable for production;
+- deployment source publication in BaseScan remains separate and pending;
+- the integration is local only and does not change Vercel or active hosted
+  environment variables.
+
+### Existing legacy integration preserved during migration
 
 - `src/utils/contract.ts` contains the minimal `Pop33DemoV2` ABI and reads
   `VITE_POP33_CONTRACT_ADDRESS`.
@@ -291,15 +326,12 @@ the receipt/indexer, and an actionable claim state for the connected winner.
 The archive should reconstruct completed pools from pool IDs, round getters,
 and events instead of browser-local winner arrays.
 
-Planned frontend variables, to be introduced only during that integration
-checkpoint, should separately identify the Demo V1 contract and token, for
-example:
+Frontend variables separately identifying the Demo V1 contract and token are:
 
 - `VITE_POP33_DEMO_V1_CONTRACT_ADDRESS`;
 - `VITE_POP33_DEMO_V1_TOKEN_ADDRESS`;
 - `VITE_POP33_DEMO_V1_CHAIN_ID`;
 - `VITE_POP33_DEMO_V1_RPC_URL`;
-- `VITE_POP33_DEPLOYMENT_VERSION`.
 
 The current legacy variables must remain intact until the migration is tested.
 

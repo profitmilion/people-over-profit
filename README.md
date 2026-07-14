@@ -231,3 +231,38 @@ export default defineConfig([
 
 This README is a **living document (v1.2)** — it will be updated and expanded as the project evolves, new mechanisms are introduced, and community input grows.  
 Stay tuned for revisions and ongoing development updates in this repository.
+
+## POP33 Demo V1 local frontend
+
+The deployed Base Sepolia Basic V1 integration is intentionally separate from
+the legacy demo. Copy `.env.example` to an ignored `.env`, keep the four
+`VITE_POP33_DEMO_V1_*` values, and run:
+
+```text
+npm install
+npm run dev
+```
+
+Open `#/demo-v1`; the getter-based archive is at `#/archive-v1`. The legacy
+routes remain `#/demo` and `#/archive`.
+
+Manual MetaMask scenario:
+
+1. connect the intended test wallet and switch to Base Sepolia (`84532`);
+2. confirm that the wallet has Base Sepolia ETH for gas;
+3. obtain dUSDC only if the displayed faucet cooldown permits it;
+4. use the combined control and confirm the exact 33 dUSDC approval first,
+   wait for its receipt, then confirm the separate `join()` transaction;
+5. confirm the new active position and pool counters after refresh;
+6. while its pool is still `Open`, test withdrawal only if that is the intended
+   scenario; otherwise fill the pool using controlled test wallets;
+7. after each displayed schedule, manually execute one clearly labelled
+   permissionless test draw and inspect all ten round results;
+8. from each winning wallet, claim its finalized unclaimed round prize;
+9. verify the finished pool in `#/archive-v1`.
+
+dUSDC has no value and cannot pay gas. The faucet is uncapped and per-address,
+the draw randomness is temporary and manipulable, there is no KYC, and the
+getter-only archive is capped at 50 pools and cannot recover historical
+transaction hashes without an indexer. No action is sent automatically. This
+checkpoint does not publish or change Vercel configuration.

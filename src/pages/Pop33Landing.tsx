@@ -62,13 +62,13 @@ const Pop33Landing: React.FC = () => {
 
                         {/* GŁÓWNE CTA – POP IT */}
                         <div className="mt-6 flex flex-col items-center gap-3 min-[1600px]:items-start">
-                            <Link to="/demo" className="block min-w-0 w-full max-w-sm sm:w-auto">
+                            <Link to="/demo-v1" className="block min-w-0 w-full max-w-sm sm:w-auto">
                                 <Button
                                     variant="pop"
                                     type="button"
                                     className="min-w-0 w-full whitespace-normal px-4 text-center text-sm sm:w-auto sm:px-10 sm:text-base"
                                 >
-                                    POP IT - open Base Sepolia demo
+                                    POP IT - open Demo V1
                                 </Button>
                             </Link>
 
@@ -160,9 +160,9 @@ const Pop33Landing: React.FC = () => {
 
                     {/* DRUGIE CTA – mocniej wyeksponowane, z większym odstępem */}
                     <div className="mt-10 mb-12 flex justify-center md:justify-start">
-                        <Link to="/demo">
+                        <Link to="/demo-v1">
                             <Button variant="pop" type="button">
-                                POP IT - open Base Sepolia demo
+                                POP IT - open Demo V1
                             </Button>
                         </Link>
                     </div>

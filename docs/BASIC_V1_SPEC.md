@@ -36,6 +36,14 @@ The draw interval must be an immutable deployment parameter or another
 explicitly controlled configuration value. Changing the network must not
 silently change the interval or any economic parameter.
 
+The undeployed Basic V1 workspace stores an immutable snapshot in every pool
+for the entry price, position capacity, draw-round count, prize per round,
+total prize amount, and draw interval. The current contract has no runtime
+configuration setter: all newly created pools use the approved 33 USDC Basic
+V1 defaults. A future controlled configuration mechanism may change defaults
+only for pools created after that change; it must never mutate an existing
+pool, including an `Open` pool that already contains positions.
+
 ## Participation and position rules
 
 1. One successful payment of 33 USDC creates one position.
@@ -120,6 +128,13 @@ Claim expiry, treatment of unclaimed prizes, and the exact finalization
 operation are `TO DECIDE`. The implementation must not reach `Finished` merely
 because the tenth winner was selected.
 
+Until an expiry or alternative settlement rule is approved, the current
+undeployed implementation uses the narrow safe finalization rule: the pool
+enters `Finished` only after all 10 finalized round prizes have been claimed.
+The final claim atomically releases all 100 positions from active-position
+accounting. This is an implementation constraint for the present stage, not a
+decision about future claim expiry or unclaimed-prize treatment.
+
 ## Draw and winner rules
 
 1. Each full pool has exactly 10 draw rounds.
@@ -179,6 +194,23 @@ The design must prevent duplicate requests and duplicate fulfillment for one
 round. Randomness fulfillment must be correlated with the expected pool,
 round, and active request ID before any result is accepted.
 
+### Temporary lifecycle-testing draw mechanism
+
+The current undeployed workspace exposes a permissionless `executeDraw(poolId,
+roundNumber)` function so the full lifecycle can be tested before VRF and
+Automation are selected. It executes one eligible round synchronously, assigns
+a monotonically increasing temporary request ID, and selects one position from
+a bounded remaining-candidate array with constant-time swap-and-pop removal.
+The first call changes `Locked` to `Drawing`; the tenth finalized call changes
+`Drawing` to `Claimable`.
+
+This temporary selection is **not production-safe randomness**. Its entropy
+uses current block attributes and the caller, all of which may be predicted or
+influenced. A validator, transaction submitter, or ordering actor may bias a
+result. Temporary request IDs are local correlation identifiers, not Chainlink
+VRF request IDs, and there is no asynchronous request state in this mechanism.
+It must be replaced, not relabelled, before a production deployment.
+
 ## Open/Locked contract core design
 
 The first implementation stage may implement only participation, withdrawal,
@@ -234,9 +266,9 @@ The following are explicitly outside the current implementation stage:
 
 - Chainlink VRF integration;
 - Chainlink Automation registration;
-- real winner selection;
-- randomness request and fulfillment implementation;
-- prize claim implementation;
+- production-grade winner selection;
+- asynchronous randomness request, correlation, fulfillment, retry, and
+  failure-recovery implementation;
 - deployment.
 
 A future stage must evaluate Chainlink VRF for verifiable randomness and

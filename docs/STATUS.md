@@ -1,6 +1,6 @@
 # POP33 Development Status
 
-Last reviewed: 2026-07-13
+Last reviewed: 2026-07-14
 
 Branch reviewed: `codex/pop33-recovery`
 
@@ -21,10 +21,13 @@ The target Basic V1 parameters and lifecycle are now documented in
 different winning positions, 330 USDC per draw, pull-based claims, and
 `Open -> Locked -> Drawing -> Claimable -> Finished`.
 
-A separate, reproducible Hardhat 3 + TypeScript workspace now exists in
-`packages/contracts`. Its new, undeployed `Pop33BasicV1` contract implements
-only the approved Open/Locked foundation. The active frontend and its existing
-Base Sepolia deployment remain unchanged.
+A separate, reproducible Hardhat 3 + TypeScript workspace exists in
+`packages/contracts`. Its undeployed `Pop33BasicV1` contract now implements the
+approved `Open -> Locked -> Drawing -> Claimable -> Finished` lifecycle,
+including ten scheduled rounds, bounded non-repeating test winner selection,
+explicit prize accounting, pull-based claims, and position release at
+`Finished`. The active frontend and its existing Base Sepolia deployment remain
+unchanged.
 
 ## Business-rule implementation matrix
 
@@ -35,8 +38,8 @@ Base Sepolia deployment remain unchanged.
 | Automatic assignment to an available pool | **implemented in undeployed workspace** | The approved algorithm selects the oldest qualifying open pool and creates another only when required, up to 10 open pools. Frontend integration is absent. |
 | Maximum one active position per user in the same pool | **implemented in undeployed workspace** | Indexed membership prevents a second active position in one pool and routes a subsequent join to another qualifying pool. |
 | Maximum 10 active positions per user | **implemented in undeployed workspace** | The new contract enforces the limit and withdrawal releases one slot. Equivalent behavior is not yet deployed or integrated. |
-| Position leaves the active limit when its pool reaches `finished` | **partial** | The local layer excludes positions in `finished` cycles from the active count and can re-enable participation. Authoritative on-chain lifecycle enforcement is not yet present. |
-| The first draw does not release an active position | **partial** | In the local lifecycle, a cycle remains non-`finished` through intermediate draws, so its position continues to count. Equivalent authoritative on-chain enforcement is not yet present. |
+| Position leaves the active limit when its pool reaches `finished` | **implemented in undeployed workspace** | The final settled claim atomically releases the pool's bounded set of 100 positions. The active deployment and frontend do not use it yet. |
+| The first draw does not release an active position | **implemented in undeployed workspace** | Positions remain active through `Locked`, `Drawing`, and `Claimable`, including after individual wins and claims. |
 | Pool remains open/in collection until target participation | **implemented in undeployed workspace** | The new contract keeps a pool Open through 99 active positions and locks atomically on the 100th. |
 | Withdraw one position while its pool is open | **implemented in undeployed workspace** | The position owner can withdraw only while the pool is Open. No frontend action exists yet. |
 | Withdrawal removes the position from active pool state | **implemented in undeployed workspace** | The historical record remains indexed while active membership and pool accounting are cleared. |
@@ -44,10 +47,10 @@ Base Sepolia deployment remain unchanged.
 | Withdrawal returns the paid stablecoin | **implemented in undeployed workspace** | The new contract returns exactly 33 USDC. The existing deployed demo contract remains nonpayable. |
 | No withdrawal after the pool is full and locked | **implemented in undeployed workspace** | The new contract reverts withdrawal after Locked and retains participant active-position counts. |
 | 100 positions at 33 USDC and no Basic V1 fees | **implemented in undeployed workspace** | Constants, escrow accounting, and boundary behavior are covered by automated tests. |
-| Ten sequential draws with different winning positions | **not implemented** | The local simulation has conflicting prototype draw counts. The deployed contract has no authoritative draw implementation. |
-| 330 USDC credited per round through claim accounting | **not implemented** | Winner selection, prize accounting, and claim are absent. |
-| Hourly Base Sepolia round eligibility after `lockedAt` | **not implemented** | The future trigger must enforce time, ordering, active-request, and one-execution-per-round invariants. |
-| `Open -> Locked -> Drawing -> Claimable -> Finished` | **not implemented** | The deployed contract does not implement the approved lifecycle. Active positions must remain active until `Finished`. |
+| Ten sequential draws with different winning positions | **implemented in undeployed workspace** | Each eligible call finalizes one numbered round and removes its winner from a bounded candidate set. The temporary entropy is not production-safe. |
+| 330 USDC credited per round through claim accounting | **implemented in undeployed workspace** | Each finalized round credits exactly 330 USDC to its winning wallet; claims are round-specific, pull-based, and protected against unauthorized or repeated payout. |
+| Hourly Base Sepolia round eligibility after `lockedAt` | **implemented in undeployed workspace** | Round `n` is eligible at `lockedAt + n * drawInterval`; boundary, early, duplicate, and out-of-order behavior is tested. Automation and production randomness remain deferred. |
+| `Open -> Locked -> Drawing -> Claimable -> Finished` | **implemented in undeployed workspace** | The first draw enters `Drawing`, the tenth enters `Claimable`, and all ten claims are required for `Finished`. The active deployment and frontend remain unchanged. |
 | Demo mirrors the final/mainnet product model | **partial** | The `/demo` participation action is now Base Sepolia-only, while the browser-local simulation is confined to `/demo?view=dev`. Stablecoin payment, withdrawals, and complete authoritative position lifecycle rules remain missing. |
 | Demo differences limited mainly to network, test tokens, safety parameters, and developer tools | **partial** | This is the approved direction; the current historical simulation and unfinished contract integration have not yet fully converged on it. |
 
@@ -85,9 +88,20 @@ Base Sepolia deployment remain unchanged.
 - Constructor validation requiring deployed token bytecode and exactly 6
   decimals for the approved standard, non-rebasing USDC model.
 - A six-decimal unrestricted `MockUSDC` clearly marked for tests only.
-- Automated Open/Locked contract coverage: 56 passing Mocha tests, including
-  bounded candidate sets, rollback behavior, open-pool index integrity, token
-  validation, pagination boundaries, re-entry, and donated-token surplus.
+- Immutable per-pool configuration snapshots for entry price, capacity, round
+  count, prize values, total prize amount, and draw interval.
+- Ten explicit scheduled round records derived from `lockedAt` and the pool's
+  snapshotted interval.
+- A permissionless, synchronous, bounded temporary draw path with unique
+  winners and explicit warnings that its block-derived entropy is manipulable
+  and non-production.
+- Per-round and aggregate assigned, claimable, claimed, and escrow balances.
+- Pull-based `claim()` with winner authorization, double-claim protection,
+  checks-effects-interactions, `SafeERC20`, and `ReentrancyGuard`.
+- `Finished` after all ten prizes are claimed, with atomic bounded release of
+  all 100 pool positions.
+- Automated contract coverage: 69 passing Mocha tests, preserving the prior 56
+  and adding lifecycle, timing, uniqueness, claim, balance, and snapshot cases.
 
 ## Partial / in progress
 
@@ -100,7 +114,8 @@ Base Sepolia deployment remain unchanged.
 - authoritative on-chain enforcement of automatic allocation, one position per
   user per pool, and the active-position lifecycle;
 - consistent configuration across UI, hooks, and environment variables;
-- on-chain draw implementation;
+- deployment and frontend integration of the new on-chain draw and claim flow;
+- production randomness and asynchronous request/fulfillment recovery;
 - unified cycle and position domain model;
 - Farcaster integration;
 - production readiness.
@@ -113,8 +128,8 @@ Base Sepolia deployment remain unchanged.
 - deployment and frontend integration of the 33 USDC refund;
 - deployment and frontend integration of withdrawal prohibition after lock;
 - end-to-end real or test stablecoin payment flow;
-- the approved Basic V1 pool capacity, pricing, prize, draw, claim-accounting,
-  and lifecycle behavior.
+- deployment and frontend integration of the approved Basic V1 pool capacity,
+  pricing, prize, draw, claim-accounting, and lifecycle behavior.
 
 ## Legacy or alternative code retained
 
@@ -153,6 +168,17 @@ newer code exists.
   contracts workspace has its own passing test command;
 - source for the currently deployed demo contract is not present; source for
   the new, undeployed Basic V1 foundation is in `packages/contracts`.
+- the undeployed contract's temporary draw entropy uses caller and block
+  attributes and can be biased; it is suitable only for lifecycle tests and
+  must be replaced by a verified randomness flow before production;
+- claim expiry and alternate unclaimed-prize settlement remain `TO DECIDE`, so
+  the current narrow implementation cannot reach `Finished` until all ten
+  winners claim.
+- an additional root-package `npm audit --omit=dev` reports 38 transitive
+  frontend dependency findings (27 moderate, 11 high), primarily through the
+  wallet connector stack; npm's complete remediation currently requires the
+  breaking `wagmi` 2-to-3 upgrade. That frontend dependency migration is
+  outside this contract-only checkpoint and remains to be planned and tested.
 
 The previous wrong-network false positive was caused by using `useChainId()`
 with a wagmi configuration containing only Base Sepolia. An unsupported active
@@ -175,7 +201,9 @@ the UI and rechecks the connector directly before sending.
   settlement remain `TO DECIDE`.
 - `TO DECIDE`: authorized automation versus safe permissionless triggering and
   possible Chainlink Automation use.
-- `TO DECIDE`: canonical configuration source.
+- Every current pool snapshots the approved Basic V1 constants and draw
+  interval at creation. `TO DECIDE`: controlled versioned configuration for
+  future price levels, restricted to subsequently created pools.
 - The Basic V1 contract workspace is `packages/contracts`; release and deployed
   versioning policy remains `TO DECIDE`.
 - `TO DECIDE`: testing strategy.
@@ -183,6 +211,8 @@ the UI and rechecks the connector directly before sending.
 
 ## Verification commands
 
+- `cd packages/contracts && npm run compile`
+- `cd packages/contracts && npm test`
 - `npm run lint`
 - `npm run build`
 - `git diff --check`

@@ -37,14 +37,21 @@ Implemented:
 - withdrawal and exact refund while a pool is open;
 - automatic lock at 100 active positions;
 - bounded active-position pagination with constant-time swap-and-pop removal;
-- event-based chronological join and withdrawal history.
+- event-based chronological join and withdrawal history;
+- immutable per-pool snapshots of all Basic V1 economic and draw parameters;
+- ten hourly scheduled rounds with ordering and boundary-time enforcement;
+- bounded, non-repeating winner selection for lifecycle testing;
+- explicit per-round and aggregate prize accounting;
+- pull-based claims during `Drawing` and `Claimable`;
+- `Claimable -> Finished` after all ten prizes are claimed, with atomic release
+  of all pool positions.
 
 Intentionally not implemented:
 
-- randomness or winner selection;
+- production-safe or verifiable randomness;
 - Chainlink VRF or Automation;
-- draw execution;
-- prize accounting and claim;
+- asynchronous randomness request and fulfillment recovery;
+- claim expiry or alternative unclaimed-prize settlement;
 - deployment scripts or network credentials.
 
 The target behavior is defined in `../../docs/BASIC_V1_SPEC.md`.
@@ -62,15 +69,32 @@ in seconds. It rejects addresses without bytecode, missing ERC-20 metadata, and
 tokens whose `decimals()` value is not exactly 6. Tests use 3,600 seconds for
 the planned Base Sepolia configuration.
 
+Every pool snapshots the current Basic V1 defaults when it is created: 33 USDC
+per position, 100 positions, ten rounds, 330 USDC per round, 3,300 USDC total,
+and the constructor-supplied draw interval. The current contract deliberately
+has no configuration mutation function. Future price-level support requires a
+controlled defaults/versioning mechanism that affects only subsequently
+created pools.
+
 ## Safety notes
 
 `MockUSDC` is unrestricted and mintable. It is for local automated tests only
 and is not a production token. `Pop33BasicV1` has no administrative participant-
-fund withdrawal function. Funds in locked pools remain escrowed for the future
-draw and claim stages.
+fund withdrawal function. Funds in locked and drawing pools remain explicitly
+accounted and reserved for their round prizes until valid winner claims.
 
 A future deployment must use a previously verified, standard, non-rebasing
 USDC contract. Fee-on-transfer, rebasing, and non-standard ERC-20 behavior are
 not supported. The exact-refund guarantee assumes that approved token model.
+The current permissionless `executeDraw()` mechanism is also test-only. It
+derives entropy from caller and block attributes that can be influenced and is
+therefore manipulable. Its monotonically increasing request IDs are local
+correlation values, not VRF requests. Replace this entire selection path with a
+verified asynchronous randomness flow before production use.
+
+Claims use checks-effects-interactions, `SafeERC20`, and `ReentrancyGuard`.
+With claim expiry and unclaimed-prize settlement still `TO DECIDE`, a pool
+reaches `Finished` only when all ten prizes have been claimed. The final claim
+releases the bounded set of 100 positions atomically.
 The `Pop33BasicV1Harness` and all contracts under `contracts/mocks` are test-only
 artifacts and must not be included in a production deployment path.

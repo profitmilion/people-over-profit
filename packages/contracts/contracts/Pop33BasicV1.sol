@@ -6,9 +6,12 @@ import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IER
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
-/// @title POP33 Basic V1 Open/Locked Core
+/// @title POP33 Basic V1
 /// @notice Implements paid positions, deterministic pool allocation, withdrawal,
-///         and the Open-to-Locked transition. Draws and claims are intentionally absent.
+///         ten scheduled draw rounds, pull-based prizes, and the complete pool lifecycle.
+/// @dev Winner selection is deliberately temporary and NOT production-safe. It uses
+///      block attributes that validators and callers can influence. Replace it with a
+///      verified randomness request/fulfillment flow before any production deployment.
 contract Pop33BasicV1 is ReentrancyGuard {
     using SafeERC20 for IERC20;
 
@@ -17,6 +20,9 @@ contract Pop33BasicV1 is ReentrancyGuard {
     uint256 public constant MAX_ACTIVE_POSITIONS_PER_USER = 10;
     uint256 public constant MAX_OPEN_POOLS = 10;
     uint256 public constant MAX_PAGE_SIZE = 100;
+    uint256 public constant DRAW_ROUNDS = 10;
+    uint256 public constant PRIZE_PER_ROUND = 330_000_000;
+    uint256 public constant TOTAL_PRIZE_AMOUNT = 3_300_000_000;
 
     enum PoolStatus {
         Open,
@@ -24,6 +30,11 @@ contract Pop33BasicV1 is ReentrancyGuard {
         Drawing,
         Claimable,
         Finished
+    }
+
+    enum RoundStatus {
+        Pending,
+        Finalized
     }
 
     struct Pool {
@@ -34,6 +45,15 @@ contract Pop33BasicV1 is ReentrancyGuard {
         uint64 openedAt;
         uint64 lockedAt;
         uint64 drawInterval;
+        uint256 entryPrice;
+        uint256 prizePerRound;
+        uint256 totalPrizeAmount;
+        uint256 positionsPerPool;
+        uint256 drawRoundCount;
+        uint256 completedDrawRoundCount;
+        uint256 claimedPrizeCount;
+        uint256 assignedPrizeAmount;
+        uint256 claimedPrizeAmount;
     }
 
     struct Position {
@@ -42,6 +62,18 @@ contract Pop33BasicV1 is ReentrancyGuard {
         address owner;
         uint64 joinedAt;
         bool active;
+    }
+
+    struct DrawRound {
+        uint256 number;
+        uint256 scheduledAt;
+        uint256 executedAt;
+        RoundStatus status;
+        uint256 winningPositionId;
+        address winner;
+        uint256 prizeAmount;
+        uint256 temporaryRequestId;
+        bool claimed;
     }
 
     error InvalidPaymentToken();
@@ -61,8 +93,39 @@ contract Pop33BasicV1 is ReentrancyGuard {
     error OpenPoolNotIndexed(uint256 poolId);
     error ActivePositionNotIndexed(uint256 poolId, uint256 positionId);
     error ActivePositionIndexMismatch(uint256 poolId, uint256 expected, uint256 actual);
+    error DrawCandidateNotIndexed(uint256 poolId, uint256 positionId);
+    error DrawCandidateCountMismatch(uint256 poolId, uint256 expected, uint256 actual);
+    error PoolNotDrawable(uint256 poolId, PoolStatus status);
+    error InvalidDrawRoundNumber(uint256 poolId, uint256 roundNumber);
+    error DrawRoundOutOfSequence(uint256 poolId, uint256 expected, uint256 actual);
+    error DrawRoundAlreadyExecuted(uint256 poolId, uint256 roundNumber);
+    error DrawRoundNotReady(
+        uint256 poolId,
+        uint256 roundNumber,
+        uint256 scheduledAt,
+        uint256 currentTimestamp
+    );
+    error DrawRoundNotFinalized(uint256 poolId, uint256 roundNumber);
+    error WinningPositionAlreadySelected(uint256 poolId, uint256 positionId);
+    error NotRoundWinner(uint256 poolId, uint256 roundNumber, address caller);
+    error PrizeAlreadyClaimed(uint256 poolId, uint256 roundNumber);
+    error PrizeAccountingMismatch(uint256 poolId, uint256 expected, uint256 actual);
 
     event PoolCreated(uint256 indexed poolId, uint64 openedAt, uint64 drawInterval);
+    event PoolConfigurationSnapshotted(
+        uint256 indexed poolId,
+        uint256 entryPrice,
+        uint256 positionsPerPool,
+        uint256 drawRoundCount,
+        uint256 prizePerRound,
+        uint256 totalPrizeAmount,
+        uint64 drawInterval
+    );
+    event PoolStatusChanged(
+        uint256 indexed poolId,
+        PoolStatus previousStatus,
+        PoolStatus newStatus
+    );
     event PositionJoined(
         uint256 indexed positionId,
         uint256 indexed poolId,
@@ -84,6 +147,27 @@ contract Pop33BasicV1 is ReentrancyGuard {
         uint256 activePositionCount,
         uint256 escrowedAmount
     );
+    event DrawRoundExecuted(
+        uint256 indexed poolId,
+        uint256 indexed roundNumber,
+        uint256 indexed temporaryRequestId,
+        uint256 scheduledAt,
+        uint256 executedAt
+    );
+    event WinningPositionAssigned(
+        uint256 indexed poolId,
+        uint256 indexed roundNumber,
+        uint256 indexed positionId,
+        address winner,
+        uint256 prizeAmount
+    );
+    event PrizeClaimed(
+        uint256 indexed poolId,
+        uint256 indexed roundNumber,
+        uint256 indexed positionId,
+        address winner,
+        uint256 prizeAmount
+    );
 
     IERC20 public immutable paymentToken;
     uint64 public immutable DRAW_INTERVAL;
@@ -91,6 +175,9 @@ contract Pop33BasicV1 is ReentrancyGuard {
     uint256 public poolCount;
     uint256 public positionCount;
     uint256 public totalEscrowed;
+    uint256 public totalPrizesAssigned;
+    uint256 public totalPrizesClaimed;
+    uint256 public temporaryRequestCount;
 
     mapping(uint256 poolId => Pool pool) private _pools;
     mapping(uint256 positionId => Position position) private _positions;
@@ -98,9 +185,17 @@ contract Pop33BasicV1 is ReentrancyGuard {
     mapping(uint256 poolId => uint256[] positionIds) private _activePoolPositionIds;
     mapping(uint256 poolId => mapping(uint256 positionId => uint256 indexPlusOne))
         private _activePoolPositionIndexPlusOne;
+    mapping(uint256 poolId => uint256[] positionIds) private _drawCandidatePositionIds;
+    mapping(uint256 poolId => mapping(uint256 positionId => uint256 indexPlusOne))
+        private _drawCandidatePositionIndexPlusOne;
     mapping(uint256 poolId => mapping(address user => uint256 positionId))
         private _activePositionByPoolAndUser;
+    mapping(uint256 poolId => mapping(uint256 roundNumber => DrawRound drawRound))
+        private _drawRounds;
+    mapping(uint256 poolId => mapping(uint256 positionId => bool selected))
+        public isWinningPosition;
     mapping(address user => uint256 count) public activePositionsByUser;
+    mapping(address user => uint256 amount) public claimablePrizesByUser;
 
     constructor(IERC20 paymentToken_, uint64 drawInterval_) {
         address tokenAddress = address(paymentToken_);
@@ -152,32 +247,44 @@ contract Pop33BasicV1 is ReentrancyGuard {
         _activePoolPositionIds[selectedPoolId].push(newPositionId);
         _activePoolPositionIndexPlusOne[selectedPoolId][newPositionId] =
             _activePoolPositionIds[selectedPoolId].length;
+        _drawCandidatePositionIds[selectedPoolId].push(newPositionId);
+        _drawCandidatePositionIndexPlusOne[selectedPoolId][newPositionId] =
+            _drawCandidatePositionIds[selectedPoolId].length;
         _activePositionByPoolAndUser[selectedPoolId][msg.sender] = newPositionId;
 
         pool.activePositionCount = _activePoolPositionIds[selectedPoolId].length;
-        pool.escrowedAmount += ENTRY_PRICE;
+        pool.escrowedAmount += pool.entryPrice;
         activePositionsByUser[msg.sender] += 1;
-        totalEscrowed += ENTRY_PRICE;
+        totalEscrowed += pool.entryPrice;
 
         emit PositionJoined(
             newPositionId,
             selectedPoolId,
             msg.sender,
-            ENTRY_PRICE,
+            pool.entryPrice,
             pool.activePositionCount
         );
 
-        if (pool.activePositionCount == MAX_POSITIONS_PER_POOL) {
+        if (pool.activePositionCount == pool.positionsPerPool) {
             uint256 activeSetLength = _activePoolPositionIds[selectedPoolId].length;
-            if (activeSetLength != MAX_POSITIONS_PER_POOL) {
+            if (activeSetLength != pool.positionsPerPool) {
                 revert ActivePositionIndexMismatch(
                     selectedPoolId,
-                    MAX_POSITIONS_PER_POOL,
+                    pool.positionsPerPool,
                     activeSetLength
                 );
             }
-            pool.status = PoolStatus.Locked;
+            uint256 drawCandidateCount = _drawCandidatePositionIds[selectedPoolId].length;
+            if (drawCandidateCount != pool.positionsPerPool) {
+                revert DrawCandidateCountMismatch(
+                    selectedPoolId,
+                    pool.positionsPerPool,
+                    drawCandidateCount
+                );
+            }
+            _setPoolStatus(pool, PoolStatus.Locked);
             pool.lockedAt = uint64(block.timestamp);
+            _initializeDrawRounds(pool);
             _removeOpenPool(selectedPoolId);
             emit PoolLocked(
                 selectedPoolId,
@@ -188,10 +295,10 @@ contract Pop33BasicV1 is ReentrancyGuard {
             );
         }
 
-        paymentToken.safeTransferFrom(msg.sender, address(this), ENTRY_PRICE);
+        paymentToken.safeTransferFrom(msg.sender, address(this), pool.entryPrice);
         uint256 amountReceived = paymentToken.balanceOf(address(this)) - balanceBefore;
-        if (amountReceived != ENTRY_PRICE) {
-            revert IncorrectTokenAmountReceived(ENTRY_PRICE, amountReceived);
+        if (amountReceived != pool.entryPrice) {
+            revert IncorrectTokenAmountReceived(pool.entryPrice, amountReceived);
         }
     }
 
@@ -206,21 +313,184 @@ contract Pop33BasicV1 is ReentrancyGuard {
         if (pool.status != PoolStatus.Open) revert PoolNotOpen(position.poolId);
 
         _removeActivePosition(position.poolId, positionId);
+        _removeDrawCandidate(position.poolId, positionId);
         position.active = false;
         _activePositionByPoolAndUser[position.poolId][msg.sender] = 0;
         pool.activePositionCount = _activePoolPositionIds[position.poolId].length;
-        pool.escrowedAmount -= ENTRY_PRICE;
+        pool.escrowedAmount -= pool.entryPrice;
         activePositionsByUser[msg.sender] -= 1;
-        totalEscrowed -= ENTRY_PRICE;
+        totalEscrowed -= pool.entryPrice;
 
         emit PositionWithdrawn(
             positionId,
             position.poolId,
             msg.sender,
-            ENTRY_PRICE,
+            pool.entryPrice,
             pool.activePositionCount
         );
-        paymentToken.safeTransfer(msg.sender, ENTRY_PRICE);
+        paymentToken.safeTransfer(msg.sender, pool.entryPrice);
+    }
+
+    /// @notice Executes one eligible draw round using bounded, temporary winner selection.
+    /// @dev This synchronous entropy construction is manipulable and MUST NOT be used in
+    ///      production. It exists only to exercise the complete testnet lifecycle before
+    ///      a verified randomness integration is selected.
+    function executeDraw(uint256 poolId, uint256 roundNumber)
+        external
+        returns (uint256 winningPositionId)
+    {
+        _requirePool(poolId);
+        Pool storage pool = _pools[poolId];
+        if (pool.status != PoolStatus.Locked && pool.status != PoolStatus.Drawing) {
+            revert PoolNotDrawable(poolId, pool.status);
+        }
+        if (roundNumber == 0 || roundNumber > pool.drawRoundCount) {
+            revert InvalidDrawRoundNumber(poolId, roundNumber);
+        }
+
+        DrawRound storage drawRound = _drawRounds[poolId][roundNumber];
+        if (drawRound.status == RoundStatus.Finalized) {
+            revert DrawRoundAlreadyExecuted(poolId, roundNumber);
+        }
+
+        uint256 expectedRoundNumber = pool.completedDrawRoundCount + 1;
+        if (roundNumber != expectedRoundNumber) {
+            revert DrawRoundOutOfSequence(poolId, expectedRoundNumber, roundNumber);
+        }
+        if (block.timestamp < drawRound.scheduledAt) {
+            revert DrawRoundNotReady(
+                poolId,
+                roundNumber,
+                drawRound.scheduledAt,
+                block.timestamp
+            );
+        }
+
+        uint256 expectedCandidateCount = pool.positionsPerPool - pool.completedDrawRoundCount;
+        uint256 candidateCount = _drawCandidatePositionIds[poolId].length;
+        if (candidateCount != expectedCandidateCount) {
+            revert DrawCandidateCountMismatch(poolId, expectedCandidateCount, candidateCount);
+        }
+
+        if (pool.status == PoolStatus.Locked) {
+            _setPoolStatus(pool, PoolStatus.Drawing);
+        }
+
+        uint256 temporaryRequestId = ++temporaryRequestCount;
+        uint256 temporaryEntropy = uint256(
+            keccak256(
+                abi.encode(
+                    block.prevrandao,
+                    blockhash(block.number - 1),
+                    block.timestamp,
+                    msg.sender,
+                    address(this),
+                    block.chainid,
+                    poolId,
+                    roundNumber,
+                    temporaryRequestId
+                )
+            )
+        );
+        uint256 selectedIndex = temporaryEntropy % candidateCount;
+        winningPositionId = _drawCandidatePositionIds[poolId][selectedIndex];
+        if (isWinningPosition[poolId][winningPositionId]) {
+            revert WinningPositionAlreadySelected(poolId, winningPositionId);
+        }
+
+        Position storage winningPosition = _positions[winningPositionId];
+        _removeDrawCandidate(poolId, winningPositionId);
+        isWinningPosition[poolId][winningPositionId] = true;
+
+        drawRound.executedAt = block.timestamp;
+        drawRound.status = RoundStatus.Finalized;
+        drawRound.winningPositionId = winningPositionId;
+        drawRound.winner = winningPosition.owner;
+        drawRound.temporaryRequestId = temporaryRequestId;
+
+        pool.completedDrawRoundCount += 1;
+        pool.assignedPrizeAmount += drawRound.prizeAmount;
+        totalPrizesAssigned += drawRound.prizeAmount;
+        claimablePrizesByUser[winningPosition.owner] += drawRound.prizeAmount;
+
+        emit DrawRoundExecuted(
+            poolId,
+            roundNumber,
+            temporaryRequestId,
+            drawRound.scheduledAt,
+            drawRound.executedAt
+        );
+        emit WinningPositionAssigned(
+            poolId,
+            roundNumber,
+            winningPositionId,
+            winningPosition.owner,
+            drawRound.prizeAmount
+        );
+
+        if (pool.completedDrawRoundCount == pool.drawRoundCount) {
+            if (pool.assignedPrizeAmount != pool.totalPrizeAmount) {
+                revert PrizeAccountingMismatch(
+                    poolId,
+                    pool.totalPrizeAmount,
+                    pool.assignedPrizeAmount
+                );
+            }
+            _setPoolStatus(pool, PoolStatus.Claimable);
+        }
+    }
+
+    /// @notice Claims one finalized round prize for its winning position owner.
+    /// @dev Uses checks-effects-interactions and a reentrancy guard. The last outstanding
+    ///      claim transitions the pool to Finished and atomically releases its positions.
+    function claim(uint256 poolId, uint256 roundNumber) external nonReentrant {
+        _requirePool(poolId);
+        Pool storage pool = _pools[poolId];
+        if (roundNumber == 0 || roundNumber > pool.drawRoundCount) {
+            revert InvalidDrawRoundNumber(poolId, roundNumber);
+        }
+
+        DrawRound storage drawRound = _drawRounds[poolId][roundNumber];
+        if (drawRound.status != RoundStatus.Finalized) {
+            revert DrawRoundNotFinalized(poolId, roundNumber);
+        }
+        if (drawRound.winner != msg.sender) {
+            revert NotRoundWinner(poolId, roundNumber, msg.sender);
+        }
+        if (drawRound.claimed) revert PrizeAlreadyClaimed(poolId, roundNumber);
+
+        uint256 prizeAmount = drawRound.prizeAmount;
+        drawRound.claimed = true;
+        pool.claimedPrizeCount += 1;
+        pool.claimedPrizeAmount += prizeAmount;
+        pool.escrowedAmount -= prizeAmount;
+        totalEscrowed -= prizeAmount;
+        totalPrizesClaimed += prizeAmount;
+        claimablePrizesByUser[msg.sender] -= prizeAmount;
+
+        if (pool.claimedPrizeCount == pool.drawRoundCount) {
+            if (
+                pool.completedDrawRoundCount != pool.drawRoundCount ||
+                pool.claimedPrizeAmount != pool.totalPrizeAmount
+            ) {
+                revert PrizeAccountingMismatch(
+                    poolId,
+                    pool.totalPrizeAmount,
+                    pool.claimedPrizeAmount
+                );
+            }
+            _setPoolStatus(pool, PoolStatus.Finished);
+            _releaseFinishedPoolPositions(pool);
+        }
+
+        emit PrizeClaimed(
+            poolId,
+            roundNumber,
+            drawRound.winningPositionId,
+            msg.sender,
+            prizeAmount
+        );
+        paymentToken.safeTransfer(msg.sender, prizeAmount);
     }
 
     function getPool(uint256 poolId) external view returns (Pool memory) {
@@ -231,6 +501,24 @@ contract Pop33BasicV1 is ReentrancyGuard {
     function getPosition(uint256 positionId) external view returns (Position memory) {
         if (_positions[positionId].id == 0) revert PositionDoesNotExist(positionId);
         return _positions[positionId];
+    }
+
+    function getDrawRound(uint256 poolId, uint256 roundNumber)
+        external
+        view
+        returns (DrawRound memory)
+    {
+        _requirePool(poolId);
+        Pool storage pool = _pools[poolId];
+        if (roundNumber == 0 || roundNumber > pool.drawRoundCount) {
+            revert InvalidDrawRoundNumber(poolId, roundNumber);
+        }
+        return _drawRounds[poolId][roundNumber];
+    }
+
+    function getPoolDrawCandidateCount(uint256 poolId) external view returns (uint256) {
+        _requirePool(poolId);
+        return _drawCandidatePositionIds[poolId].length;
     }
 
     function getActivePositionId(uint256 poolId, address user)
@@ -293,7 +581,7 @@ contract Pop33BasicV1 is ReentrancyGuard {
             uint256 poolId = _openPoolIds[index];
             Pool storage pool = _pools[poolId];
             if (
-                pool.activePositionCount < MAX_POSITIONS_PER_POOL &&
+                pool.activePositionCount < pool.positionsPerPool &&
                 _activePositionByPoolAndUser[poolId][user] == 0
             ) {
                 return poolId;
@@ -312,10 +600,71 @@ contract Pop33BasicV1 is ReentrancyGuard {
             escrowedAmount: 0,
             openedAt: openedAt,
             lockedAt: 0,
-            drawInterval: DRAW_INTERVAL
+            drawInterval: DRAW_INTERVAL,
+            entryPrice: ENTRY_PRICE,
+            prizePerRound: PRIZE_PER_ROUND,
+            totalPrizeAmount: TOTAL_PRIZE_AMOUNT,
+            positionsPerPool: MAX_POSITIONS_PER_POOL,
+            drawRoundCount: DRAW_ROUNDS,
+            completedDrawRoundCount: 0,
+            claimedPrizeCount: 0,
+            assignedPrizeAmount: 0,
+            claimedPrizeAmount: 0
         });
         _openPoolIds.push(poolId);
         emit PoolCreated(poolId, openedAt, DRAW_INTERVAL);
+        emit PoolConfigurationSnapshotted(
+            poolId,
+            ENTRY_PRICE,
+            MAX_POSITIONS_PER_POOL,
+            DRAW_ROUNDS,
+            PRIZE_PER_ROUND,
+            TOTAL_PRIZE_AMOUNT,
+            DRAW_INTERVAL
+        );
+    }
+
+    function _initializeDrawRounds(Pool storage pool) private {
+        for (uint256 roundNumber = 1; roundNumber <= pool.drawRoundCount; ++roundNumber) {
+            _drawRounds[pool.id][roundNumber] = DrawRound({
+                number: roundNumber,
+                scheduledAt: uint256(pool.lockedAt) + roundNumber * pool.drawInterval,
+                executedAt: 0,
+                status: RoundStatus.Pending,
+                winningPositionId: 0,
+                winner: address(0),
+                prizeAmount: pool.prizePerRound,
+                temporaryRequestId: 0,
+                claimed: false
+            });
+        }
+    }
+
+    function _setPoolStatus(Pool storage pool, PoolStatus newStatus) private {
+        PoolStatus previousStatus = pool.status;
+        pool.status = newStatus;
+        emit PoolStatusChanged(pool.id, previousStatus, newStatus);
+    }
+
+    function _releaseFinishedPoolPositions(Pool storage pool) private {
+        uint256 length = _activePoolPositionIds[pool.id].length;
+        if (length != pool.positionsPerPool) {
+            revert ActivePositionIndexMismatch(pool.id, pool.positionsPerPool, length);
+        }
+
+        for (uint256 index; index < length; ++index) {
+            uint256 positionId = _activePoolPositionIds[pool.id][index];
+            Position storage position = _positions[positionId];
+            position.active = false;
+            activePositionsByUser[position.owner] -= 1;
+            delete _activePositionByPoolAndUser[pool.id][position.owner];
+            delete _activePoolPositionIndexPlusOne[pool.id][positionId];
+            delete _drawCandidatePositionIndexPlusOne[pool.id][positionId];
+        }
+
+        delete _activePoolPositionIds[pool.id];
+        delete _drawCandidatePositionIds[pool.id];
+        pool.activePositionCount = 0;
     }
 
     function _removeOpenPool(uint256 poolId) internal {
@@ -346,6 +695,22 @@ contract Pop33BasicV1 is ReentrancyGuard {
 
         _activePoolPositionIds[poolId].pop();
         delete _activePoolPositionIndexPlusOne[poolId][positionId];
+    }
+
+    function _removeDrawCandidate(uint256 poolId, uint256 positionId) private {
+        uint256 indexPlusOne = _drawCandidatePositionIndexPlusOne[poolId][positionId];
+        if (indexPlusOne == 0) revert DrawCandidateNotIndexed(poolId, positionId);
+
+        uint256 index = indexPlusOne - 1;
+        uint256 lastIndex = _drawCandidatePositionIds[poolId].length - 1;
+        if (index != lastIndex) {
+            uint256 movedPositionId = _drawCandidatePositionIds[poolId][lastIndex];
+            _drawCandidatePositionIds[poolId][index] = movedPositionId;
+            _drawCandidatePositionIndexPlusOne[poolId][movedPositionId] = index + 1;
+        }
+
+        _drawCandidatePositionIds[poolId].pop();
+        delete _drawCandidatePositionIndexPlusOne[poolId][positionId];
     }
 
     function _requirePool(uint256 poolId) private view {

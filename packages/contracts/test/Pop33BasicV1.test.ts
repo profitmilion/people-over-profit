@@ -10,6 +10,9 @@ const MAX_POSITIONS = 100n;
 const MAX_ACTIVE = 10n;
 const MAX_OPEN_POOLS = 10n;
 const DRAW_INTERVAL = 3_600;
+const DRAW_ROUNDS = 10n;
+const PRIZE_PER_ROUND = 330_000_000n;
+const TOTAL_PRIZE_AMOUNT = 3_300_000_000n;
 
 // Hardhat returns dynamic contract and signer shapes until TypeChain is introduced.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -93,6 +96,43 @@ async function lockedPoolFixture() {
   return fixture;
 }
 
+async function executeAllDrawRounds(fixture: Awaited<ReturnType<typeof lockedPoolFixture>>) {
+  const pool = await fixture.pop33.getPool(1);
+  for (let roundNumber = 1; roundNumber <= Number(DRAW_ROUNDS); roundNumber += 1) {
+    await networkHelpers.time.setNextBlockTimestamp(
+      Number(pool.lockedAt) + roundNumber * DRAW_INTERVAL,
+    );
+    await fixture.pop33.executeDraw(1, roundNumber);
+  }
+  return fixture;
+}
+
+async function claimablePoolFixture() {
+  return executeAllDrawRounds(await lockedPoolFixture());
+}
+
+async function signerForAddress(
+  participants: DynamicHardhatValue[],
+  address: string,
+) {
+  const signer = participants.find(
+    (participant) => participant.address.toLowerCase() === address.toLowerCase(),
+  );
+  expect(signer, `missing participant signer for ${address}`).not.to.equal(undefined);
+  return signer as DynamicHardhatValue;
+}
+
+async function claimAllPrizes(
+  fixture: Awaited<ReturnType<typeof claimablePoolFixture>>,
+) {
+  for (let roundNumber = 1; roundNumber <= Number(DRAW_ROUNDS); roundNumber += 1) {
+    const drawRound = await fixture.pop33.getDrawRound(1, roundNumber);
+    const winner = await signerForAddress(fixture.participants, drawRound.winner);
+    await fixture.pop33.connect(winner).claim(1, roundNumber);
+  }
+  return fixture;
+}
+
 async function tenActivePositionsFixture() {
   const fixture = await deployFixture();
   await fundAndApprove(
@@ -148,6 +188,36 @@ describe("Pop33BasicV1 deployment and constants", function () {
     expect(await pop33.MAX_ACTIVE_POSITIONS_PER_USER()).to.equal(MAX_ACTIVE);
     expect(await pop33.MAX_OPEN_POOLS()).to.equal(MAX_OPEN_POOLS);
     expect(await pop33.DRAW_INTERVAL()).to.equal(DRAW_INTERVAL);
+    expect(await pop33.DRAW_ROUNDS()).to.equal(DRAW_ROUNDS);
+    expect(await pop33.PRIZE_PER_ROUND()).to.equal(PRIZE_PER_ROUND);
+    expect(await pop33.TOTAL_PRIZE_AMOUNT()).to.equal(TOTAL_PRIZE_AMOUNT);
+  });
+
+  it("snapshots all economic and draw parameters in every pool", async function () {
+    const { token, pop33, user } = await networkHelpers.loadFixture(deployFixture);
+    const originalPool = await pop33.getPool(1);
+
+    expect(originalPool.entryPrice).to.equal(ENTRY_PRICE);
+    expect(originalPool.positionsPerPool).to.equal(MAX_POSITIONS);
+    expect(originalPool.drawRoundCount).to.equal(DRAW_ROUNDS);
+    expect(originalPool.prizePerRound).to.equal(PRIZE_PER_ROUND);
+    expect(originalPool.totalPrizeAmount).to.equal(TOTAL_PRIZE_AMOUNT);
+    expect(originalPool.drawInterval).to.equal(DRAW_INTERVAL);
+
+    await fundAndApprove(token, pop33, user, ENTRY_PRICE * 2n);
+    await pop33.connect(user).join();
+    await pop33.connect(user).join();
+
+    const unchangedPool = await pop33.getPool(1);
+    const secondPool = await pop33.getPool(2);
+    for (const pool of [unchangedPool, secondPool]) {
+      expect(pool.entryPrice).to.equal(ENTRY_PRICE);
+      expect(pool.positionsPerPool).to.equal(MAX_POSITIONS);
+      expect(pool.drawRoundCount).to.equal(DRAW_ROUNDS);
+      expect(pool.prizePerRound).to.equal(PRIZE_PER_ROUND);
+      expect(pool.totalPrizeAmount).to.equal(TOTAL_PRIZE_AMOUNT);
+      expect(pool.drawInterval).to.equal(DRAW_INTERVAL);
+    }
   });
 
   it("rejects a zero payment-token address", async function () {
@@ -692,6 +762,220 @@ describe("Withdrawal", function () {
     expect(await pop33.getActivePositionId(1, user.address)).to.equal(11);
     expect(await pop33.getPoolActivePositionCount(1)).to.equal(1);
     expect(await pop33.getPoolActivePositionIds(1, 0, 100)).to.deep.equal([11n]);
+  });
+});
+
+describe("Draw lifecycle", function () {
+  it("creates ten numbered rounds with schedules derived from lockedAt", async function () {
+    const { pop33 } = await networkHelpers.loadFixture(lockedPoolFixture);
+    const pool = await pop33.getPool(1);
+
+    for (let roundNumber = 1; roundNumber <= Number(DRAW_ROUNDS); roundNumber += 1) {
+      const drawRound = await pop33.getDrawRound(1, roundNumber);
+      expect(drawRound.number).to.equal(roundNumber);
+      expect(drawRound.scheduledAt).to.equal(
+        pool.lockedAt + BigInt(roundNumber * DRAW_INTERVAL),
+      );
+      expect(drawRound.status).to.equal(0);
+      expect(drawRound.prizeAmount).to.equal(PRIZE_PER_ROUND);
+      expect(drawRound.executedAt).to.equal(0);
+    }
+  });
+
+  it("rejects a draw before its scheduled timestamp", async function () {
+    const { pop33 } = await networkHelpers.loadFixture(lockedPoolFixture);
+    const drawRound = await pop33.getDrawRound(1, 1);
+    await networkHelpers.time.setNextBlockTimestamp(Number(drawRound.scheduledAt) - 1);
+
+    await expect(pop33.executeDraw(1, 1))
+      .to.be.revertedWithCustomError(pop33, "DrawRoundNotReady")
+      .withArgs(1, 1, drawRound.scheduledAt, drawRound.scheduledAt - 1n);
+  });
+
+  it("executes the first draw exactly at the boundary and enters Drawing", async function () {
+    const { pop33 } = await networkHelpers.loadFixture(lockedPoolFixture);
+    const drawRound = await pop33.getDrawRound(1, 1);
+    await networkHelpers.time.setNextBlockTimestamp(Number(drawRound.scheduledAt));
+
+    await expect(pop33.executeDraw(1, 1))
+      .to.emit(pop33, "PoolStatusChanged")
+      .withArgs(1, 1, 2);
+
+    const pool = await pop33.getPool(1);
+    const finalizedRound = await pop33.getDrawRound(1, 1);
+    expect(pool.status).to.equal(2);
+    expect(pool.completedDrawRoundCount).to.equal(1);
+    expect(finalizedRound.status).to.equal(1);
+    expect(finalizedRound.executedAt).to.equal(drawRound.scheduledAt);
+    expect(finalizedRound.winningPositionId).to.be.greaterThan(0);
+    expect(finalizedRound.temporaryRequestId).to.equal(1);
+    expect(await pop33.getPoolDrawCandidateCount(1)).to.equal(99);
+    expect(await pop33.getPoolActivePositionCount(1)).to.equal(100);
+  });
+
+  it("rejects an out-of-sequence round", async function () {
+    const { pop33 } = await networkHelpers.loadFixture(lockedPoolFixture);
+    const secondRound = await pop33.getDrawRound(1, 2);
+    await networkHelpers.time.setNextBlockTimestamp(Number(secondRound.scheduledAt));
+
+    await expect(pop33.executeDraw(1, 2))
+      .to.be.revertedWithCustomError(pop33, "DrawRoundOutOfSequence")
+      .withArgs(1, 1, 2);
+  });
+
+  it("rejects executing the same round twice", async function () {
+    const { pop33 } = await networkHelpers.loadFixture(lockedPoolFixture);
+    const drawRound = await pop33.getDrawRound(1, 1);
+    await networkHelpers.time.setNextBlockTimestamp(Number(drawRound.scheduledAt));
+    await pop33.executeDraw(1, 1);
+
+    await expect(pop33.executeDraw(1, 1))
+      .to.be.revertedWithCustomError(pop33, "DrawRoundAlreadyExecuted")
+      .withArgs(1, 1);
+  });
+
+  it("executes exactly ten rounds with ten unique winning positions", async function () {
+    const { pop33 } = await networkHelpers.loadFixture(claimablePoolFixture);
+    const winningPositionIds = new Set<string>();
+    const winningWallets = new Set<string>();
+
+    for (let roundNumber = 1; roundNumber <= Number(DRAW_ROUNDS); roundNumber += 1) {
+      const drawRound = await pop33.getDrawRound(1, roundNumber);
+      expect(drawRound.number).to.equal(roundNumber);
+      expect(drawRound.status).to.equal(1);
+      expect(drawRound.prizeAmount).to.equal(PRIZE_PER_ROUND);
+      expect(drawRound.claimed).to.equal(false);
+      expect(await pop33.isWinningPosition(1, drawRound.winningPositionId)).to.equal(true);
+      winningPositionIds.add(drawRound.winningPositionId.toString());
+      winningWallets.add(drawRound.winner.toLowerCase());
+    }
+
+    const pool = await pop33.getPool(1);
+    expect(winningPositionIds.size).to.equal(Number(DRAW_ROUNDS));
+    expect(winningWallets.size).to.equal(Number(DRAW_ROUNDS));
+    expect(pool.status).to.equal(3);
+    expect(pool.completedDrawRoundCount).to.equal(DRAW_ROUNDS);
+    expect(pool.assignedPrizeAmount).to.equal(TOTAL_PRIZE_AMOUNT);
+    expect(await pop33.totalPrizesAssigned()).to.equal(TOTAL_PRIZE_AMOUNT);
+    expect(await pop33.getPoolDrawCandidateCount(1)).to.equal(90);
+    expect(await pop33.getPoolActivePositionCount(1)).to.equal(100);
+  });
+
+  it("rejects further draws after the pool becomes Claimable", async function () {
+    const { pop33 } = await networkHelpers.loadFixture(claimablePoolFixture);
+
+    await expect(pop33.executeDraw(1, 10))
+      .to.be.revertedWithCustomError(pop33, "PoolNotDrawable")
+      .withArgs(1, 3);
+  });
+});
+
+describe("Prize claims and Finished", function () {
+  it("allows a finalized prize to be claimed while later rounds remain pending", async function () {
+    const { token, pop33, participants } = await networkHelpers.loadFixture(lockedPoolFixture);
+    const pendingRound = await pop33.getDrawRound(1, 1);
+    await networkHelpers.time.setNextBlockTimestamp(Number(pendingRound.scheduledAt));
+    await pop33.executeDraw(1, 1);
+    const drawRound = await pop33.getDrawRound(1, 1);
+    const winner = await signerForAddress(participants, drawRound.winner);
+
+    await expect(pop33.connect(winner).claim(1, 1)).to.changeTokenBalances(
+      ethers,
+      token,
+      [pop33, winner],
+      [-PRIZE_PER_ROUND, PRIZE_PER_ROUND],
+    );
+
+    const pool = await pop33.getPool(1);
+    expect(pool.status).to.equal(2);
+    expect(pool.claimedPrizeCount).to.equal(1);
+    expect(pool.claimedPrizeAmount).to.equal(PRIZE_PER_ROUND);
+    expect(pool.activePositionCount).to.equal(100);
+    expect(await pop33.activePositionsByUser(winner.address)).to.equal(1);
+  });
+
+  it("rejects a claim by anyone other than the winning position owner", async function () {
+    const { pop33, outsider } = await networkHelpers.loadFixture(claimablePoolFixture);
+    const drawRound = await pop33.getDrawRound(1, 1);
+    expect(drawRound.winner.toLowerCase()).not.to.equal(outsider.address.toLowerCase());
+
+    await expect(pop33.connect(outsider).claim(1, 1))
+      .to.be.revertedWithCustomError(pop33, "NotRoundWinner")
+      .withArgs(1, 1, outsider.address);
+  });
+
+  it("accounts for a successful claim and rejects a double claim", async function () {
+    const { token, pop33, participants } = await networkHelpers.loadFixture(
+      claimablePoolFixture,
+    );
+    const drawRound = await pop33.getDrawRound(1, 1);
+    const winner = await signerForAddress(participants, drawRound.winner);
+
+    await expect(pop33.connect(winner).claim(1, 1))
+      .to.emit(pop33, "PrizeClaimed")
+      .withArgs(1, 1, drawRound.winningPositionId, winner.address, PRIZE_PER_ROUND);
+
+    expect((await pop33.getDrawRound(1, 1)).claimed).to.equal(true);
+    expect(await pop33.claimablePrizesByUser(winner.address)).to.equal(0);
+    expect(await pop33.totalPrizesClaimed()).to.equal(PRIZE_PER_ROUND);
+    expect(await pop33.totalEscrowed()).to.equal(TOTAL_PRIZE_AMOUNT - PRIZE_PER_ROUND);
+    expect(await token.balanceOf(await pop33.getAddress())).to.equal(
+      TOTAL_PRIZE_AMOUNT - PRIZE_PER_ROUND,
+    );
+
+    await expect(pop33.connect(winner).claim(1, 1))
+      .to.be.revertedWithCustomError(pop33, "PrizeAlreadyClaimed")
+      .withArgs(1, 1);
+  });
+
+  it("stays Claimable until all ten prizes are claimed", async function () {
+    const fixture = await networkHelpers.loadFixture(claimablePoolFixture);
+
+    for (let roundNumber = 1; roundNumber < Number(DRAW_ROUNDS); roundNumber += 1) {
+      const drawRound = await fixture.pop33.getDrawRound(1, roundNumber);
+      const winner = await signerForAddress(fixture.participants, drawRound.winner);
+      await fixture.pop33.connect(winner).claim(1, roundNumber);
+    }
+
+    const pool = await fixture.pop33.getPool(1);
+    expect(pool.status).to.equal(3);
+    expect(pool.claimedPrizeCount).to.equal(9);
+    expect(pool.activePositionCount).to.equal(100);
+    for (const participant of fixture.participants.slice(0, 10)) {
+      expect(await fixture.pop33.activePositionsByUser(participant.address)).to.equal(1);
+    }
+  });
+
+  it("finishes only after all prizes settle and releases every position", async function () {
+    const fixture = await networkHelpers.loadFixture(claimablePoolFixture);
+    await claimAllPrizes(fixture);
+
+    const pool = await fixture.pop33.getPool(1);
+    expect(pool.status).to.equal(4);
+    expect(pool.claimedPrizeCount).to.equal(DRAW_ROUNDS);
+    expect(pool.claimedPrizeAmount).to.equal(TOTAL_PRIZE_AMOUNT);
+    expect(pool.escrowedAmount).to.equal(0);
+    expect(pool.activePositionCount).to.equal(0);
+    expect(await fixture.pop33.totalEscrowed()).to.equal(0);
+    expect(await fixture.pop33.totalPrizesClaimed()).to.equal(TOTAL_PRIZE_AMOUNT);
+    expect(await fixture.pop33.getPoolActivePositionCount(1)).to.equal(0);
+    expect(await fixture.pop33.getPoolDrawCandidateCount(1)).to.equal(0);
+    expect(await fixture.token.balanceOf(await fixture.pop33.getAddress())).to.equal(0);
+
+    let totalWinnerBalance = 0n;
+    for (let roundNumber = 1; roundNumber <= Number(DRAW_ROUNDS); roundNumber += 1) {
+      const drawRound = await fixture.pop33.getDrawRound(1, roundNumber);
+      expect(drawRound.claimed).to.equal(true);
+      totalWinnerBalance += await fixture.token.balanceOf(drawRound.winner);
+    }
+    expect(totalWinnerBalance).to.equal(TOTAL_PRIZE_AMOUNT);
+
+    for (const participant of fixture.participants) {
+      expect(await fixture.pop33.activePositionsByUser(participant.address)).to.equal(0);
+    }
+    for (let positionId = 1; positionId <= Number(MAX_POSITIONS); positionId += 1) {
+      expect((await fixture.pop33.getPosition(positionId)).active).to.equal(false);
+    }
   });
 });
 

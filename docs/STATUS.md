@@ -1,6 +1,6 @@
 # POP33 Development Status
 
-Last reviewed: 2026-07-14
+Last reviewed: 2026-07-15
 
 Branch reviewed: `codex/pop33-recovery`
 
@@ -113,7 +113,7 @@ addresses; it has not been released through Vercel.
   checks-effects-interactions, `SafeERC20`, and `ReentrancyGuard`.
 - `Finished` after all ten prizes are claimed, with atomic bounded release of
   all 100 pool positions.
-- Automated contract coverage: 91 passing Mocha tests. The prior lifecycle and
+- Automated contract coverage: 119 passing Mocha tests. The prior lifecycle and
   external deployment-configuration coverage remains intact; added tests cover
   dUSDC identity, decimals, fixed faucet amount and cooldown, per-address timing,
   absence of owner/arbitrary mint/sale/native-value paths, Basic V1 compatibility,
@@ -127,6 +127,14 @@ addresses; it has not been released through Vercel.
   `Pop33BasicV1` to a fresh `hardhatOp` network and validates both contracts.
 - A local Demo V1 smoke command covering 100 faucet drips, 100 joins, ten unique winning
   positions, ten claims, `Finished`, and complete prize/escrow reconciliation.
+- A local-only modular multi-wallet operator with read-only preflight/status,
+  Hardhat funding and faucet modes, exact approval, a hard 99-position stop,
+  separately confirmed final join, safe Open-pool withdrawal, one-round draw,
+  winner-mapped claim, and live-state checkpoint reconciliation.
+- A repeatable local operator lifecycle covering withdrawal and refill before
+  lock, 100/100 lock scheduling, ten distinct winners, ten correct claims,
+  `Finished`, zero escrow, and release of all active positions. Base Sepolia
+  writes remain deliberately unimplemented and blocked.
 - A planned deployment register and a technical frontend integration plan in
   `docs/DEMO_V1.md`.
 - Separate `#/demo-v1` and `#/archive-v1` routes with isolated environment
@@ -208,6 +216,21 @@ the new, deployed Demo V1 Basic foundation is in `packages/contracts`.
 - claim expiry and alternate unclaimed-prize settlement remain `TO DECIDE`, so
   the current narrow implementation cannot reach `Finished` until all ten
   winners claim.
+- local operator wallets and the default checkpoint store are intentionally
+  process-bound; durable encrypted keystore/seed loading, interactive password
+  entry, deterministic public-testnet derivation, and restart recovery remain
+  prerequisites for any Base Sepolia multi-wallet run.
+- checkpointed confirmed transactions are verified against provider
+  transaction/receipt data during resume, but hash and nonce are still not
+  durably journaled immediately after broadcast. A persistent signer provider,
+  submitted-transaction journal, bounded resolution by hash/nonce and an
+  approved recovery runbook remain mandatory before public execution.
+- the current `join()` ABI cannot atomically bind a transaction to an expected
+  pool ID and pre-join count. Post-receipt position/event validation detects a
+  race but cannot undo it; a public-safe solution requires a future guarded
+  contract entry point and separately reviewed deployment.
+- the operator cannot make a Locked pool recoverable: the contract has neither
+  participant withdrawal nor an administrator rescue path after the 100th join.
 - an additional root-package `npm audit --omit=dev` reports 38 transitive
   frontend dependency findings (27 moderate, 11 high), primarily through the
   wallet connector stack; npm's complete remediation currently requires the
@@ -250,6 +273,7 @@ the UI and rechecks the connector directly before sending.
 - `cd packages/contracts && npm test`
 - `cd packages/contracts && npm run deploy:dry-run`
 - `cd packages/contracts && npm run smoke:demo-v1`
+- `cd packages/contracts && npm run operator:local:lifecycle`
 - `cd packages/contracts && npx tsc --noEmit`
 - `npx tsc --noEmit`
 - `npm run lint`

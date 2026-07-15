@@ -12,7 +12,8 @@
     "deploy:base-sepolia": "hardhat run scripts/deploy-base-sepolia.ts --network baseSepolia",
     "deploy:base-sepolia:external-token": "hardhat run scripts/deploy-base-sepolia.ts --network baseSepolia",
     "deploy:base-sepolia:demo-token": "hardhat run scripts/deploy-base-sepolia-demo-token.ts --network baseSepolia",
-    "smoke:demo-v1": "hardhat run scripts/smoke-demo-v1.ts"
+    "smoke:demo-v1": "hardhat run scripts/smoke-demo-v1.ts",
+    "operator:local:lifecycle": "hardhat run scripts/operator-local-lifecycle.ts"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-ethers": "4.0.14",

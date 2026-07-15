@@ -12,6 +12,8 @@ dist
 dist-ssr
 .test-dist
 *.local
+*.operator-checkpoint.json
+*.operator-checkpoint.json.tmp
 
 # Local environment files
 .env

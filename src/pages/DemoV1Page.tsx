@@ -222,7 +222,14 @@ export default function DemoV1Page() {
                 <Metric label="Draw progress" value={`${currentPool.completedDrawRoundCount} / ${currentPool.drawRoundCount}`} />
                 <Metric label="Claim progress" value={`${currentPool.claimedPrizeCount} / ${currentPool.drawRoundCount}`} />
               </div>
-              {currentRound && currentPool.completedDrawRoundCount < currentPool.drawRoundCount ? (
+              {currentPool.status === 0 ? (
+                <div className="rounded-xl border border-slate-800 p-4">
+                  <div className="text-sm font-semibold">Drawing is not available while the pool is Open.</div>
+                  <div className="mt-1 text-sm text-slate-400">
+                    The pool must first reach 100/100 active positions and become Locked. Round schedules are created by that contract lifecycle transition.
+                  </div>
+                </div>
+              ) : currentRound && currentRound.scheduledAt > 0n && currentPool.completedDrawRoundCount < currentPool.drawRoundCount ? (
                 <div className="rounded-xl border border-slate-800 p-4">
                   <div className="text-sm font-semibold">Next round #{currentRoundNumber.toString()}</div>
                   <div className="mt-1 text-sm text-slate-400">
@@ -235,6 +242,10 @@ export default function DemoV1Page() {
                   >
                     Execute permissionless test draw
                   </Button>
+                </div>
+              ) : currentPool.status === 1 || currentPool.status === 2 ? (
+                <div className="rounded-xl border border-slate-800 p-4 text-sm text-slate-400">
+                  The pool lifecycle permits drawing, but no valid next-round schedule is currently available from the contract. Refresh the on-chain reads before trying again.
                 </div>
               ) : null}
             </div>

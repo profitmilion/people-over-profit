@@ -37,6 +37,14 @@ export function needsApproval(allowance: bigint, entryPrice: bigint): boolean {
   return allowance < entryPrice;
 }
 
+export function shouldWaitForConfirmedAllowance(
+  displayedAllowance: bigint,
+  requiredAmount: bigint,
+  hasConfirmedApproval: boolean,
+): boolean {
+  return hasConfirmedApproval && displayedAllowance < requiredAmount;
+}
+
 export function canJoin(input: {
   configured: boolean;
   connected: boolean;

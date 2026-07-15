@@ -1,8 +1,20 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useAccount, usePublicClient, useWriteContract } from "wagmi";
-import type { Abi, Hash } from "viem";
+import { createPublicClient, http, type Abi, type Hash } from "viem";
+import { baseSepolia } from "viem/chains";
 import { demoV1Abi, demoV1TokenAbi } from "../demo-v1/abi";
 import { DEMO_V1_CHAIN_ID, demoV1Config } from "../demo-v1/config";
+import { shouldWaitForConfirmedAllowance } from "../demo-v1/domain";
+
+const ALLOWANCE_POLL_INTERVAL_MS = 1_000;
+const ALLOWANCE_POLL_TIMEOUT_MS = 30_000;
+
+const allowancePublicClient = demoV1Config.rpcUrl
+  ? createPublicClient({
+      chain: baseSepolia,
+      transport: http(demoV1Config.rpcUrl),
+    })
+  : undefined;
 
 export type DemoV1TxPhase =
   | "idle"
@@ -14,7 +26,8 @@ export type DemoV1TxPhase =
   | "reverted"
   | "wrong-network"
   | "insufficient-token"
-  | "insufficient-gas";
+  | "insufficient-gas"
+  | "allowance-not-observed";
 
 export type DemoV1TxState = {
   action: string;
@@ -29,6 +42,43 @@ class LocalActionError extends Error {
   constructor(public readonly phase: DemoV1TxPhase, message: string) {
     super(message);
   }
+}
+
+async function waitForApprovedAllowance(input: {
+  owner: `0x${string}`;
+  spender: `0x${string}`;
+  requiredAmount: bigint;
+}): Promise<bigint> {
+  if (!allowancePublicClient || !demoV1Config.tokenAddress) {
+    throw new LocalActionError(
+      "allowance-not-observed",
+      "Approval was confirmed, but the Demo V1 RPC client is unavailable. No second approval was sent.",
+    );
+  }
+
+  const deadline = Date.now() + ALLOWANCE_POLL_TIMEOUT_MS;
+  while (Date.now() <= deadline) {
+    try {
+      const allowance = await allowancePublicClient.readContract({
+        address: demoV1Config.tokenAddress,
+        abi: demoV1TokenAbi,
+        functionName: "allowance",
+        args: [input.owner, input.spender],
+      });
+      if (allowance >= input.requiredAmount) return allowance;
+    } catch {
+      // A transient read failure is retried against this same RPC transport.
+    }
+
+    await new Promise((resolve) =>
+      window.setTimeout(resolve, ALLOWANCE_POLL_INTERVAL_MS),
+    );
+  }
+
+  throw new LocalActionError(
+    "allowance-not-observed",
+    "Approval was confirmed, but the fresh 33 dUSDC allowance was not visible within 30 seconds. No second approval was sent. Wait briefly, refresh, and retry join.",
+  );
 }
 
 function classifyError(error: unknown): Pick<DemoV1TxState, "phase" | "message"> {
@@ -51,6 +101,12 @@ export function useDemoV1Actions(onConfirmed: () => Promise<unknown> | unknown) 
   const publicClient = usePublicClient({ chainId: DEMO_V1_CHAIN_ID });
   const { writeContractAsync } = useWriteContract();
   const [txState, setTxState] = useState<DemoV1TxState>(initialState);
+  const confirmedApprovalRef = useRef<{
+    owner: `0x${string}`;
+    spender: `0x${string}`;
+    amount: bigint;
+    hash: Hash;
+  } | null>(null);
 
   const assertReady = useCallback(async () => {
     if (!isConnected || !address || !connector) {
@@ -140,18 +196,69 @@ export function useDemoV1Actions(onConfirmed: () => Promise<unknown> | unknown) 
     if (!demoV1Config.tokenAddress || !demoV1Config.contractAddress) {
       throw new Error("Demo V1 addresses are missing.");
     }
-    if (input.allowance < input.entryPrice) {
-      await run("Approve exactly one entry", () =>
+    if (!address) {
+      throw new LocalActionError("rejected", "Connect a wallet first.");
+    }
+
+    let confirmedApproval = confirmedApprovalRef.current;
+    let hasConfirmedApproval = Boolean(
+      confirmedApproval &&
+      confirmedApproval.owner.toLowerCase() === address.toLowerCase() &&
+      confirmedApproval.spender.toLowerCase() === demoV1Config.contractAddress.toLowerCase() &&
+      confirmedApproval.amount >= input.entryPrice,
+    );
+
+    if (input.allowance < input.entryPrice && !hasConfirmedApproval) {
+      const approvalHash = await run("Approve exactly one entry", () =>
         sendWrite(demoV1TokenAbi, demoV1Config.tokenAddress!, "approve", [
           demoV1Config.contractAddress!,
           input.entryPrice,
         ]),
       );
+      confirmedApproval = {
+        owner: address,
+        spender: demoV1Config.contractAddress,
+        amount: input.entryPrice,
+        hash: approvalHash,
+      };
+      confirmedApprovalRef.current = confirmedApproval;
+      hasConfirmedApproval = true;
     }
-    return run("Join pool", () =>
+
+    if (shouldWaitForConfirmedAllowance(
+      input.allowance,
+      input.entryPrice,
+      hasConfirmedApproval,
+    )) {
+      setTxState({
+        action: "Observe approved allowance",
+        phase: "confirming",
+        hash: confirmedApproval?.hash,
+        message: "Approval is confirmed. Waiting for Base Sepolia RPC to expose the fresh allowance before simulating join.",
+      });
+      try {
+        await waitForApprovedAllowance({
+          owner: address,
+          spender: demoV1Config.contractAddress,
+          requiredAmount: input.entryPrice,
+        });
+      } catch (error) {
+        const classified = classifyError(error);
+        setTxState({
+          action: "Approval confirmed",
+          ...classified,
+          hash: confirmedApproval?.hash,
+        });
+        throw error;
+      }
+    }
+
+    const joinHash = await run("Join pool", () =>
       sendWrite(demoV1Abi, demoV1Config.contractAddress!, "join"),
     );
-  }, [run, sendWrite]);
+    confirmedApprovalRef.current = null;
+    return joinHash;
+  }, [address, run, sendWrite]);
 
   const withdraw = useCallback((positionId: bigint) => {
     if (!demoV1Config.contractAddress) return Promise.reject(new Error("Contract address missing."));

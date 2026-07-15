@@ -8,6 +8,7 @@ import {
   formatDUsdc,
   isFaucetAvailable,
   needsApproval,
+  shouldWaitForConfirmedAllowance,
 } from "../src/demo-v1/domain.js";
 
 test("formats 6-decimal dUSDC values without losing precision", () => {
@@ -25,6 +26,12 @@ test("faucet eligibility respects the cooldown timestamp", () => {
 test("approval is required only below the exact entry price", () => {
   assert.equal(needsApproval(32_999_999n, 33_000_000n), true);
   assert.equal(needsApproval(33_000_000n, 33_000_000n), false);
+});
+
+test("a confirmed approval waits for fresh allowance instead of approving twice", () => {
+  assert.equal(shouldWaitForConfirmedAllowance(0n, 33_000_000n, true), true);
+  assert.equal(shouldWaitForConfirmedAllowance(0n, 33_000_000n, false), false);
+  assert.equal(shouldWaitForConfirmedAllowance(33_000_000n, 33_000_000n, true), false);
 });
 
 test("join eligibility requires configuration, wallet, chain, balance and position capacity", () => {
@@ -59,6 +66,8 @@ test("draw eligibility requires a due pending round in a locked or drawing pool"
   };
   assert.equal(canExecuteDraw(valid), true);
   assert.equal(canExecuteDraw({ ...valid, poolStatus: 0 }), false);
+  assert.equal(canExecuteDraw({ ...valid, poolStatus: 0, scheduledAt: 0n }), false);
+  assert.equal(canExecuteDraw({ ...valid, scheduledAt: 0n }), false);
   assert.equal(canExecuteDraw({ ...valid, scheduledAt: 1_001n }), false);
   assert.equal(canExecuteDraw({ ...valid, completedRounds: 10n }), false);
 });

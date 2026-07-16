@@ -113,6 +113,53 @@ was added, all Base Sepolia writes still abort before broadcast, and the
 existing contracts, deployment scripts, addresses, and on-chain state are
 unchanged.
 
+### Separate reversible Base Sepolia smoke harness
+
+A separate single-wallet harness now exists under
+`packages/contracts/scripts/smoke`. It is not a mode of the multi-wallet
+lifecycle operator and does not weaken that operator's unconditional Base
+Sepolia write block. It cannot use the encrypted 100-wallet store and exposes
+no draw, claim, deployment, or administration path.
+
+Its default `npm run smoke:base-sepolia` mode is read-only. With a credential-free
+HTTPS `BASE_SEPOLIA_SMOKE_RPC_URL` and a public
+`BASE_SEPOLIA_SMOKE_WALLET_ADDRESS`, it validates chain `84532`, bytecode and
+the two recorded addresses, `paymentToken()`, dUSDC identity and six decimals,
+all fixed contract parameters and pool snapshots, current pool status/count,
+wallet membership, faucet cooldown, ETH/dUSDC balances, allowance, fee data,
+and a buffered gas plan. It neither requires a private key nor creates a signer.
+
+The write form, `npm run smoke:base-sepolia -- --write-smoke`, is disabled unless
+two exact documented confirmation phrases, the dedicated matching
+`BASE_SEPOLIA_SMOKE_PRIVATE_KEY`, an external transaction-journal path, a clean
+preflight, sufficient ETH, elapsed faucet cooldown, an Open pool, the safety
+margin, and no existing fresh-run position all agree. The recorded deployment
+wallet is explicitly rejected. The key is accepted only from the runtime
+process environment and must never enter GitHub, Vercel, `.env`, logs,
+command-line arguments, or `VITE_*` configuration.
+
+The only write sequence is `dUSDC drip -> exact 33 dUSDC approval -> join ->
+position verification -> Open-only withdraw -> exact refund and membership
+verification`. The hard rejection boundary is 98 active positions; the harness
+uses a stricter operating maximum of 89 to leave a ten-position margin. This
+cannot remove the deployed contract's `join()` race because its ABI does not
+accept an expected pool ID/count, so every state is rechecked and any mismatch
+halts instead of guessing.
+
+The journal contains no secrets and uses stable operation IDs. It has explicit
+180-second receipt timeouts, at most three retries for read-only RPC calls, and
+no automatic retry for any broadcast. On restart it validates transaction
+identity, calldata and action-specific receipt events. Pending, replaced,
+cancelled, failed and ambiguous results stop; inconclusive evidence becomes
+`requires_manual_review`. Confirmed work is not sent twice.
+
+Recovery starts from the unchanged journal and public chain evidence. Inspect
+only public wallet/contract addresses and transaction hashes through links such
+as `https://sepolia.basescan.org/tx/<hash>`; never include a private key or RPC
+credential. No Base Sepolia preflight or write was performed in the milestone
+that added this harness because the dedicated RPC and public smoke-wallet
+configuration were absent.
+
 Run commands from `packages/contracts`.
 
 ### Local deployment dry-run

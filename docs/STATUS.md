@@ -113,11 +113,8 @@ addresses; it has not been released through Vercel.
   checks-effects-interactions, `SafeERC20`, and `ReentrancyGuard`.
 - `Finished` after all ten prizes are claimed, with atomic bounded release of
   all 100 pool positions.
-- Automated contract coverage: 119 passing Mocha tests. The prior lifecycle and
-  external deployment-configuration coverage remains intact; added tests cover
-  dUSDC identity, decimals, fixed faucet amount and cooldown, per-address timing,
-  absence of owner/arbitrary mint/sale/native-value paths, Basic V1 compatibility,
-  and the two-confirmation deployment configuration.
+- Automated contract/operator coverage: 163 passing Mocha tests, including 25
+  isolated Base Sepolia smoke-harness tests. No test uses a public RPC.
 - A named Hardhat `baseSepolia` OP network using configuration variables, with
   no committed credentials.
 - A guarded external-token Base Sepolia deployment script plus a separately
@@ -145,6 +142,12 @@ addresses; it has not been released through Vercel.
 - Journal coordination is integrated into every local lifecycle transaction.
   Confirmed and pending semantic operations cannot be broadcast again, while
   ambiguous evidence halts in `requires_manual_review`.
+- A separate, guarded Base Sepolia single-wallet smoke harness with a default
+  read-only preflight, dedicated runtime-only key namespace, fixed documented
+  addresses, exact approval, reversible join/withdraw scope, buffered gas
+  checks, 180-second receipts, bounded read retries, stable journal IDs and
+  conservative restart recovery. Its write mode was not executed in this
+  milestone because no dedicated smoke runtime configuration was present.
 - A planned deployment register and a technical frontend integration plan in
   `docs/DEMO_V1.md`.
 - Separate `#/demo-v1` and `#/archive-v1` routes with isolated environment
@@ -230,11 +233,10 @@ the new, deployed Demo V1 Basic foundation is in `packages/contracts`.
   local lifecycle deliberately keeps disposable in-memory wallets because its
   simulated chain also disappears. No public operator entrypoint exists;
   Base Sepolia writes remain blocked before broadcast.
-- provider-standard hash and nonce recovery is implemented conservatively.
-  Discovering an unknown same-nonce transaction without provider-specific
-  transaction indexing remains a manual-review case; bounded receipt timeouts,
-  gas-funding preflight, backup operations, and an approved public runbook are
-  still mandatory before public execution.
+- provider-standard hash and nonce recovery is implemented conservatively. The
+  smoke adapter also scans a bounded 128-block window for mined same-nonce
+  replacements or cancellations. A pending replacement absent from standard
+  RPC indexing remains a manual-review case.
 - the current `join()` ABI cannot atomically bind a transaction to an expected
   pool ID and pre-join count. Post-receipt position/event validation detects a
   race but cannot undo it; a public-safe solution requires a future guarded
@@ -284,6 +286,8 @@ the UI and rechecks the connector directly before sending.
 - `cd packages/contracts && npm run deploy:dry-run`
 - `cd packages/contracts && npm run smoke:demo-v1`
 - `cd packages/contracts && npm run operator:local:lifecycle`
+- `cd packages/contracts && npm run smoke:base-sepolia` (external read-only RPC;
+  requires dedicated public configuration and was not run in this milestone)
 - `cd packages/contracts && npx tsc --noEmit`
 - `npx tsc --noEmit`
 - `npm run lint`

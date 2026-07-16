@@ -33,6 +33,13 @@ export default defineConfig({
       url: configVariable("BASE_SEPOLIA_RPC_URL"),
       accounts: [configVariable("BASE_SEPOLIA_DEPLOYER_PRIVATE_KEY")],
     },
+    baseSepoliaSmoke: {
+      type: "http",
+      chainType: "op",
+      chainId: 84_532,
+      url: configVariable("BASE_SEPOLIA_SMOKE_RPC_URL"),
+      accounts: [],
+    },
   },
   test: {
     mocha: {

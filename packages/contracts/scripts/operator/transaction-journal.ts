@@ -190,6 +190,7 @@ export function sanitizeOperatorError(error: unknown): string {
       : "Operator operation failed.";
   return raw
     .replace(/\b([a-z][a-z0-9+.-]*:\/\/)[^/\s:@]+:[^@\s/]+@/gi, "$1[redacted]@")
+    .replace(/\b(?:https?|wss?):\/\/[^\s"'<>]+/gi, "[redacted-url]")
     .replace(/\b(mnemonic|seed phrase)\s*[:=]\s*(?:[a-z]+\s+){11,23}[a-z]+/gi, "$1=[redacted]")
     .replace(/\b(?:0x)?[0-9a-f]{64}\b/gi, "[redacted-64-byte-value]")
     .replace(/\b(private key|mnemonic|seed phrase|password|passphrase)\s*[:=]\s*[^\r\n]+/gi, "$1=[redacted]")

@@ -123,6 +123,92 @@ between simulation and mining cannot be fully bound to an expected pool with
 the current `join()` interface; solving that requires a future contract-level
 expected-pool/count guard and a separately reviewed deployment.
 
+## Guarded single-wallet Base Sepolia smoke harness
+
+The Base Sepolia smoke harness is deliberately separate from the multi-wallet
+`DemoV1Operator`. It cannot fund or manage 100 wallets, execute a draw, claim a
+prize, deploy a contract, or perform an administrative action. The main
+operator's Base Sepolia write policy remains unchanged and always aborts before
+broadcast.
+
+The smoke harness uses only the addresses recorded in `docs/DEMO_V1.md`:
+
+- dUSDC: `0xA7FA084b34c888061757d4b5FBb08a7B53fee786`;
+- POP33: `0x140DA1b29F0B00b003Cabe86AE1a473d6745f56F`;
+- chain ID: `84532`.
+
+The default command is read-only:
+
+```text
+npm run smoke:base-sepolia
+```
+
+It requires `BASE_SEPOLIA_SMOKE_RPC_URL` and the public
+`BASE_SEPOLIA_SMOKE_WALLET_ADDRESS`, but no private key. It validates HTTPS and
+rejects URL credentials and local endpoints, Base Mainnet and every chain other
+than Base Sepolia, missing bytecode, token/POP33 linkage, token identity and six
+decimals, all Demo V1 constants and the current pool snapshot. It reads native
+ETH, dUSDC balance, allowance, faucet cooldown, membership, and the oldest open
+pool. It obtains live gas estimates for immediately simulatable calls and uses
+explicit conservative budgets for join/withdraw, which cannot always be
+estimated before their prerequisite state exists. The write path estimates
+each action again immediately before broadcast.
+
+The preflight always rejects a pool at 98 or more active positions. It also
+uses a stricter ten-position operating margin and therefore refuses above 89.
+This margin reduces but cannot eliminate the known public race because the
+deployed `join()` ABI cannot bind the transaction to an expected pool/count.
+
+The public write form is intentionally awkward:
+
+```text
+npm run smoke:base-sepolia -- --write-smoke
+```
+
+It additionally requires all of the following at the same time:
+
+- a successful preflight and the exact `--write-smoke` CLI flag;
+- `BASE_SEPOLIA_SMOKE_NETWORK_CONFIRM` equal to
+  `I UNDERSTAND THIS SMOKE TEST WRITES TO BASE SEPOLIA`;
+- `BASE_SEPOLIA_SMOKE_FLOW_CONFIRM` equal to
+  `I AUTHORIZE DUSDC FAUCET APPROVE JOIN AND WITHDRAW`;
+- `BASE_SEPOLIA_SMOKE_PRIVATE_KEY`, matching the separately configured public
+  smoke address and never the recorded deployment wallet;
+- `BASE_SEPOLIA_SMOKE_JOURNAL_PATH`, an absolute external path ending with
+  `.operator-journal.json`;
+- sufficient Base Sepolia ETH, an elapsed faucet cooldown, an `Open` pool in
+  the safety margin, and no existing position for a fresh run.
+
+The dedicated key is read only after non-secret preflight and confirmation
+checks. It is never printed or written. Never store the key or credentialed RPC
+URL in GitHub, Vercel, `.env` files, command arguments, logs, or any `VITE_*`
+variable. Do not use the deployer wallet. The separate `baseSepoliaSmoke`
+Hardhat network has an empty account list; only the guarded write path constructs
+the one runtime signer.
+
+The only permitted sequence is `drip -> approve exactly 33 dUSDC -> join ->
+verify position -> withdraw while Open -> verify exact 33 dUSDC refund`. The
+journal uses stable semantic operation IDs and persists nonce before broadcast,
+hash before receipt waiting, and a sanitized receipt summary. Receipt waits have
+a 180-second timeout. Safe RPC reads have three bounded attempts; broadcasts
+are never retried. Restart revalidates calldata, sender, nonce, target, receipt,
+and action events. Pending, broadcast, replaced, cancelled, failed, malformed,
+and ambiguous states stop without resubmission; inconclusive evidence becomes
+`requires_manual_review`. Already confirmed operations are never repeated.
+
+One journal represents one smoke run. After a fully completed run, retain or
+archive it as evidence; a separately authorized later run must use a new
+external journal path. After an interrupted run, keep using the original path
+so recovery can preserve idempotency.
+
+After a stop, do not delete or edit the journal and do not rerun with a new
+path. First inspect the public transaction hash and wallet address in BaseScan,
+then compare the on-chain nonce, receipt, target, calldata, pool, position, and
+allowance. BaseScan links contain only public identifiers, for example
+`https://sepolia.basescan.org/tx/<transaction-hash>` and
+`https://sepolia.basescan.org/address/<public-address>`. Never place the RPC URL
+or private key in an explorer link or report.
+
 ## Base Sepolia commands
 
 - `npm run deploy:base-sepolia` and the explicit alias

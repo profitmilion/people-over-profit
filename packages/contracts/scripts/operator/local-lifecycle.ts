@@ -8,6 +8,7 @@ import {
   POOL_STATUS,
 } from "./demo-v1-operator.js";
 import { EphemeralLocalWalletProvider } from "./wallet-provider.js";
+import { MemoryTransactionJournal } from "./transaction-journal.js";
 
 export async function runFullLocalLifecycle(log = console.log) {
   log("LOCAL OPERATOR TEST ONLY: no external RPC or public blockchain is used.");
@@ -18,6 +19,11 @@ export async function runFullLocalLifecycle(log = console.log) {
     deployed.ethers.provider,
   );
   const checkpointStore = new MemoryCheckpointStore();
+  const transactionJournal = new MemoryTransactionJournal({
+    chainId: 31_337n,
+    tokenAddress: await deployed.token.getAddress(),
+    contractAddress: await deployed.pop33.getAddress(),
+  });
   const operator = new DemoV1Operator({
     runtime: {
       network: "hardhatOp",
@@ -29,6 +35,7 @@ export async function runFullLocalLifecycle(log = console.log) {
     },
     wallets: walletProvider,
     checkpointStore,
+    transactionJournal,
     log,
   });
 
@@ -89,12 +96,24 @@ export async function runFullLocalLifecycle(log = console.log) {
   assert.equal(checkpoint.completedDrawRoundCount, "10");
   assert.equal(checkpoint.claimedPrizeCount, "10");
 
+  const journal = transactionJournal.snapshot();
+  assert.equal(journal.operations.length, 617);
+  assert.equal(
+    new Set(journal.operations.map((operation) => operation.operationId)).size,
+    journal.operations.length,
+  );
+  assert.equal(
+    journal.operations.every((operation) => operation.status === "confirmed"),
+    true,
+  );
+
   log("LOCAL OPERATOR LIFECYCLE PASSED");
   log("  First fill: stopped at 99/100");
   log("  Open-pool withdrawals: 99");
   log("  Second fill: 99/100 plus separately confirmed final join");
   log("  Unique winners: 10");
   log("  Claims: 10");
+  log("  Journal: 617 unique operations confirmed");
   log("  Final status: Finished; escrow: 0; active positions: 0");
-  return { connection, deployed, operator, walletProvider, checkpoint };
+  return { connection, deployed, operator, walletProvider, checkpoint, journal };
 }

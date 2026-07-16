@@ -1,4 +1,4 @@
-import { getAddress, parseEther, type HDNodeWallet } from "ethers";
+import { getAddress, parseEther } from "ethers";
 
 import { DEMO_V1_PARAMETERS, LOCAL_HARDHAT_CHAIN_ID } from "../lib/demo-v1-config.js";
 import type { DynamicContract } from "../lib/deployment.js";
@@ -13,7 +13,9 @@ import {
   type OperatorMode,
   type OperatorNetwork,
 } from "./network-policy.js";
-import type { OperatorWalletProvider } from "./wallet-provider.js";
+import type { OperationAction, TransactionJournal } from "./transaction-journal.js";
+import { executeJournaledOperation, recoverTransactionJournal } from "./transaction-recovery.js";
+import type { OperatorWallet, OperatorWalletProvider } from "./wallet-provider.js";
 
 export const POOL_STATUS = Object.freeze({
   Open: 0n,
@@ -38,11 +40,12 @@ interface OperatorRuntime {
     getBlock(blockTag: "latest"): Promise<{ timestamp: number } | null>;
     getTransaction(hash: string): Promise<ChainTransactionLike | null>;
     getTransactionReceipt(hash: string): Promise<ChainReceiptLike | null>;
+    getTransactionCount(address: string, blockTag: "latest" | "pending"): Promise<number>;
   };
   networkHelpers?: LocalNetworkHelpers;
   token: DynamicContract;
   pop33: DynamicContract;
-  drawExecutor: HDNodeWallet | { address: string };
+  drawExecutor: OperatorWallet | { address: string };
 }
 
 interface TransactionResponseLike {
@@ -65,6 +68,7 @@ interface ChainReceiptLike {
   blockNumber: number;
   status: number | null;
   logs: readonly unknown[];
+  gasUsed?: bigint;
 }
 
 interface PoolLike {
@@ -86,6 +90,7 @@ export interface OperatorOptions {
   runtime: OperatorRuntime;
   wallets: OperatorWalletProvider;
   checkpointStore: CheckpointStore;
+  transactionJournal?: TransactionJournal;
   poolId?: bigint;
   log?: (message: string) => void;
 }
@@ -122,19 +127,22 @@ export class DemoV1Operator {
   private readonly walletProvider: OperatorWalletProvider;
   private readonly checkpointStore: CheckpointStore;
   private readonly poolId: bigint;
+  private readonly transactionJournal?: TransactionJournal;
   private readonly log: (message: string) => void;
   private checkpoint?: OperatorCheckpoint;
   private activeWriteMode?: OperatorMode;
+  private journalRecoveryCompleted = false;
 
   constructor(options: OperatorOptions) {
     this.runtime = options.runtime;
     this.walletProvider = options.wallets;
     this.checkpointStore = options.checkpointStore;
     this.poolId = options.poolId ?? 1n;
+    this.transactionJournal = options.transactionJournal;
     this.log = options.log ?? console.log;
   }
 
-  private wallets(): readonly HDNodeWallet[] {
+  private wallets(): readonly OperatorWallet[] {
     return this.walletProvider.listWallets();
   }
 
@@ -292,6 +300,21 @@ export class DemoV1Operator {
 
   private async ensureCheckpoint(): Promise<OperatorCheckpoint> {
     if (this.checkpoint) return this.checkpoint;
+
+    if (this.transactionJournal && !this.journalRecoveryCompleted) {
+      const recovered = await recoverTransactionJournal(
+        this.transactionJournal,
+        this.runtime.provider,
+      );
+      this.journalRecoveryCompleted = true;
+      const unsafe = recovered.find((operation) =>
+        !["prepared", "confirmed"].includes(operation.status),
+      );
+      requireCondition(
+        !unsafe,
+        `Transaction journal operation ${unsafe?.operationId} requires review in ${unsafe?.status} state.`,
+      );
+    }
 
     const chainId = await this.chainId();
     const { tokenAddress, contractAddress } = await this.addresses();
@@ -469,6 +492,66 @@ export class DemoV1Operator {
     };
   }
 
+  private async sendJournaled(input: {
+    checkpointOperation: TransactionCheckpoint["operation"];
+    action: OperationAction;
+    scope: string;
+    wallet: { address: string };
+    parameters?: unknown;
+    poolId?: bigint;
+    round?: number;
+    send(nonce?: number): Promise<TransactionResponseLike>;
+  }): Promise<{ transaction: TransactionCheckpoint; receipt: ChainReceiptLike }> {
+    if (!this.transactionJournal) {
+      return this.receiptWithDetails(input.checkpointOperation, await input.send());
+    }
+
+    const chainId = await this.chainId();
+    const { tokenAddress, contractAddress } = await this.addresses();
+    const result = await executeJournaledOperation({
+      journal: this.transactionJournal,
+      meaning: {
+        action: input.action,
+        scope: input.scope,
+        walletAddress: input.wallet.address,
+        chainId,
+        contractAddress,
+        tokenAddress,
+        poolId: input.poolId,
+        round: input.round,
+        parameters: input.parameters,
+      },
+      getNonce: () => this.runtime.provider.getTransactionCount(input.wallet.address, "pending"),
+      broadcast: (nonce) => input.send(nonce),
+    });
+
+    const hash = result.operation.transactionHash;
+    const nonce = result.operation.nonce;
+    requireCondition(hash && nonce !== null, "Confirmed journal operation is missing hash or nonce.");
+    const receipt = await this.runtime.provider.getTransactionReceipt(hash);
+    requireCondition(receipt, "Confirmed journal operation receipt is unavailable from provider.");
+    const response: TransactionResponseLike = {
+      hash,
+      nonce,
+      wait: async () => receipt,
+    };
+    return {
+      transaction: toCheckpointTransaction(input.checkpointOperation, response, receipt),
+      receipt,
+    };
+  }
+
+  private walletOperationSequence(
+    index: number,
+    operation: TransactionCheckpoint["operation"],
+  ): number {
+    const checkpoint = this.checkpoint;
+    requireCondition(checkpoint, "Checkpoint was not initialized.");
+    return checkpoint.wallets[index].transactions.filter(
+      (transaction) => transaction.operation === operation,
+    ).length + 1;
+  }
+
   async preflight() {
     this.assertMode("preflight");
     const checkpoint = await this.ensureCheckpoint();
@@ -586,8 +669,17 @@ export class DemoV1Operator {
         continue;
       }
       await this.runtime.token.connect(wallet).drip.staticCall();
-      const response = (await this.runtime.token.connect(wallet).drip()) as TransactionResponseLike;
-      const transaction = await this.receipt("dripped", response);
+      const sequence = this.walletOperationSequence(index, "dripped");
+      const { transaction } = await this.sendJournaled({
+        checkpointOperation: "dripped",
+        action: "faucet",
+        scope: `wallet-${index}-drip-${sequence}`,
+        wallet,
+        parameters: { amount: DEMO_V1_PARAMETERS.dripAmount },
+        send: (nonce) => this.runtime.token.connect(wallet).drip(
+          ...(nonce === undefined ? [] : [{ nonce }]),
+        ) as Promise<TransactionResponseLike>,
+      });
       const after = (await this.runtime.token.balanceOf(wallet.address)) as bigint;
       requireCondition(
         after - before === DEMO_V1_PARAMETERS.dripAmount,
@@ -614,10 +706,19 @@ export class DemoV1Operator {
       await this.runtime.token
         .connect(wallet)
         .approve.staticCall(contractAddress, DEMO_V1_PARAMETERS.entryPrice);
-      const response = (await this.runtime.token
-        .connect(wallet)
-        .approve(contractAddress, DEMO_V1_PARAMETERS.entryPrice)) as TransactionResponseLike;
-      const transaction = await this.receipt("approved", response);
+      const sequence = this.walletOperationSequence(index, "approved");
+      const { transaction } = await this.sendJournaled({
+        checkpointOperation: "approved",
+        action: "approve",
+        scope: `wallet-${index}-approval-${sequence}`,
+        wallet,
+        parameters: { spender: contractAddress, amount: DEMO_V1_PARAMETERS.entryPrice },
+        send: (nonce) => this.runtime.token.connect(wallet).approve(
+          contractAddress,
+          DEMO_V1_PARAMETERS.entryPrice,
+          ...(nonce === undefined ? [] : [{ nonce }]),
+        ) as Promise<TransactionResponseLike>,
+      });
       requireCondition(
         (await this.runtime.token.allowance(wallet.address, contractAddress)) ===
           DEMO_V1_PARAMETERS.entryPrice,
@@ -665,8 +766,18 @@ export class DemoV1Operator {
         BigInt(simulation[1]) === this.poolId,
         `join-to-99 simulation selected unexpected pool ${simulation[1]}.`,
       );
-      const response = (await this.runtime.pop33.connect(wallet).join()) as TransactionResponseLike;
-      const transaction = await this.receipt("joined", response);
+      const sequence = this.walletOperationSequence(index, "joined");
+      const { transaction } = await this.sendJournaled({
+        checkpointOperation: "joined",
+        action: "join",
+        scope: `wallet-${index}-position-${sequence}`,
+        wallet,
+        poolId: this.poolId,
+        parameters: { expectedPoolId: this.poolId, expectedCount: poolBefore.activePositionCount },
+        send: (nonce) => this.runtime.pop33.connect(wallet).join(
+          ...(nonce === undefined ? [] : [{ nonce }]),
+        ) as Promise<TransactionResponseLike>,
+      });
       const poolAfter = (await this.runtime.pop33.getPool(this.poolId)) as PoolLike;
       requireCondition(
         poolAfter.status === POOL_STATUS.Open &&
@@ -741,8 +852,18 @@ export class DemoV1Operator {
     const simulation = await this.runtime.pop33.connect(wallet).join.staticCall();
     requireCondition(BigInt(simulation[1]) === this.poolId, "final-join simulation selected another pool.");
     const simulatedPositionId = BigInt(simulation[0]);
-    const response = (await this.runtime.pop33.connect(wallet).join()) as TransactionResponseLike;
-    const { transaction, receipt } = await this.receiptWithDetails("joined", response);
+    const sequence = this.walletOperationSequence(finalIndex, "joined");
+    const { transaction, receipt } = await this.sendJournaled({
+      checkpointOperation: "joined",
+      action: "join",
+      scope: `wallet-${finalIndex}-position-${sequence}-final-lock`,
+      wallet,
+      poolId: this.poolId,
+      parameters: { expectedPoolId: this.poolId, expectedCount: 99n, finalJoin: true },
+      send: (nonce) => this.runtime.pop33.connect(wallet).join(
+        ...(nonce === undefined ? [] : [{ nonce }]),
+      ) as Promise<TransactionResponseLike>,
+    });
     const [poolAfter, finalPositionId] = await Promise.all([
       this.runtime.pop33.getPool(this.poolId) as Promise<PoolLike>,
       this.runtime.pop33.getActivePositionId(this.poolId, wallet.address) as Promise<bigint>,
@@ -812,10 +933,18 @@ export class DemoV1Operator {
       requireCondition(poolBefore.status === POOL_STATUS.Open, "Pool left Open during withdrawal.");
       const balanceBefore = (await this.runtime.token.balanceOf(wallet.address)) as bigint;
       await this.runtime.pop33.connect(wallet).withdraw.staticCall(positionId);
-      const response = (await this.runtime.pop33
-        .connect(wallet)
-        .withdraw(positionId)) as TransactionResponseLike;
-      const transaction = await this.receipt("withdrawn", response);
+      const { transaction } = await this.sendJournaled({
+        checkpointOperation: "withdrawn",
+        action: "withdraw",
+        scope: `position-${positionId}-withdrawal`,
+        wallet,
+        poolId: this.poolId,
+        parameters: { positionId },
+        send: (nonce) => this.runtime.pop33.connect(wallet).withdraw(
+          positionId,
+          ...(nonce === undefined ? [] : [{ nonce }]),
+        ) as Promise<TransactionResponseLike>,
+      });
       const [poolAfter, balanceAfter, activeAfter, positionAfter] = await Promise.all([
         this.runtime.pop33.getPool(this.poolId) as Promise<PoolLike>,
         this.runtime.token.balanceOf(wallet.address) as Promise<bigint>,
@@ -864,10 +993,20 @@ export class DemoV1Operator {
     await this.runtime.pop33
       .connect(this.runtime.drawExecutor)
       .executeDraw.staticCall(this.poolId, roundNumber);
-    const response = (await this.runtime.pop33
-      .connect(this.runtime.drawExecutor)
-      .executeDraw(this.poolId, roundNumber)) as TransactionResponseLike;
-    const transaction = await this.receipt("draw", response);
+    const { transaction } = await this.sendJournaled({
+      checkpointOperation: "draw",
+      action: "draw",
+      scope: `pool-${this.poolId}-round-${roundNumber}`,
+      wallet: this.runtime.drawExecutor,
+      poolId: this.poolId,
+      round: roundNumber,
+      parameters: { poolId: this.poolId, roundNumber },
+      send: (nonce) => this.runtime.pop33.connect(this.runtime.drawExecutor).executeDraw(
+        this.poolId,
+        roundNumber,
+        ...(nonce === undefined ? [] : [{ nonce }]),
+      ) as Promise<TransactionResponseLike>,
+    });
     const [poolAfter, drawRoundAfter] = await Promise.all([
       this.runtime.pop33.getPool(this.poolId) as Promise<PoolLike>,
       this.runtime.pop33.getDrawRound(this.poolId, roundNumber),
@@ -928,10 +1067,20 @@ export class DemoV1Operator {
         this.runtime.pop33.getPool(this.poolId) as Promise<PoolLike>,
       ]);
       await this.runtime.pop33.connect(winner).claim.staticCall(this.poolId, roundNumber);
-      const response = (await this.runtime.pop33
-        .connect(winner)
-        .claim(this.poolId, roundNumber)) as TransactionResponseLike;
-      const transaction = await this.receipt("claimed", response);
+      const { transaction } = await this.sendJournaled({
+        checkpointOperation: "claimed",
+        action: "claim",
+        scope: `pool-${this.poolId}-round-${roundNumber}-claim`,
+        wallet: winner,
+        poolId: this.poolId,
+        round: roundNumber,
+        parameters: { poolId: this.poolId, roundNumber },
+        send: (nonce) => this.runtime.pop33.connect(winner).claim(
+          this.poolId,
+          roundNumber,
+          ...(nonce === undefined ? [] : [{ nonce }]),
+        ) as Promise<TransactionResponseLike>,
+      });
       const [roundAfter, poolAfter, balanceAfter] = await Promise.all([
         this.runtime.pop33.getDrawRound(this.poolId, roundNumber),
         this.runtime.pop33.getPool(this.poolId) as Promise<PoolLike>,

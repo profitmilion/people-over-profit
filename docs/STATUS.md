@@ -1,6 +1,6 @@
 # POP33 Development Status
 
-Last reviewed: 2026-07-15
+Last reviewed: 2026-07-16
 
 Branch reviewed: `codex/pop33-recovery`
 
@@ -135,6 +135,16 @@ addresses; it has not been released through Vercel.
   lock, 100/100 lock scheduling, ten distinct winners, ten correct claims,
   `Finished`, zero escrow, and release of all active positions. Base Sepolia
   writes remain deliberately unimplemented and blocked.
+- A versioned encrypted operator-wallet store using scrypt and AES-256-GCM,
+  with authenticated integrity checks, runtime-only password input, external
+  absolute paths, atomic replacement, and stable wallet restoration.
+- A separate versioned transaction journal with deterministic idempotency keys,
+  nonce-before-broadcast and hash-before-receipt persistence, strict forward
+  states, sanitized errors, and conservative restart recovery for confirmed,
+  pending, replaced, cancelled, failed, and ambiguous operations.
+- Journal coordination is integrated into every local lifecycle transaction.
+  Confirmed and pending semantic operations cannot be broadcast again, while
+  ambiguous evidence halts in `requires_manual_review`.
 - A planned deployment register and a technical frontend integration plan in
   `docs/DEMO_V1.md`.
 - Separate `#/demo-v1` and `#/archive-v1` routes with isolated environment
@@ -216,15 +226,15 @@ the new, deployed Demo V1 Basic foundation is in `packages/contracts`.
 - claim expiry and alternate unclaimed-prize settlement remain `TO DECIDE`, so
   the current narrow implementation cannot reach `Finished` until all ten
   winners claim.
-- local operator wallets and the default checkpoint store are intentionally
-  process-bound; durable encrypted keystore/seed loading, interactive password
-  entry, deterministic public-testnet derivation, and restart recovery remain
-  prerequisites for any Base Sepolia multi-wallet run.
-- checkpointed confirmed transactions are verified against provider
-  transaction/receipt data during resume, but hash and nonce are still not
-  durably journaled immediately after broadcast. A persistent signer provider,
-  submitted-transaction journal, bounded resolution by hash/nonce and an
-  approved recovery runbook remain mandatory before public execution.
+- the durable wallet and journal foundation is implemented, but the runnable
+  local lifecycle deliberately keeps disposable in-memory wallets because its
+  simulated chain also disappears. No public operator entrypoint exists;
+  Base Sepolia writes remain blocked before broadcast.
+- provider-standard hash and nonce recovery is implemented conservatively.
+  Discovering an unknown same-nonce transaction without provider-specific
+  transaction indexing remains a manual-review case; bounded receipt timeouts,
+  gas-funding preflight, backup operations, and an approved public runbook are
+  still mandatory before public execution.
 - the current `join()` ABI cannot atomically bind a transaction to an expected
   pool ID and pre-join count. Post-receipt position/event validation detects a
   race but cannot undo it; a public-safe solution requires a future guarded

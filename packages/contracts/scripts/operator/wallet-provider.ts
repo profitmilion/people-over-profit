@@ -1,11 +1,13 @@
 import type { HDNodeWallet, Provider } from "ethers";
 import { Wallet } from "ethers";
 
+export type OperatorWallet = HDNodeWallet | Wallet;
+
 export interface OperatorWalletProvider {
   readonly kind: "local-ephemeral" | "external-encrypted";
   readonly supportsProcessRestart: boolean;
-  listWallets(): readonly HDNodeWallet[];
-  findWallet(address: string): HDNodeWallet | undefined;
+  listWallets(): readonly OperatorWallet[];
+  findWallet(address: string): OperatorWallet | undefined;
 }
 
 export interface InteractivePasswordReader {
@@ -22,7 +24,7 @@ export interface FutureEncryptedWalletSource {
 export class EphemeralLocalWalletProvider implements OperatorWalletProvider {
   readonly kind = "local-ephemeral" as const;
   readonly supportsProcessRestart = false;
-  private readonly walletsByAddress: Map<string, HDNodeWallet>;
+  private readonly walletsByAddress: Map<string, OperatorWallet>;
 
   private constructor(private readonly wallets: readonly HDNodeWallet[]) {
     this.walletsByAddress = new Map(
@@ -40,11 +42,11 @@ export class EphemeralLocalWalletProvider implements OperatorWalletProvider {
     return new EphemeralLocalWalletProvider(wallets);
   }
 
-  listWallets(): readonly HDNodeWallet[] {
+  listWallets(): readonly OperatorWallet[] {
     return this.wallets;
   }
 
-  findWallet(address: string): HDNodeWallet | undefined {
+  findWallet(address: string): OperatorWallet | undefined {
     return this.walletsByAddress.get(address.toLowerCase());
   }
 }

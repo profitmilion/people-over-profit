@@ -36,9 +36,10 @@ validation, and checkpoint updates:
 | `claim-finalized` | Maps finalized winners to their actual local signer and verifies every payout and accounting change. |
 
 `local-lifecycle.ts` is the repeatable invariant-driven orchestration of those
-modes. Its 100 wallets are generated randomly in memory and disappear with the
-process. No private key, seed or password is accepted through command-line
-arguments, logged, serialized or placed in an environment file.
+modes. Its 100 wallets are still generated randomly in memory for disposable
+local tests. Its transaction path now runs through the same idempotency and
+journal coordinator as the durable foundation, using a memory journal because
+the simulated chain itself disappears with the process.
 
 Checkpoints use an explicit non-secret schema containing only public wallet
 indexes/addresses, pool and position IDs, stages, nonces, transaction hashes,
@@ -60,18 +61,51 @@ symlink or redirected path component. Existing ordinary or corrupted files are
 never overwritten. The current local lifecycle does not need this store and
 continues to use `MemoryCheckpointStore`.
 
-The current runnable lifecycle intentionally uses the in-memory checkpoint
-store. Because its random local wallets are ephemeral, it cannot resume after
-the process exits. The wallet-provider boundary is ready for a future adapter
-that loads an encrypted keystore or encrypted seed from outside the repository,
-prompts interactively for a password, and derives deterministic testnet-only
-wallets. That adapter and any public execution path are not implemented.
+## Durable wallet and transaction foundation
 
-The confirmed transaction hash and nonce are still written only after
-`wait()` returns a successful receipt. There is no durable `submitted` journal,
-bounded receipt timeout, or nonce/hash recovery procedure for a process that
-stops after broadcast. Consequently, full restart-safe resume is not supported
-even though already checkpointed receipts are verified when a store is loaded.
+`EncryptedWalletProvider` creates wallets once and stores their private keys in
+one authenticated encrypted file. The versioned envelope uses AES-256-GCM,
+scrypt (`N=16384`, `r=8`, `p=1`), a new random salt and a new random 96-bit IV
+for every write. Addresses and private keys are inside the ciphertext. The GCM
+authentication tag detects a wrong password, corruption, or modification.
+The target path comes only from `OPERATOR_WALLET_STORE_PATH`; it must be
+absolute, outside the repository, and end with `.operator-wallets.enc.json`.
+The password is requested through the runtime password-reader boundary and has
+no environment variable. The file is written through a synced temporary file,
+an atomic rename, and owner-only permissions where supported.
+
+The encrypted file and its password are both required to recover the wallets.
+Losing the file or password means losing access to those wallets. Store them
+separately in controlled locations. Never put either secret in GitHub, Vercel,
+logs, command-line arguments, `.env`, or any `VITE_*` variable.
+
+`JsonTransactionJournal` is a separate non-secret, versioned file selected by
+`OPERATOR_TRANSACTION_JOURNAL_PATH`. It stores public operation meaning,
+reserved nonce, transaction hash, receipt summary, timestamps, sanitized error
+text, and these explicit states: `prepared`, `ready_to_broadcast`, `broadcast`,
+`pending`, `confirmed`, `failed`, `replaced`, `cancelled`, and
+`requires_manual_review`. Its deterministic idempotency key hashes the action,
+scope, wallet, chain, contracts, pool/round, and a canonical parameter digest.
+Repeating the same semantic operation returns the existing record instead of
+creating another one.
+
+Before a transaction is sent, the operator persists its intent and reserved
+nonce. It persists the returned hash before waiting for a receipt. On restart,
+a confirmed record is revalidated against the provider; a newly found
+successful receipt is reconciled to `confirmed`; an existing transaction stays
+`pending`; a discoverable same-nonce replacement or cancellation is marked
+explicitly. A reserved nonce without a hash, a missing transaction with
+inconclusive provider evidence, and every other ambiguous outcome become
+`requires_manual_review`. Confirmed, pending, replaced, cancelled, failed, and
+manual-review records cannot be automatically broadcast again. Journal writes
+use the same synced temporary-file and atomic-rename pattern. A short-lived
+process-owned lock and revision comparison reject concurrent writers instead
+of silently losing an operation.
+
+`openDurableOperatorState()` opens the encrypted wallets and matching journal
+together. This is a preparatory API, not a public-network command. There is no
+CLI that enables Base Sepolia writes, no password environment variable, and no
+automatic manual-review resolution in this checkpoint.
 
 All Base Sepolia writes are blocked in this version. The policy already reserves
 three future gates (the exact `baseSepolia` network, a separate execution flag,
@@ -82,9 +116,9 @@ Safety warning: once a pool reaches 100/100 it becomes Locked atomically. There
 is no withdrawal path and no administrator rescue after that point. The current
 contract reaches Finished only after ten due permissionless draws and all ten
 winner wallets claim successfully. Do not adapt this operator to a public
-network until durable encrypted wallet recovery, funded-gas preflight,
-an immediate submitted-transaction journal, nonce/hash resolution, independent
-code review, and an explicit public runbook are complete. The public race
+network until funded-gas preflight, provider-specific replacement discovery,
+bounded receipt timeouts, independent review, and an explicit public runbook
+are complete. The public race
 between simulation and mining cannot be fully bound to an expected pool with
 the current `join()` interface; solving that requires a future contract-level
 expected-pool/count guard and a separately reviewed deployment.

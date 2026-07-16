@@ -81,6 +81,38 @@ contract getters. It does not replace the legacy `#/demo` or browser-local
 
 ## Deployment tooling
 
+### Durable operator recovery foundation
+
+The local operator now has a versioned encrypted wallet provider and a separate
+versioned transaction journal. The wallet file uses scrypt key derivation and
+AES-256-GCM authenticated encryption with random salt and IV values. Wallet
+addresses and private keys are encrypted; wrong passwords and modified or
+truncated files are rejected. The file path is read from
+`OPERATOR_WALLET_STORE_PATH`, must remain outside the repository, and is written
+atomically with restrictive permissions where the operating system supports
+them. The password exists only in process memory through an interactive reader;
+there is intentionally no password environment variable.
+
+The non-secret journal path is read from
+`OPERATOR_TRANSACTION_JOURNAL_PATH`. Every semantic operation receives a stable
+idempotency key. Intent and nonce are persisted before broadcast, and the hash
+is persisted before waiting for a receipt. Restart recovery revalidates
+confirmed evidence against the provider and never guesses: confirmed work is
+not repeated, pending work is not automatically resent,
+replacement and cancellation evidence receives an explicit terminal state, and
+ambiguous evidence becomes `requires_manual_review`.
+
+Both files are required for controlled recovery, but only the wallet file is
+encrypted. The wallet file is useless without its password, and loss of either
+one means the participant wallets cannot be recovered. The file and password
+must be backed up separately. Neither may be stored in GitHub, Vercel, `.env`,
+logs, command-line arguments, or `VITE_*` variables.
+
+This foundation does not authorize public execution. No public operator command
+was added, all Base Sepolia writes still abort before broadcast, and the
+existing contracts, deployment scripts, addresses, and on-chain state are
+unchanged.
+
 Run commands from `packages/contracts`.
 
 ### Local deployment dry-run

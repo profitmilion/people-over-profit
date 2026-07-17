@@ -33,6 +33,80 @@ documentation.
   current overview of implementation, gaps, and risks.
 - Do not guess. Mark unclear facts as requiring later reconstruction.
 
+## 2026-07-17 - Successful resumed Base Sepolia reversible smoke test
+
+### At a glance
+
+The successful resumed Base Sepolia reversible smoke test reused the original
+recovery journal. It revalidated and skipped the previously confirmed dUSDC
+faucet and exact approval, then executed only one join and one withdrawal for
+position 3. The final read-only verification confirmed the exact 33 dUSDC
+refund and no residual position, allowance, participant, escrow, prize, or
+pending transaction.
+
+### Completed
+
+- Retained the existing journal and its original faucet and approval operation
+  IDs instead of creating a new run or replaying either transaction.
+- Revalidated the confirmed faucet at nonce 0 and exact 33 dUSDC approval at
+  nonce 1 against their public transactions, receipts, calldata, and events.
+- Confirmed one join at nonce 2, which created position 3 in pool 1 and moved
+  exactly 33,000,000 dUSDC units into escrow.
+- Confirmed one withdrawal at nonce 3, which deactivated position 3 and returned
+  exactly 33,000,000 dUSDC units to the dedicated smoke wallet.
+- Completed post-receipt semantic verification with the bounded read-retry
+  guard available and without any automatic broadcast retry.
+
+### Public evidence
+
+- Faucet: `0xf948c74e13dc9947a04627abf1a9ed3abe08805cef95289dabcb08ea4e1e4dca`,
+  block 44275699, gas used 74,750.
+- Approval: `0x33fbb15a82f4112eb82f630afca68ae9a1b492670ac893fe62a84c1ba98a1497`,
+  block 44275701, gas used 46,330.
+- Join: `0x3793505779eb8fe95843903bd3bac524e470af337c5cd348b940c3cbd7e6c1d1`,
+  block 44277341, gas used 390,755.
+- Withdrawal: `0xb1383a7f73188bc726f02de67070a430cac82e784a57cf2a4f7dc3a97649f0e5`,
+  block 44277343, gas used 93,944.
+- Final journal revision: 20; final journal SHA-256:
+  `B6F19642862F0C7CD879F0609BF38481A1C203B910DE102843043A27E5F81C26`.
+
+### Verification
+
+- All four journal operations are `confirmed`; none is pending, failed, or
+  marked `requires_manual_review`, and the journal contains no secret material.
+- The dedicated wallet's latest and pending nonces are both 4, covering exactly
+  the four journaled transactions at nonces 0 through 3 with no pending gap.
+- The final wallet state is 330,000,000 dUSDC units, zero allowance, zero active
+  positions, and zero claimable prizes.
+- Pool 1 remains Open with zero active participants and zero escrow. Position 3
+  remains as an inactive historical record owned by the smoke wallet.
+- No draw, claim, deployment, replacement transaction, or multi-wallet operator
+  action occurred. The main operator's public-write block remains unchanged.
+- The documentation checkpoint itself used only public read-only RPC calls and
+  did not load a private key, create a signer, or send a transaction.
+
+### Limitations
+
+- This is evidence for one reversible flow on Base Sepolia, not production or
+  mainnet readiness and not authorization for another public smoke run.
+- The deployed `join()` ABI still cannot atomically bind a transaction to an
+  expected pool ID and participant count.
+- The journal must remain preserved as evidence; a later independently approved
+  smoke would require a separate run decision and a new external journal.
+
+### Next logical step
+
+Archive and independently review the public journal and transaction evidence,
+while keeping every Base Sepolia write path for the 100-wallet operator blocked.
+
+### Git
+
+- Branch: `codex/pop33-recovery`
+- Starting checkpoint: `0db1fa53b312cb928042ab0568c26369bce97255`
+- Starting message: `fix: tolerate stale RPC reads after confirmed smoke transactions`
+- The documentation commit hash did not exist when this entry was written and
+  is intentionally not embedded in the commit that it identifies.
+
 ## 2026-07-17 — Base Sepolia smoke semantic-read recovery guard
 
 ### At a glance

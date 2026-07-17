@@ -1,6 +1,6 @@
 # POP33 Development Status
 
-Last reviewed: 2026-07-16
+Last reviewed: 2026-07-17
 
 Branch reviewed: `codex/pop33-recovery`
 
@@ -146,10 +146,13 @@ addresses; it has not been released through Vercel.
   read-only preflight, dedicated runtime-only key namespace, fixed documented
   addresses, exact approval, reversible join/withdraw scope, buffered gas
   checks, 180-second receipts, bounded semantic read retries, stable journal IDs
-  and conservative restart recovery. Its first controlled write run confirmed
-  one faucet and one exact approval, then stopped before join when a confirmed
-  receipt briefly preceded the RPC backend's allowance state. The recovery
-  journal remains authoritative; join and withdraw have not been executed.
+  and conservative restart recovery. A controlled recovery reused the original
+  journal, revalidated and skipped its previously confirmed faucet and exact
+  approval, then broadcast only one join and one withdrawal. Position 3 was
+  refunded exactly 33 dUSDC; the verified final state is 330 dUSDC, zero
+  allowance, no active position, an Open pool with zero participants and zero
+  escrow, and no pending transaction. This is the successful resumed Base
+  Sepolia reversible smoke test; it does not enable the multi-wallet operator.
 - A planned deployment register and a technical frontend integration plan in
   `docs/DEMO_V1.md`.
 - Separate `#/demo-v1` and `#/archive-v1` routes with isolated environment

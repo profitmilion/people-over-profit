@@ -190,11 +190,19 @@ The only permitted sequence is `drip -> approve exactly 33 dUSDC -> join ->
 verify position -> withdraw while Open -> verify exact 33 dUSDC refund`. The
 journal uses stable semantic operation IDs and persists nonce before broadcast,
 hash before receipt waiting, and a sanitized receipt summary. Receipt waits have
-a 180-second timeout. Safe RPC reads have three bounded attempts; broadcasts
-are never retried. Restart revalidates calldata, sender, nonce, target, receipt,
-and action events. Pending, broadcast, replaced, cancelled, failed, malformed,
-and ambiguous states stop without resubmission; inconclusive evidence becomes
-`requires_manual_review`. Already confirmed operations are never repeated.
+a 180-second timeout. Safe RPC reads have three bounded attempts. Post-receipt
+semantic verification also retries only its state reads when a successful
+receipt is visible before an RPC backend exposes the resulting state. The
+default linear backoff waits 500 ms and then 1000 ms. Exact postconditions remain
+strict: faucet balance/cooldown, exact approval, join balance/allowance/position/
+membership/participant-count/escrow, and withdraw refund/removal/count/escrow.
+Broadcasts are never retried. Exhausted semantic reads stop for manual review;
+the confirmed operation remains in the existing journal, which must be reused
+for recovery instead of creating a new run. Restart revalidates calldata,
+sender, nonce, target, receipt, and action events. Pending, broadcast, replaced,
+cancelled, failed, malformed, and ambiguous states stop without resubmission;
+inconclusive evidence becomes `requires_manual_review`. Already confirmed
+operations are never repeated.
 
 One journal represents one smoke run. After a fully completed run, retain or
 archive it as evidence; a separately authorized later run must use a new

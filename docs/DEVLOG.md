@@ -33,6 +33,58 @@ documentation.
   current overview of implementation, gaps, and risks.
 - Do not guess. Mark unclear facts as requiring later reconstruction.
 
+## 2026-07-17 — Base Sepolia smoke semantic-read recovery guard
+
+### At a glance
+
+The first controlled Base Sepolia write smoke confirmed one dUSDC faucet and
+one exact 33 dUSDC approval, then stopped before join when an RPC backend briefly
+returned the pre-approval allowance after the successful receipt. The recovery
+journal was retained, and no join or withdraw was sent.
+
+### Completed
+
+- Confirmed the faucet and exact approval through their public calldata,
+  events, receipts, nonces, and current token state.
+- Added one reusable, bounded semantic-read retry for post-receipt state that
+  never retries a broadcast, operation ID, nonce, or transaction.
+- Kept exact equality for the 33,000,000-unit approval and added strict
+  composite checks for faucet, join, and withdraw state transitions.
+- Added regression coverage for stale allowance, faucet, join and withdraw
+  reads, plus recovery from confirmed faucet and approval without replay.
+
+### Verification
+
+- All 167 contracts/operator Mocha tests passed, including 29 isolated smoke
+  harness tests that use no public RPC.
+- The contracts TypeScript `--noEmit` check passed.
+- The real external recovery journal was inspected only read-only and retained
+  its original fingerprint.
+- No public transaction was sent during this implementation and verification
+  task.
+
+### Limitations
+
+- The public smoke is not complete: join and withdraw remain unsent.
+- A later recovery must be separately authorized and must reuse the existing
+  journal so confirmed faucet and approval operations cannot be replayed.
+- The deployed `join()` ABI still cannot bind a transaction atomically to an
+  expected pool ID and participant count.
+
+### Next logical step
+
+After independent review of this checkpoint, perform a separately controlled
+recovery using the existing journal, beginning from join and preserving every
+pre-join and pre-withdraw safety gate.
+
+### Git
+
+- Branch: `codex/pop33-recovery`
+- Starting checkpoint: `cba599000459034d878b5d07b8ef4a9c23e10ba6`
+- Starting message: `feat: add guarded Base Sepolia smoke harness`
+- The checkpoint commit hash did not exist when this entry was written and is
+  intentionally not guessed.
+
 ## 2026-07-16 — Guarded single-wallet Base Sepolia smoke harness
 
 ### At a glance

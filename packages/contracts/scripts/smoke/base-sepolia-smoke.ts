@@ -266,6 +266,30 @@ export async function readWithRetry<T>(
   });
 }
 
+export async function readUntilExpected<T>(
+  label: string,
+  operation: () => Promise<T>,
+  isExpected: (value: T) => boolean,
+  options: ReadRetryOptions = {},
+): Promise<T> {
+  const attempts = options.attempts ?? MAX_READ_ATTEMPTS;
+  try {
+    return await readWithRetry(label, async () => {
+      const value = await operation();
+      if (!isExpected(value)) {
+        throw new Error(`Expected state is not visible yet: ${label}.`);
+      }
+      return value;
+    }, options);
+  } catch (error) {
+    throw new Error(
+      `Read-only semantic verification failed after ${attempts} attempts: ${label}. ` +
+      "Stop for manual review, reuse the existing journal, and do not rebroadcast.",
+      { cause: error },
+    );
+  }
+}
+
 function requireEqual(actual: bigint, expected: bigint, label: string): void {
   if (actual !== expected) throw new Error(`${label} mismatch: expected ${expected}, received ${actual}.`);
 }
@@ -456,14 +480,6 @@ async function requireCurrentPoolSafety(runtime: SmokeRuntime, poolId: bigint): 
   return pool;
 }
 
-async function requirePoolOpenForWithdraw(runtime: SmokeRuntime, poolId: bigint): Promise<SmokePoolState> {
-  const pool = await readWithRetry("Open-pool withdraw recheck", () => runtime.getPool(poolId));
-  if (pool.status !== 0n) {
-    throw new Error("Current pool is no longer Open; withdraw cannot be broadcast.");
-  }
-  return pool;
-}
-
 async function requireActionGas(runtime: SmokeRuntime, action: SmokeWriteAction, positionId?: bigint): Promise<void> {
   const [estimate, feePerGas, balance] = await Promise.all([
     readWithRetry(`${action} gas estimate`, () => runtime.estimateAction(action, positionId)),
@@ -548,6 +564,7 @@ export async function runSmokeWriteFlow(input: {
   journal: TransactionJournal;
   preflight: SmokePreflightReport;
   receiptTimeoutMs?: number;
+  semanticRetryOptions?: ReadRetryOptions;
   failureHook?(action: SmokeWriteAction, point: CoordinatorFailurePoint): Promise<void> | void;
 }): Promise<SmokeWriteResult> {
   const { runtime, journal, preflight } = input;
@@ -558,6 +575,7 @@ export async function runSmokeWriteFlow(input: {
   const recovered = await recoverAndValidateSmokeJournal(runtime, journal, poolId);
   const operationIds: string[] = [];
   const transactionHashes: string[] = [];
+  const semanticRetryOptions = input.semanticRetryOptions ?? {};
   const receiptTimeoutMs = input.receiptTimeoutMs ?? BASE_SEPOLIA_SMOKE_RECEIPT_TIMEOUT_MS;
   if (!Number.isSafeInteger(receiptTimeoutMs) || receiptTimeoutMs < 1 || receiptTimeoutMs > 600_000) {
     throw new Error("Smoke receipt timeout must be between 1 and 600000 milliseconds.");
@@ -565,7 +583,7 @@ export async function runSmokeWriteFlow(input: {
 
   if (!recovered.has("faucet")) {
     assertFreshSmokeWriteReady(preflight);
-    const before = (await readWithRetry("dUSDC balance before faucet", () => runtime.getTokenState())).balance;
+    const before = await readWithRetry("dUSDC state before faucet", () => runtime.getTokenState());
     const step = await executeSmokeStep({
       runtime,
       journal,
@@ -575,8 +593,14 @@ export async function runSmokeWriteFlow(input: {
       failureHook: (point) => input.failureHook?.("faucet", point),
     });
     if (step.evidence.amount !== DEMO_V1_PARAMETERS.dripAmount) throw new Error("Faucet receipt evidence amount mismatch.");
-    const after = (await readWithRetry("dUSDC balance after faucet", () => runtime.getTokenState())).balance;
-    if (after - before !== DEMO_V1_PARAMETERS.dripAmount) throw new Error("Faucet balance delta mismatch.");
+    await readUntilExpected(
+      "faucet balance delta and cooldown",
+      () => runtime.getTokenState(),
+      (after) =>
+        after.balance - before.balance === DEMO_V1_PARAMETERS.dripAmount &&
+        after.nextDripAt > before.nextDripAt,
+      semanticRetryOptions,
+    );
     recovered.set("faucet", step.evidence);
     operationIds.push(step.operation.operationId);
     if (step.operation.transactionHash) transactionHashes.push(step.operation.transactionHash);
@@ -593,26 +617,31 @@ export async function runSmokeWriteFlow(input: {
       receiptTimeoutMs,
       failureHook: (point) => input.failureHook?.("approve", point),
     });
-    const allowance = (await readWithRetry("allowance after approval", () => runtime.getTokenState())).allowance;
-    if (allowance !== DEMO_V1_PARAMETERS.entryPrice) throw new Error("Approval is not exactly 33 dUSDC.");
+    await readUntilExpected(
+      "approve exact 33 dUSDC allowance",
+      () => runtime.getTokenState(),
+      (tokenAfterApproval) => tokenAfterApproval.allowance === DEMO_V1_PARAMETERS.entryPrice,
+      semanticRetryOptions,
+    );
     recovered.set("approve", step.evidence);
     operationIds.push(step.operation.operationId);
     if (step.operation.transactionHash) transactionHashes.push(step.operation.transactionHash);
   }
 
   if (recovered.has("approve") && !recovered.has("join")) {
-    const token = await readWithRetry("recovered exact approval", () => runtime.getTokenState());
-    if (token.balance < DEMO_V1_PARAMETERS.entryPrice) {
-      throw new Error("Recovered smoke wallet no longer has 33 dUSDC for join.");
-    }
-    if (token.allowance !== DEMO_V1_PARAMETERS.entryPrice) {
-      throw new Error("Recovered approval is no longer exactly 33 dUSDC; join will not be broadcast.");
-    }
+    await readUntilExpected(
+      "recovered sufficient dUSDC balance and exact 33 dUSDC allowance before join",
+      () => runtime.getTokenState(),
+      (token) =>
+        token.balance >= DEMO_V1_PARAMETERS.entryPrice &&
+        token.allowance === DEMO_V1_PARAMETERS.entryPrice,
+      semanticRetryOptions,
+    );
   }
 
   let positionId = recovered.get("join")?.positionId;
   if (!recovered.has("join")) {
-    await requireCurrentPoolSafety(runtime, poolId);
+    const poolBeforeJoin = await requireCurrentPoolSafety(runtime, poolId);
     if (await readWithRetry("membership before join", () => runtime.getActivePositionId(poolId)) !== 0n) {
       throw new Error("Smoke wallet already has an active position; join refused.");
     }
@@ -627,9 +656,31 @@ export async function runSmokeWriteFlow(input: {
     });
     positionId = step.evidence.positionId;
     if (!positionId || step.evidence.poolId !== poolId) throw new Error("Join receipt did not prove the expected pool and position.");
-    const token = await readWithRetry("token state after join", () => runtime.getTokenState());
-    if (before - token.balance !== DEMO_V1_PARAMETERS.entryPrice) throw new Error("Join did not debit exactly 33 dUSDC.");
-    if (token.allowance !== 0n) throw new Error("Exact approval was not fully consumed by join.");
+    await readUntilExpected(
+      "join balance, allowance, position, participant count, and escrow",
+      async () => {
+        const [token, position, activePositionId, pool] = await Promise.all([
+          runtime.getTokenState(),
+          runtime.getPosition(positionId!),
+          runtime.getActivePositionId(poolId),
+          runtime.getPool(poolId),
+        ]);
+        return { token, position, activePositionId, pool };
+      },
+      ({ token, position, activePositionId, pool }) =>
+        before - token.balance === DEMO_V1_PARAMETERS.entryPrice &&
+        token.allowance === 0n &&
+        position.id === positionId &&
+        position.poolId === poolId &&
+        getAddress(position.owner) === getAddress(runtime.walletAddress) &&
+        position.active &&
+        activePositionId === positionId &&
+        pool.id === poolId &&
+        pool.status === 0n &&
+        pool.activePositionCount === poolBeforeJoin.activePositionCount + 1n &&
+        pool.escrowedAmount === poolBeforeJoin.escrowedAmount + DEMO_V1_PARAMETERS.entryPrice,
+      semanticRetryOptions,
+    );
     recovered.set("join", step.evidence);
     operationIds.push(step.operation.operationId);
     if (step.operation.transactionHash) transactionHashes.push(step.operation.transactionHash);
@@ -637,20 +688,33 @@ export async function runSmokeWriteFlow(input: {
   if (!positionId) throw new Error("Confirmed join evidence is missing its position ID.");
 
   const withdrawAlreadyConfirmed = recovered.get("withdraw");
+  let finalState: {
+    token: SmokeTokenState;
+    position: SmokePositionState;
+    activePositionId: bigint;
+    pool: SmokePoolState;
+  } | undefined;
   if (!withdrawAlreadyConfirmed) {
-    const position = await readWithRetry("joined position", () => runtime.getPosition(positionId!));
-    if (
-      position.id !== positionId ||
-      position.poolId !== poolId ||
-      getAddress(position.owner) !== getAddress(runtime.walletAddress) ||
-      !position.active
-    ) {
-      throw new Error("Joined position state does not match the dedicated smoke wallet.");
-    }
-    if (await readWithRetry("active position membership", () => runtime.getActivePositionId(poolId)) !== positionId) {
-      throw new Error("Active pool membership does not match the joined position.");
-    }
-    await requirePoolOpenForWithdraw(runtime, poolId);
+    const withdrawReady = await readUntilExpected(
+      "joined position, active membership, and Open pool before withdraw",
+      async () => {
+        const [position, activePositionId, pool] = await Promise.all([
+          runtime.getPosition(positionId!),
+          runtime.getActivePositionId(poolId),
+          runtime.getPool(poolId),
+        ]);
+        return { position, activePositionId, pool };
+      },
+      ({ position, activePositionId, pool }) =>
+        position.id === positionId &&
+        position.poolId === poolId &&
+        getAddress(position.owner) === getAddress(runtime.walletAddress) &&
+        position.active &&
+        activePositionId === positionId &&
+        pool.id === poolId &&
+        pool.status === 0n,
+      semanticRetryOptions,
+    );
     const before = (await readWithRetry("dUSDC balance before withdraw", () => runtime.getTokenState())).balance;
     const step = await executeSmokeStep({
       runtime,
@@ -668,8 +732,31 @@ export async function runSmokeWriteFlow(input: {
     ) {
       throw new Error("Withdraw receipt did not prove the exact 33 dUSDC refund.");
     }
-    const after = (await readWithRetry("dUSDC balance after withdraw", () => runtime.getTokenState())).balance;
-    if (after - before !== DEMO_V1_PARAMETERS.entryPrice) throw new Error("Withdraw balance delta is not exactly 33 dUSDC.");
+    finalState = await readUntilExpected(
+      "withdraw refund, inactive position, participant count, escrow, and allowance",
+      async () => {
+        const [token, position, activePositionId, pool] = await Promise.all([
+          runtime.getTokenState(),
+          runtime.getPosition(positionId!),
+          runtime.getActivePositionId(poolId),
+          runtime.getPool(poolId),
+        ]);
+        return { token, position, activePositionId, pool };
+      },
+      ({ token, position, activePositionId, pool }) =>
+        token.balance - before === DEMO_V1_PARAMETERS.entryPrice &&
+        token.allowance === 0n &&
+        position.id === positionId &&
+        position.poolId === poolId &&
+        getAddress(position.owner) === getAddress(runtime.walletAddress) &&
+        !position.active &&
+        activePositionId === 0n &&
+        pool.id === poolId &&
+        pool.status === 0n &&
+        pool.activePositionCount === withdrawReady.pool.activePositionCount - 1n &&
+        pool.escrowedAmount === withdrawReady.pool.escrowedAmount - DEMO_V1_PARAMETERS.entryPrice,
+      semanticRetryOptions,
+    );
     recovered.set("withdraw", step.evidence);
     operationIds.push(step.operation.operationId);
     if (step.operation.transactionHash) transactionHashes.push(step.operation.transactionHash);
@@ -680,24 +767,36 @@ export async function runSmokeWriteFlow(input: {
     throw new Error("Recovered withdraw evidence does not match the joined position and refund.");
   }
 
-  const [finalPosition, finalActivePositionId, finalToken] = await Promise.all([
-    readWithRetry("final position", () => runtime.getPosition(positionId!)),
-    readWithRetry("final membership", () => runtime.getActivePositionId(poolId)),
-    readWithRetry("final token state", () => runtime.getTokenState()),
-  ]);
-  if (finalPosition.active || finalActivePositionId !== 0n) {
-    throw new Error("Withdraw did not remove the active smoke position.");
-  }
-  if (finalToken.allowance !== 0n) {
-    throw new Error("Unexpected allowance remains after exact approve/join/withdraw flow.");
+  if (!finalState) {
+    finalState = await readUntilExpected(
+      "recovered withdraw final position, membership, pool, and allowance",
+      async () => {
+        const [token, position, activePositionId, pool] = await Promise.all([
+          runtime.getTokenState(),
+          runtime.getPosition(positionId!),
+          runtime.getActivePositionId(poolId),
+          runtime.getPool(poolId),
+        ]);
+        return { token, position, activePositionId, pool };
+      },
+      ({ token, position, activePositionId, pool }) =>
+        token.allowance === 0n &&
+        position.id === positionId &&
+        position.poolId === poolId &&
+        getAddress(position.owner) === getAddress(runtime.walletAddress) &&
+        !position.active &&
+        activePositionId === 0n &&
+        pool.id === poolId,
+      semanticRetryOptions,
+    );
   }
   const snapshot = journal.snapshot();
   return {
     walletAddress: getAddress(runtime.walletAddress),
     poolId,
     positionId,
-    finalTokenBalance: finalToken.balance,
-    finalAllowance: finalToken.allowance,
+    finalTokenBalance: finalState.token.balance,
+    finalAllowance: finalState.token.allowance,
     operationIds: snapshot.operations.map((operation) => operation.operationId),
     transactionHashes: snapshot.operations
       .map((operation) => operation.transactionHash)

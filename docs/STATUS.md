@@ -113,7 +113,7 @@ addresses; it has not been released through Vercel.
   checks-effects-interactions, `SafeERC20`, and `ReentrancyGuard`.
 - `Finished` after all ten prizes are claimed, with atomic bounded release of
   all 100 pool positions.
-- Automated contract/operator coverage: 163 passing Mocha tests, including 25
+- Automated contract/operator coverage: 167 passing Mocha tests, including 29
   isolated Base Sepolia smoke-harness tests. No test uses a public RPC.
 - A named Hardhat `baseSepolia` OP network using configuration variables, with
   no committed credentials.
@@ -145,9 +145,11 @@ addresses; it has not been released through Vercel.
 - A separate, guarded Base Sepolia single-wallet smoke harness with a default
   read-only preflight, dedicated runtime-only key namespace, fixed documented
   addresses, exact approval, reversible join/withdraw scope, buffered gas
-  checks, 180-second receipts, bounded read retries, stable journal IDs and
-  conservative restart recovery. Its write mode was not executed in this
-  milestone because no dedicated smoke runtime configuration was present.
+  checks, 180-second receipts, bounded semantic read retries, stable journal IDs
+  and conservative restart recovery. Its first controlled write run confirmed
+  one faucet and one exact approval, then stopped before join when a confirmed
+  receipt briefly preceded the RPC backend's allowance state. The recovery
+  journal remains authoritative; join and withdraw have not been executed.
 - A planned deployment register and a technical frontend integration plan in
   `docs/DEMO_V1.md`.
 - Separate `#/demo-v1` and `#/archive-v1` routes with isolated environment

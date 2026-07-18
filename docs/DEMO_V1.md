@@ -315,14 +315,18 @@ addresses, reviewed source commit, UTC date, and one of `planned`, `active`, or
 
 The integration is intentionally isolated from the legacy deployment:
 
-- `src/demo-v1/config.ts` validates the four `VITE_POP33_DEMO_V1_*` variables;
+- `src/demo-v1/config.ts` validates the four `VITE_POP33_DEMO_V1_*` variables
+  against the reviewed Base Sepolia chain and canonical contract/token
+  addresses;
 - `src/demo-v1/abi.ts` contains only the typed token and Basic V1 functions and
   events needed by this interface;
 - `src/hooks/useDemoV1Data.ts` performs bounded getter reads;
-- `src/hooks/useDemoV1Actions.ts` rechecks the connector chain immediately
-  before every write, simulates the call, submits it, waits for its receipt,
-  and distinguishes signature, confirmation, rejection, revert, wrong-network,
-  token-balance, and native-gas states;
+- `src/hooks/useDemoV1Actions.ts` performs a fresh runtime identity and
+  `paymentToken()` linkage check, rechecks the connector chain immediately
+  before every write, simulates the call, submits it without automatic retry,
+  applies a 180-second receipt timeout, and distinguishes signature,
+  confirmation, verification, rejection, revert, wrong-network, replacement,
+  cancellation, manual-review, token-balance, and native-gas states;
 - `#/demo-v1` exposes faucet, exact sequential approval and join, eligible
   withdrawal, permissionless test draw, and winner-only claim controls;
 - `#/archive-v1` reconstructs up to 50 pools and ten rounds per pool from
@@ -330,20 +334,64 @@ The integration is intentionally isolated from the legacy deployment:
 
 No faucet, approval, join, withdrawal, draw, or claim is sent automatically.
 The approve/join control approves exactly one current entry when allowance is
-insufficient, waits for confirmation, and only then requests the join.
+insufficient, waits for confirmation and a fresh exact allowance read, reruns
+the Open-pool and wallet-limit preflight, and only then requests the separate
+join signature. A synchronous single-flight guard spans the entire sequence.
+The reversible public UI procedure refuses a selected pool above 89 active
+positions. Faucet, join, and withdrawal then use bounded read-only retries to
+verify the semantic post-receipt state; writes themselves are never retried.
+
+### Public Preview reversible write procedure (not yet executed)
+
+This is the prepared manual procedure for the first public UI write test. It is
+not evidence that any public faucet, approval, join, or withdrawal has occurred.
+
+1. Use a dedicated wallet and open `/#/demo-v1` through the confirmed Preview
+   alias, not Production.
+2. Connect the wallet, confirm Base Sepolia (`84532`), and verify a non-zero
+   Base Sepolia ETH balance for gas.
+3. Confirm that the runtime identity check succeeds and the selected pool is
+   `Open` and within the 89-position reversible safety margin.
+4. Request one faucet drip and wait until the UI verifies the exact 330 dUSDC
+   increase and the new cooldown.
+5. Start `Approve if needed, then join`. If approval is required, confirm that
+   the first wallet request is exactly 33 dUSDC. A pre-existing allowance above
+   33 dUSDC is intentionally blocked.
+6. Wait for the approval receipt and the fresh exact allowance read. Sign the
+   separate join request only after the UI explicitly asks for it.
+7. Wait until the UI reports the actual position and pool and verifies the
+   exact 33 dUSDC payment, zero remaining allowance, active membership, and
+   escrow. If the state is unknown, replaced, cancelled, timed out, or fails
+   verification, inspect BaseScan and refresh reads; do not retry automatically.
+8. Withdraw the reported position only while it remains active and its pool is
+   still `Open`.
+9. Wait until the UI verifies that the position is inactive, exactly 33 dUSDC
+   was refunded, the active count changed, and escrow reconciles. Refresh reads
+   once more and retain the transaction links for the later milestone record.
+
+This procedure does not involve Farcaster, Production, a Vercel deployment, or
+any contract/configuration change.
 
 Known frontend limitations:
 
 - the archive is getter-based and capped at 50 pools; backend indexing is `TO DECIDE`;
 - getters do not retain historical transaction hashes, so only transactions
   submitted in the current UI session receive direct receipt links;
-- replaced/cancelled and indefinitely pending transaction recovery is not yet
-  specialized beyond wallet/RPC errors;
+- replacement and cancellation stop automatic continuation and a missing
+  receipt becomes manual review after 180 seconds, but the browser UI has no
+  durable transaction journal across reloads;
+- the current `join()` ABI cannot atomically bind the write to the preflight
+  pool ID/count; the UI leaves a safety margin and detects a mismatch after the
+  receipt, but cannot undo an intervening pool-state race;
+- draw and claim use the guarded transaction/receipt flow, but do not yet have
+  the same action-specific semantic post-receipt reconciliation as faucet,
+  join, and withdrawal;
 - the draw trigger remains permissionless and its temporary block-derived
   selection is explicitly unsuitable for production;
 - deployment source publication in BaseScan remains separate and pending;
-- the integration is local only and does not change Vercel or active hosted
-  environment variables.
+- the hardened source is not deployed by this documentation/code checkpoint;
+  the previously verified public Preview remains read-only evidence until a
+  later authorized deployment and manual write test.
 
 ### Existing legacy integration preserved during migration
 

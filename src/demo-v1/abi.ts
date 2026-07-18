@@ -33,6 +33,7 @@ export const demoV1Abi = parseAbi([
   "function activePositionsByUser(address user) view returns (uint256)",
   "function claimablePrizesByUser(address user) view returns (uint256)",
   "function getOpenPoolIds() view returns (uint256[])",
+  "function findOldestQualifyingPool(address user) view returns (uint256)",
   "function getPool(uint256 poolId) view returns ((uint256 id, uint8 status, uint256 activePositionCount, uint256 escrowedAmount, uint64 openedAt, uint64 lockedAt, uint64 drawInterval, uint256 entryPrice, uint256 prizePerRound, uint256 totalPrizeAmount, uint256 positionsPerPool, uint256 drawRoundCount, uint256 completedDrawRoundCount, uint256 claimedPrizeCount, uint256 assignedPrizeAmount, uint256 claimedPrizeAmount))",
   "function getActivePositionId(uint256 poolId, address user) view returns (uint256)",
   "function getPosition(uint256 positionId) view returns ((uint256 id, uint256 poolId, address owner, uint64 joinedAt, bool active))",

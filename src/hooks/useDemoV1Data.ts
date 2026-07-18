@@ -17,6 +17,7 @@ import {
   demoV1Config,
   isDemoV1Configured,
 } from "../demo-v1/config";
+import { validateDemoV1RuntimeIdentity } from "../demo-v1/safety";
 
 const MAX_FRONTEND_POOLS = 50;
 const ROUND_NUMBERS = Array.from({ length: 10 }, (_, index) => BigInt(index + 1));
@@ -131,6 +132,30 @@ export function useDemoV1Data() {
     };
   }, [staticQuery.data]);
 
+  const runtimeIdentityErrors = useMemo(
+    () =>
+      staticQuery.data
+        ? validateDemoV1RuntimeIdentity({
+            contractHasBytecode: true,
+            tokenHasBytecode: true,
+            paymentToken: staticData.paymentToken,
+            tokenName: staticData.tokenName,
+            tokenSymbol: staticData.tokenSymbol,
+            tokenDecimals: staticData.tokenDecimals,
+            entryPrice: staticData.entryPrice,
+            poolCapacity: staticData.maxPositionsPerPool,
+            drawRounds: staticData.drawRounds,
+            prizePerRound: staticData.prizePerRound,
+            drawInterval: staticData.drawInterval,
+            dripAmount: staticData.dripAmount,
+            dripCooldown: staticData.dripCooldown,
+          })
+        : [],
+    [staticData, staticQuery.data],
+  );
+  const runtimeIdentityVerified =
+    enabled && Boolean(staticQuery.data) && runtimeIdentityErrors.length === 0;
+
   const userQuery = useReadContracts({
     allowFailure: false,
     contracts: [
@@ -231,6 +256,8 @@ export function useDemoV1Data() {
     isConnected,
     isCorrectChain: chainId === DEMO_V1_CHAIN_ID,
     configured: enabled,
+    runtimeIdentityVerified,
+    runtimeIdentityErrors,
     staticData,
     tokenBalance: userQuery.data?.[0] ?? 0n,
     allowance: userQuery.data?.[1] ?? 0n,

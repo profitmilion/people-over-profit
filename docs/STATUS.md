@@ -171,6 +171,22 @@ runtime.
   `docs/DEMO_V1.md`.
 - Separate `#/demo-v1` and `#/archive-v1` routes with isolated environment
   variables, ABI, data reads, guarded transaction actions, and domain tests.
+- The `#/demo-v1` write path now rejects any non-canonical contract, token, or
+  chain configuration and revalidates deployed bytecode, `paymentToken()`
+  linkage, token identity, and fixed Demo V1 parameters before every wallet
+  request.
+- A synchronous single-flight guard covers the complete public faucet,
+  approval/join, withdrawal, draw, or claim flow. Writes are simulated and
+  never retried automatically; receipts have a 180-second timeout and explicit
+  rejected, replaced, cancelled, and manual-review outcomes.
+- The public approval/join path uses an exact 33 dUSDC allowance, waits for the
+  approval receipt and a fresh exact allowance read, rechecks the selected Open
+  pool and user limit, and only then requests the separate join signature. For
+  the reversible UI test it refuses pools above 89 active positions.
+- Faucet, join, and withdrawal receipts receive bounded read-only semantic
+  verification. Join reports the actual position and pool and reconciles the
+  exact payment, allowance, membership, and escrow; withdrawal verifies the
+  inactive position, exact 33 dUSDC refund, membership, and escrow.
 - A public Vercel Preview for `codex/pop33-recovery` at commit `9b51afc` with
   Preview-scoped Demo V1 variables. Its landing page and both Demo V1 routes
   were manually verified read-only against the current Base Sepolia contracts.
@@ -186,8 +202,10 @@ runtime.
   user per pool, and the active-position lifecycle;
 - consistent configuration across UI, hooks, and environment variables;
 - production randomness and asynchronous request/fulfillment recovery;
-- public wallet connection and faucet, approval, join, withdrawal, draw, and
-  claim transactions through the Vercel Preview UI;
+- manual execution and verification of wallet connection, faucet, exact
+  approval, join, and Open-pool withdrawal through the Vercel Preview UI; no
+  public write has been performed yet;
+- manual public draw and claim verification through the Vercel Preview UI;
 - promotion or release of the current Demo V1 through Vercel Production; the
   confirmed Preview must remain separate until a later explicit decision;
 - selection of an external test-token address remains open only for the
@@ -227,13 +245,15 @@ newer code exists.
   and lifecycle cannot be verified from the available ABI without contract
   source;
 - the current contract join is nonpayable;
-- a transaction that remains pending for a very long time can keep the primary
-  action locked until a receipt or provider error is observed;
-- handling for replaced or cancelled transactions and controlled recovery from
-  prolonged pending state is not yet implemented;
-- automatic wallet network switching is not implemented; users must switch to
-  Base Sepolia explicitly in their wallet;
-- withdrawal/refund behavior is absent;
+- the separate Demo V1 UI stops receipt waiting after 180 seconds and treats
+  replacement, cancellation, and timeout conservatively, but it has no durable
+  browser journal across page reloads; the transaction hash must be reviewed
+  manually before deciding whether another write is safe;
+- the separate Demo V1 route can request a switch to Base Sepolia and rechecks
+  the live connector chain immediately before every write; wallet support and
+  user confirmation are still required;
+- withdrawal/refund behavior remains absent from the legacy deployment, while
+  the separate Demo V1 route implements and post-verifies Open-pool withdrawal;
 - the README contains historical and Vite-template content;
 - some visible strings show character-encoding problems;
 - the root frontend has focused domain tests, but a broader component and

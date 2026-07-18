@@ -25,8 +25,31 @@ import {
 } from "../demo-v1/config";
 import { useDemoV1Actions } from "../hooks/useDemoV1Actions";
 import { useDemoV1Data } from "../hooks/useDemoV1Data";
+import type { DemoV1TxPhase } from "../demo-v1/safety";
 
 const explorer = "https://sepolia.basescan.org";
+
+const transactionPhaseLabels: Record<DemoV1TxPhase, string> = {
+  idle: "Idle",
+  "awaiting-signature": "Waiting for wallet signature",
+  submitted: "Submitted",
+  confirming: "Waiting for receipt",
+  verifying: "Verifying on-chain state",
+  confirmed: "Confirmed and verified",
+  rejected: "Rejected",
+  reverted: "Reverted or failed",
+  "wrong-network": "Wrong network",
+  "insufficient-token": "Insufficient dUSDC",
+  "insufficient-gas": "Insufficient Base Sepolia ETH",
+  "allowance-not-observed": "Exact allowance not observed",
+  "unsafe-allowance": "Existing allowance is too high",
+  "identity-mismatch": "Runtime identity check failed",
+  replaced: "Replaced — manual review required",
+  cancelled: "Cancelled",
+  "manual-review": "Unknown state — manual review required",
+  "verification-failed": "Receipt found — state verification failed",
+  busy: "Another transaction flow is active",
+};
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
@@ -67,7 +90,7 @@ export default function DemoV1Page() {
   const faucetReady = isFaucetAvailable(data.nextDripAt, now);
   const hasGas = data.nativeBalance > 0n;
   const joinReady = canJoin({
-    configured: data.configured,
+    configured: data.runtimeIdentityVerified,
     connected: data.isConnected,
     correctChain: data.isCorrectChain,
     tokenBalance: data.tokenBalance,
@@ -118,9 +141,19 @@ export default function DemoV1Page() {
             {getDemoV1ConfigErrorMessage()}
           </div>
         ) : null}
+        {data.configured && !data.isLoading && !data.runtimeIdentityVerified ? (
+          <div className="rounded-xl border border-red-800 bg-red-950/40 p-4 text-sm text-red-200">
+            Demo V1 runtime identity check failed: {data.runtimeIdentityErrors.join(", ") || "contract reads unavailable"}. All write actions are blocked.
+          </div>
+        ) : null}
+        {data.configured && data.isLoading && !data.runtimeIdentityVerified ? (
+          <div className="rounded-xl border border-sky-800 bg-sky-950/40 p-4 text-sm text-sky-200">
+            Verifying the reviewed Demo V1 contract, payment token, and fixed Base Sepolia parameters before enabling writes…
+          </div>
+        ) : null}
         {data.error ? (
           <div className="rounded-xl border border-red-800 bg-red-950/40 p-4 text-sm text-red-200">
-            RPC read failed: {data.error.message}
+            Base Sepolia reads are unavailable. Write actions remain blocked; use Refresh reads before trying again.
           </div>
         ) : null}
         {data.isConnected && !data.isCorrectChain ? (
@@ -159,7 +192,7 @@ export default function DemoV1Page() {
             </p>
             <Button
               className="mt-4"
-              disabled={!data.isConnected || !data.isCorrectChain || !hasGas || !faucetReady || actions.isBusy}
+              disabled={!data.runtimeIdentityVerified || !data.isConnected || !data.isCorrectChain || !hasGas || !faucetReady || actions.isBusy}
               onClick={() => handle(actions.drip())}
             >
               Get test dUSDC
@@ -169,7 +202,10 @@ export default function DemoV1Page() {
           <Card>
             <h2 className="text-lg font-semibold">2. Approve and join</h2>
             <p className="mt-2 text-sm text-slate-400">
-              The button approves exactly one entry only when required, waits for its receipt, then requests a separate join signature.
+              This is a two-transaction flow. When required, the first wallet request approves exactly 33 dUSDC. Only after its receipt and a fresh exact allowance read will a separate join signature be requested.
+            </p>
+            <p className="mt-2 text-xs text-amber-300">
+              For this reversible public UI test, join is blocked when the selected pool is above the reviewed 89-position safety margin.
             </p>
             <p className="mt-2 text-xs text-slate-500">
               Approval required: {needsApproval(data.allowance, data.staticData.entryPrice) ? "yes" : "no"}
@@ -178,11 +214,7 @@ export default function DemoV1Page() {
               variant="pop"
               className="mt-4 px-6 py-2 text-sm"
               disabled={!joinReady || !hasGas || actions.isBusy}
-              onClick={() => handle(actions.approveAndJoin({
-                entryPrice: data.staticData.entryPrice,
-                tokenBalance: data.tokenBalance,
-                allowance: data.allowance,
-              }))}
+              onClick={() => handle(actions.approveAndJoin())}
             >
               Approve if needed, then join
             </Button>
@@ -191,13 +223,23 @@ export default function DemoV1Page() {
 
         {actions.txState.phase !== "idle" ? (
           <div className="rounded-xl border border-sky-800 bg-sky-950/40 p-4 text-sm">
-            <div className="font-semibold">{actions.txState.action}: {actions.txState.phase}</div>
+            <div className="font-semibold">
+              {actions.txState.action}: {transactionPhaseLabels[actions.txState.phase]}
+            </div>
             {actions.txState.message ? <div className="mt-1 text-sky-200">{actions.txState.message}</div> : null}
             {actions.txState.hash ? (
               <a className="mt-2 inline-block text-sky-400 underline" href={`${explorer}/tx/${actions.txState.hash}`} target="_blank" rel="noreferrer">
                 View transaction on BaseScan
               </a>
             ) : null}
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button variant="ghost" disabled={data.isLoading || actions.isBusy} onClick={() => void data.refetch()}>
+                Refresh on-chain reads
+              </Button>
+              <Button variant="ghost" disabled={actions.isBusy} onClick={actions.resetTxState}>
+                Clear transaction status
+              </Button>
+            </div>
           </div>
         ) : null}
 
@@ -237,7 +279,7 @@ export default function DemoV1Page() {
                   </div>
                   <Button
                     className="mt-3"
-                    disabled={!drawReady || !data.isConnected || !data.isCorrectChain || !hasGas || actions.isBusy}
+                    disabled={!data.runtimeIdentityVerified || !drawReady || !data.isConnected || !data.isCorrectChain || !hasGas || actions.isBusy}
                     onClick={() => handle(actions.executeDraw(currentPool.id, currentRoundNumber))}
                   >
                     Execute permissionless test draw
@@ -254,6 +296,9 @@ export default function DemoV1Page() {
 
         <Card>
           <h2 className="text-lg font-semibold">My active positions</h2>
+          <div className="mt-2 rounded-xl border border-amber-900/70 bg-amber-950/20 p-3 text-xs text-amber-200">
+            Withdrawal is available only while the position is active and its pool remains Open. Once a pool reaches Locked, this contract has no participant withdrawal or administrator rescue path.
+          </div>
           {data.positions.length === 0 ? (
             <p className="mt-3 text-sm text-slate-400">No active positions for the connected wallet.</p>
           ) : (
@@ -273,7 +318,7 @@ export default function DemoV1Page() {
                     </div>
                     <Button
                       variant="ghost"
-                      disabled={!pool || !canWithdraw(pool.status, position.active) || !hasGas || actions.isBusy}
+                      disabled={!data.runtimeIdentityVerified || !pool || !canWithdraw(pool.status, position.active) || !hasGas || actions.isBusy}
                       onClick={() => handle(actions.withdraw(position.id))}
                     >
                       Withdraw from open pool
@@ -305,7 +350,7 @@ export default function DemoV1Page() {
                         {draw?.claimed ? "Claimed" : (
                           <Button
                             variant="ghost"
-                            disabled={!draw || !canClaim({ roundStatus: draw.status, claimed: draw.claimed, winner: draw.winner, user: data.address }) || !hasGas || actions.isBusy}
+                            disabled={!data.runtimeIdentityVerified || !draw || !canClaim({ roundStatus: draw.status, claimed: draw.claimed, winner: draw.winner, user: data.address }) || !hasGas || actions.isBusy}
                             onClick={() => handle(actions.claim(currentPool.id, round))}
                           >
                             Claim

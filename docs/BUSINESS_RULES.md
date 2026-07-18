@@ -139,11 +139,12 @@ rules above:
 - local state is persisted in browser local storage;
 - the developer panel can add simulated participants, trigger a draw, and reset
   local demo data;
-- the current Base Sepolia join function is nonpayable;
-- the current main demo join is on-chain only, while local joins are confined
-  to the developer simulation;
-- no withdrawal/refund operation is present in the inspected UI or contract
-  ABI.
+- the current Demo V1 join function is nonpayable in native ETH and pulls the
+  exact 33 dUSDC entry through ERC-20 allowance;
+- the preserved `/demo` participation action is on-chain only, while local
+  joins are confined to the developer simulation;
+- the separate current Demo V1 UI and ABI implement withdrawal and exact refund
+  while a pool is `Open`; the preserved legacy deployment does not.
 
 ## Conflicting prototype values
 

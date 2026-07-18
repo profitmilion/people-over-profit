@@ -23,14 +23,29 @@ business specification.
   parameters, and additional developer tooling.
 - Preserve existing user changes in the worktree.
 - Do not commit unless explicitly requested.
+- Before work, confirm the actual repository path, active branch, full HEAD,
+  worktree status, and synchronization with the intended remote branch. Never
+  assume a checkpoint from memory or an earlier session.
+- Keep Vercel Preview, Vercel Production, and Farcaster status separate. A
+  verified Preview does not imply a Production release or Farcaster support.
+- Never commit private keys, API keys, wallet material, credential-bearing RPC
+  URLs, or other secrets. Read required credentials only at runtime.
 
-## Source-of-truth hierarchy
+## Source-of-truth responsibilities
 
-1. Explicit current user instruction.
-2. Approved rules in `docs/BUSINESS_RULES.md`.
-3. Product scope in `docs/PRODUCT.md`.
-4. Current implementation, treated as evidence of implementation status.
-5. `README.md` and `MANIFEST.md`, treated as vision and historical context.
+- Explicit current user instructions have highest priority.
+- `docs/STATUS.md` is the current technical snapshot.
+- `docs/DEVLOG.md` is the chronological milestone history.
+- `docs/PRODUCT.md` defines product vision and current scope.
+- `docs/BUSINESS_RULES.md` contains approved business rules and explicit open
+  decisions.
+- `docs/BASIC_V1_SPEC.md` specifies Basic V1 behavior.
+- `docs/DEMO_V1.md` is the technical description, deployment record, and
+  runbook for the current Demo V1.
+- `README.md` is a concise repository entry point, not a detailed
+  specification.
+- Current implementation is evidence of implementation status, not authority
+  to change product rules.
 
 When sources conflict, preserve the implementation unless a change is
 requested, document the conflict, and use `TO DECIDE` for unresolved policy.
@@ -43,6 +58,9 @@ requested, document the conflict, and use `TO DECIDE` for unresolved policy.
 - On-chain integration: `src/wagmi.ts`, `src/hooks/usePop33Onchain.ts`,
   `src/hooks/usePop33Stats.ts`, and `src/utils/contract.ts`.
 - Developer tooling: `src/components/DevPanel.tsx`.
+- Current Demo V1 frontend: `src/demo-v1`, `src/pages/DemoV1Page.tsx`, and
+  `src/pages/ArchiveV1Page.tsx`.
+- Current Basic V1 contracts and operator tooling: `packages/contracts`.
 - Legacy or alternative implementations include `src/store`, `src/mock`, and
   selected files under `src/features`.
 
@@ -63,10 +81,20 @@ Before changing product behavior:
 For application changes, run as appropriate:
 
 - `npm run lint`
+- `npm test`
 - `npm run build`
 
-There is currently no automated test script. The testing strategy is
-`TO DECIDE`.
+For changes in `packages/contracts`, run as appropriate from that workspace:
+
+- `npm run compile`
+- `npm test`
+- `npx tsc --noEmit`
+- `npm audit --omit=dev`
+
+The repository has focused frontend domain tests and a comprehensive
+contract/operator/smoke suite. Broader browser and component testing remains
+an open engineering decision; do not describe the repository as having no
+automated tests.
 
 For documentation-only changes, at minimum run:
 

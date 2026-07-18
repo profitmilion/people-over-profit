@@ -16,6 +16,11 @@ The broader project vision references Base, Farcaster, PMN, Auto-HODL, DCA,
 community redistribution, and governance. Their final scope and mechanics are
 `TO DECIDE` unless explicitly approved in `docs/BUSINESS_RULES.md`.
 
+The longer-term product vision retains a large monthly community pool. Its
+exact size, funding, eligibility, distribution, and relationship to Basic V1
+remain `TO DECIDE`; no values for that future pool should be inferred from the
+testnet implementation or older marketing drafts.
+
 ## Product architecture principle
 
 The POP33 demo is intended to mirror the final product and future mainnet
@@ -102,14 +107,18 @@ or `coupon`, is `TO DECIDE`.
 The repository currently provides:
 
 - a public landing page;
-- a demo participation interface;
-- wallet connection and Base Sepolia network support;
-- initial on-chain reads and writes;
+- a public Vercel Preview with separate Demo V1 and archive routes;
+- injected-wallet connection and Base Sepolia network support;
+- contract-backed Demo V1 reads, faucet, exact approval, join, eligible
+  Open-pool withdrawal, draw, and claim controls;
+- one confirmed public reversible approval, join, and exact-refund flow;
 - a local cycle simulation used for development;
 - a developer panel;
-- draw history and an archive interface.
+- a getter-based draw and pool archive;
+- a local operator that exercises the complete Basic V1 lifecycle.
 
-Not every approved rule is implemented. Implementation coverage is tracked in
+The complete 100-position lifecycle has not been executed publicly on Base
+Sepolia. Current implementation coverage and limitations are tracked in
 `docs/STATUS.md`.
 
 ## Intended users
@@ -142,7 +151,9 @@ future mainnet USDC payment asset.
 The first controlled `Pop33BasicV1` testnet release is named POP33 Demo
 V1. Its explicitly non-production scope, test-token limitations, deployment
 status, and intended end-to-end demonstration are defined in `docs/DEMO_V1.md`.
-It is deployed on Base Sepolia but is not yet connected to the frontend.
+It is deployed on Base Sepolia, connected to the separate public Demo V1
+frontend, and source-verified in BaseScan. The current release remains on
+Vercel Preview; Production and Farcaster are separate, unfinished stages.
 
 ### Future production
 
@@ -156,8 +167,10 @@ The current prototype does not yet:
 
 - represent final tokenomics;
 - implement confirmed production payments and refunds end to end;
-- implement the approved withdrawal flow;
 - prove production-grade randomness;
+- complete the public 100-position, ten-draw, ten-claim lifecycle;
+- provide a public Base Sepolia multi-wallet lifecycle operator;
+- provide production KYC, identity, or multi-wallet protection;
 - define legal classification or geographic availability;
 - represent audited, production-ready smart-contract behavior.
 

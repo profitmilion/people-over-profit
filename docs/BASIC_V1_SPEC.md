@@ -270,8 +270,7 @@ The following are explicitly outside the current implementation stage:
 - Chainlink Automation registration;
 - production-grade winner selection;
 - asynchronous randomness request, correlation, fulfillment, retry, and
-  failure-recovery implementation;
-- deployment.
+  failure-recovery implementation.
 
 A future stage must evaluate Chainlink VRF for verifiable randomness and
 Chainlink Automation for scheduled round initiation. Neither product is assumed

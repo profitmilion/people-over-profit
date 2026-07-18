@@ -2,9 +2,9 @@
 
 This isolated Hardhat 3 + TypeScript workspace contains the reproducible
 contract foundation for POP33 Basic V1. It uses only the official Ethers,
-Ethers Chai Matchers, Mocha, and Network Helpers plugins required by the local
-compile-and-test workflow; deployment and verification plugins are deliberately
-not installed at this stage.
+Ethers Chai Matchers, Mocha, Network Helpers, and Verify plugins required by
+the local compile, test, and source-verification workflow. Deployment remains
+implemented through separately gated scripts rather than an automatic plugin.
 
 The workspace does not force transitive dependencies across incompatible major
 version ranges. Development-only audit findings from the official Mocha tree
@@ -66,7 +66,22 @@ npm run compile
 npm test
 npm run deploy:dry-run
 npm run smoke:demo-v1
+npm run operator:local:lifecycle
 ```
+
+The current Base Sepolia contract sources are already published as exact
+matches in BaseScan and Sourcify. Future BaseScan verification is a separate,
+read-only operation with `accounts: []`, runtime-only
+`BASE_SEPOLIA_RPC_URL`/`ETHERSCAN_API_KEY`, and provider-specific commands:
+
+```text
+npm run verify:base-sepolia:demo-token
+npm run verify:base-sepolia:pop33
+```
+
+Do not rerun verification merely to obtain an `already verified` result. The
+authoritative addresses, compiler settings, constructor arguments, and safety
+procedure are recorded in `../../docs/DEMO_V1.md`.
 
 `deploy:dry-run` and `smoke:demo-v1` create an isolated local `hardhatOp`
 network and never use Base Sepolia. The separately named

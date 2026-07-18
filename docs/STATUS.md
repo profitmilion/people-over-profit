@@ -42,13 +42,14 @@ write was performed during deployment.
 
 The source for both current Demo V1 contracts is now published as an exact
 match in BaseScan and is also available as an exact creation/runtime match in
-Sourcify. Before publication, the local sources were confirmed unchanged from
-the deployment source commit, the compiler settings and constructor arguments
-were reconstructed from build-info and artifacts, and the local runtime
-bytecode matched the deployed bytecode after applying the recorded immutable
-references. Source verification did not change the bytecode or blockchain
-state and is not a security audit. The temporary testnet randomness remains
-manipulable, and the complete 100-wallet lifecycle has not been executed.
+Sourcify; Blockscout also reports both addresses as fully verified. Before
+publication, the local sources were confirmed unchanged from the deployment
+source commit, the compiler settings and constructor arguments were
+reconstructed from build-info and artifacts, and the local runtime bytecode
+matched the deployed bytecode after applying the recorded immutable references.
+Source verification did not change the bytecode or blockchain state and is not
+a security audit. The temporary testnet randomness remains manipulable, and the
+complete 100-wallet lifecycle has not been executed.
 
 The separate `#/demo-v1` integration is now confirmed as an independent public
 Web3 application on a Vercel Preview for branch `codex/pop33-recovery` and
@@ -103,8 +104,8 @@ runtime.
 | 330 dUSDC credited per round through claim accounting | **implemented in deployed Demo V1 contract** | Each finalized round credits exactly 330 dUSDC to its winning wallet; claims are round-specific, pull-based, and protected against unauthorized or repeated payout. |
 | Hourly Base Sepolia round eligibility after `lockedAt` | **implemented in deployed Demo V1 contract** | Round `n` is eligible at `lockedAt + n * drawInterval`; boundary, early, duplicate, and out-of-order behavior is tested. Automation and production randomness remain deferred. |
 | `Open -> Locked -> Drawing -> Claimable -> Finished` | **implemented in deployed Demo V1 and represented locally** | Pool and all ten round states are read from contract getters; all ten claims remain required for `Finished`. |
-| Demo mirrors the final/mainnet product model | **partial** | The `/demo` participation action is now Base Sepolia-only, while the browser-local simulation is confined to `/demo?view=dev`. Stablecoin payment, withdrawals, and complete authoritative position lifecycle rules remain missing. |
-| Demo differences limited mainly to network, test tokens, safety parameters, and developer tools | **partial** | This is the approved direction; the current historical simulation and unfinished contract integration have not yet fully converged on it. |
+| Demo mirrors the final/mainnet product model | **partial** | The separate Demo V1 implements paid positions, Open-pool withdrawal, draws, claims, and the authoritative lifecycle on Base Sepolia. Production randomness, identity/compliance, and the complete public 100-position execution remain unfinished; the legacy `/demo` and developer simulation remain separate historical layers. |
+| Demo differences limited mainly to network, test tokens, safety parameters, and developer tools | **partial** | The current Demo V1 follows that direction, but production integrations and the preserved legacy layers have not fully converged on one release architecture. |
 
 ## Implemented
 
@@ -192,8 +193,8 @@ runtime.
   allowance, no active position, an Open pool with zero participants and zero
   escrow, and no pending transaction. This is the successful resumed Base
   Sepolia reversible smoke test; it does not enable the multi-wallet operator.
-- A planned deployment register and a technical frontend integration plan in
-  `docs/DEMO_V1.md`.
+- The actual deployment register, verified source settings, and current
+  technical frontend runbooks in `docs/DEMO_V1.md`.
 - Separate `#/demo-v1` and `#/archive-v1` routes with isolated environment
   variables, ABI, data reads, guarded transaction actions, and domain tests.
 - The `#/demo-v1` write path now rejects any non-canonical contract, token, or
@@ -220,12 +221,8 @@ runtime.
 ## Partial / in progress
 
 - alignment of the demo with the intended mainnet product architecture;
-- expansion of the authoritative on-chain user view beyond the currently
-  available aggregate, cycle ID, and active-cycle count reads;
-- contract-driven pool lifecycle;
-- authoritative on-chain enforcement of the 10-active-position limit;
-- authoritative on-chain enforcement of automatic allocation, one position per
-  user per pool, and the active-position lifecycle;
+- convergence of the preserved legacy `/demo` integration with the separate,
+  authoritative Demo V1 routes and contract model;
 - consistent configuration across UI, hooks, and environment variables;
 - production randomness and asynchronous request/fulfillment recovery;
 - manual public faucet verification through the Vercel Preview UI; the tested
@@ -238,7 +235,6 @@ runtime.
   confirmed Preview must remain separate until a later explicit decision;
 - selection of an external test-token address remains open only for the
   preserved alternative deployment path;
-- source publication for the recorded Base Sepolia deployment;
 - unified cycle and position domain model;
 - Farcaster integration;
 - production readiness.
@@ -282,12 +278,12 @@ newer code exists.
   user confirmation are still required;
 - withdrawal/refund behavior remains absent from the legacy deployment, while
   the separate Demo V1 route implements and post-verifies Open-pool withdrawal;
-- the README contains historical and Vite-template content;
 - some visible strings show character-encoding problems;
 - the root frontend has focused domain tests, but a broader component and
   browser integration testing strategy remains `TO DECIDE`;
-- source for the currently deployed demo contract is not present; source for
-the new, deployed Demo V1 Basic foundation is in `packages/contracts`.
+- source for the preserved legacy demo deployment is not present in this
+  repository; the current deployed Demo V1 sources are in `packages/contracts`
+  and are verified in BaseScan;
 - the preserved external-token deployment script cannot determine whether a
   technically valid six-decimal address is product-approved; it still requires
   explicit human review;
@@ -349,7 +345,8 @@ the UI and rechecks the connector directly before sending.
   future price levels, restricted to subsequently created pools.
 - The Basic V1 contract workspace is `packages/contracts`; release and deployed
   versioning policy remains `TO DECIDE`.
-- `TO DECIDE`: testing strategy.
+- `TO DECIDE`: broader component, browser integration, and end-to-end testing
+  strategy beyond the existing automated frontend domain and contract suites.
 - `TO DECIDE`: production, security, and compliance milestones.
 
 ## Verification commands

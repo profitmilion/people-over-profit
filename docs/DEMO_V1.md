@@ -90,8 +90,10 @@ addresses and private keys are encrypted; wrong passwords and modified or
 truncated files are rejected. The file path is read from
 `OPERATOR_WALLET_STORE_PATH`, must remain outside the repository, and is written
 atomically with restrictive permissions where the operating system supports
-them. The password exists only in process memory through an interactive reader;
-there is intentionally no password environment variable.
+them. The local durable opener reads the password at runtime through an
+interactive reader. The public read-only inspector accepts it only from the
+transient `OPERATOR_WALLET_STORE_PASSWORD` process environment and never writes
+or logs it; it must not be placed in a repository `.env` file.
 
 The non-secret journal path is read from
 `OPERATOR_TRANSACTION_JOURNAL_PATH`. Every semantic operation receives a stable
@@ -108,10 +110,49 @@ one means the participant wallets cannot be recovered. The file and password
 must be backed up separately. Neither may be stored in GitHub, Vercel, `.env`,
 logs, command-line arguments, or `VITE_*` variables.
 
-This foundation does not authorize public execution. No public operator command
-was added, all Base Sepolia writes still abort before broadcast, and the
-existing contracts, deployment scripts, addresses, and on-chain state are
-unchanged.
+This foundation does not authorize public execution. A separate public
+read-only operator command now inspects these existing files, but it never
+creates them and exposes no signing or broadcast transport. All Base Sepolia
+multi-wallet writes remain unavailable, and the existing contracts, deployment
+scripts, addresses, and on-chain state are unchanged.
+
+### Multi-wallet Base Sepolia read-only operator
+
+`npm run operator:base-sepolia:read-only` supports only `preflight`, `status`,
+`plan`, and `dry-run`. It connects directly to chain `84532` through
+`BASE_SEPOLIA_OPERATOR_RPC_URL`, defaulting to `https://sepolia.base.org`, and
+uses only a public JSON-RPC provider. The runtime contains no signer, raw-send,
+funding, faucet, approval, join, withdrawal, draw, claim, or deployment method.
+Its sole transaction-shaped capability is unsigned `eth_estimateGas` against
+the current public state.
+
+Before wallet planning it verifies bytecode at both recorded addresses,
+`paymentToken()` linkage, token name/symbol/decimals, `DRIP_AMOUNT`,
+`DRIP_COOLDOWN`, `ENTRY_PRICE`, pool capacity, active-position limit, round
+count, and draw interval. It then reads an already-existing encrypted store,
+checkpoint, and journal without taking an exclusive write lock or creating a
+missing file. The store's project purpose is bound by requiring its complete
+ordered address list to match a checkpoint whose chain, token, and contract
+identity also matches the journal. A store from another project, a reordered
+wallet set, a pending or ambiguous journal operation, or insufficient
+confirmation depth is a blocker.
+
+The terminal report abbreviates wallet addresses. The JSON output is a local
+technical report and contains public full addresses but no password, private
+key, RPC URL credentials, cipher material, or API key. It reports latest and
+pending nonce, ETH/dUSDC balance, exact allowance, faucet cooldown, active
+membership, claimable amount, journal states, planned transaction counts,
+current fee data, live gas estimates where possible, and
+`NOT CURRENTLY ESTIMABLE` where a prerequisite state transition has not
+occurred. Historical safety budgets are labelled separately and use a visible
+2x reserve multiplier; they are not guarantees.
+
+The public identity preflight was run against Base Sepolia and confirmed pool
+1 as Open at 0/100. The external store, checkpoint, and journal were not
+configured, so wallet-backed 2-, 5-, and 100-wallet dry-runs remain blocked.
+No wallet or state file was created, no password or key was requested, and no
+transaction was signed or sent. See
+`docs/RUNBOOK_BASE_SEPOLIA_READ_ONLY_OPERATOR.md`.
 
 ### Separate reversible Base Sepolia smoke harness
 

@@ -69,6 +69,12 @@ export interface DecryptedWalletRecord {
   privateKey: string;
 }
 
+export interface EncryptedWalletStoreInspection {
+  storeId: string;
+  walletCount: number;
+  addresses: string[];
+}
+
 export interface EncryptedWalletStoreOptions {
   filePath: string;
   password: string;
@@ -198,7 +204,7 @@ function parseEnvelope(value: unknown): WalletStoreEnvelope {
 function parsePlaintext(
   value: unknown,
   storeId: string,
-  expectedWalletCount: number,
+  expectedWalletCount?: number,
 ): WalletStorePlaintext {
   const plaintext = exactObject(
     value,
@@ -208,19 +214,24 @@ function parsePlaintext(
   if (plaintext.formatVersion !== FORMAT_VERSION || plaintext.storeId !== storeId) {
     throw new Error("Wallet store decrypted metadata is inconsistent.");
   }
-  if (plaintext.walletCount !== expectedWalletCount || !Array.isArray(plaintext.wallets)) {
+  if (typeof plaintext.walletCount !== "number") {
+    throw new Error("Wallet store contains an invalid wallet count.");
+  }
+  assertWalletCount(plaintext.walletCount);
+  const walletCount = plaintext.walletCount;
+  if ((expectedWalletCount !== undefined && walletCount !== expectedWalletCount) || !Array.isArray(plaintext.wallets)) {
     throw new Error("Wallet store contains an unexpected wallet count.");
   }
-  if (plaintext.wallets.length !== expectedWalletCount) {
+  if (plaintext.wallets.length !== walletCount) {
     throw new Error("Wallet store wallet list length is inconsistent.");
   }
 
-  const wallets = validateWalletRecords(plaintext.wallets, expectedWalletCount);
+  const wallets = validateWalletRecords(plaintext.wallets, walletCount);
 
   return {
     formatVersion: FORMAT_VERSION,
     storeId,
-    walletCount: expectedWalletCount,
+    walletCount,
     wallets,
   };
 }
@@ -258,7 +269,7 @@ export function validateWalletRecords(
 async function decrypt(
   envelope: WalletStoreEnvelope,
   password: string,
-  expectedWalletCount: number,
+  expectedWalletCount?: number,
 ): Promise<WalletStorePlaintext> {
   const salt = base64Buffer(envelope.kdfParameters.salt, SALT_LENGTH, "walletStore salt");
   const iv = base64Buffer(envelope.iv, IV_LENGTH, "walletStore IV");
@@ -318,6 +329,36 @@ export async function openEncryptedWalletProviderFromEnvironment(input: {
     walletCount: input.walletCount,
     provider: input.provider,
   });
+}
+
+export async function inspectExistingEncryptedWalletStore(input: {
+  filePath: string;
+  password: string;
+  expectedWalletCount?: number;
+}): Promise<EncryptedWalletStoreInspection> {
+  assertPassword(input.password);
+  if (input.expectedWalletCount !== undefined) assertWalletCount(input.expectedWalletCount);
+  const filePath = await assertSafeExternalFilePath(input.filePath, WALLET_STORE_SUFFIX);
+  if (!(await pathIsRegularFile(filePath))) {
+    throw new Error("Encrypted wallet store does not exist; read-only inspection will not create it.");
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(await readFile(filePath, "utf8"));
+  } catch {
+    throw new Error("Wallet store file is incomplete or invalid JSON.");
+  }
+  const plaintext = await decrypt(
+    parseEnvelope(parsed),
+    input.password,
+    input.expectedWalletCount,
+  );
+  return {
+    storeId: plaintext.storeId,
+    walletCount: plaintext.walletCount,
+    addresses: plaintext.wallets.map((wallet) => wallet.address),
+  };
 }
 
 export class EncryptedWalletProvider implements OperatorWalletProvider {

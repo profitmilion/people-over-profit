@@ -509,6 +509,23 @@ export class JsonTransactionJournal extends BaseTransactionJournal {
   }
 }
 
+export async function inspectExistingTransactionJournal(
+  filePathValue: string,
+  identity: JournalIdentity,
+): Promise<TransactionJournalData> {
+  const filePath = await assertSafeExternalFilePath(filePathValue, JOURNAL_SUFFIX);
+  if (!(await pathIsRegularFile(filePath))) {
+    throw new Error("Transaction journal does not exist; read-only inspection will not create it.");
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(await readFile(filePath, "utf8"));
+  } catch {
+    throw new Error("Transaction journal is incomplete or invalid JSON.");
+  }
+  return validateJournal(parsed, identity);
+}
+
 export function readJournalPathFromEnvironment(env: NodeJS.ProcessEnv): string {
   const value = env.OPERATOR_TRANSACTION_JOURNAL_PATH?.trim();
   if (!value) throw new Error("OPERATOR_TRANSACTION_JOURNAL_PATH is required.");

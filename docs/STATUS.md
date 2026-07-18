@@ -78,6 +78,23 @@ ten-round public UI lifecycle were not tested.
 The public Preview is therefore confirmed for contract reads and for this
 narrow approval, join, and withdrawal write flow.
 
+A separate multi-wallet Base Sepolia operator entrypoint now supports only
+`preflight`, `status`, `plan`, and `dry-run`. Its public runtime has no signer or
+broadcast primitive: it uses a credential-free HTTPS provider for contract
+reads and state-dependent `eth_estimateGas` calls. It validates chain `84532`,
+both deployed bytecodes, token linkage and all fixed Demo V1 parameters before
+planning. It inspects—without creating or modifying—the existing encrypted
+wallet store, checkpoint, and transaction journal, reports both wallet nonces,
+balances, allowance, cooldown, position, claimable amount, journal states and
+gas requirements, and supports bounded ranges from 1 to 100 wallets.
+
+The live public preflight confirmed the Base Sepolia runtime and pool 1 at
+0/100, but the required external wallet store, checkpoint, and journal are not
+configured in this workspace. The tool therefore stopped with explicit
+blockers and is not yet ready for a 2–5 wallet pilot or a 100-wallet plan. It did
+not create wallets or state files, load a private key, sign or send a
+transaction, fund ETH, or execute any lifecycle action.
+
 Production remains separate and does not host the current Demo V1 checkpoint.
 Farcaster is not implemented and is not required by this standalone Web3
 runtime.
@@ -153,8 +170,11 @@ runtime.
   checks-effects-interactions, `SafeERC20`, and `ReentrancyGuard`.
 - `Finished` after all ten prizes are claimed, with atomic bounded release of
   all 100 pool positions.
-- Automated contract/operator coverage: 167 passing Mocha tests, including 29
-  isolated Base Sepolia smoke-harness tests. No test uses a public RPC.
+- Automated contract/operator coverage includes an isolated public read-only
+  operator suite for network identity, ranges, storage inspection, gas
+  planning, report redaction, repeatability, and absence of write transport.
+  No automated test uses a public RPC; the exact current passing-test count is
+  recorded in the latest DEVLOG entry.
 - A named Hardhat `baseSepolia` OP network using configuration variables, with
   no committed credentials.
 - A guarded external-token Base Sepolia deployment script plus a separately
@@ -182,6 +202,12 @@ runtime.
 - Journal coordination is integrated into every local lifecycle transaction.
   Confirmed and pending semantic operations cannot be broadcast again, while
   ambiguous evidence halts in `requires_manual_review`.
+- A separate `operator:base-sepolia:read-only` command with `preflight`,
+  `status`, `plan`, and `dry-run`; first-2, first-5, full-100, and explicit
+  start-index ranges; fixed public deployment identity; read-only nonce and
+  wallet-state inspection; live gas estimates where the current state permits;
+  and explicit `NOT CURRENTLY ESTIMABLE` results otherwise. Its lower-level
+  runtime exposes no funding, signing, or broadcast method.
 - A separate, guarded Base Sepolia single-wallet smoke harness with a default
   read-only preflight, dedicated runtime-only key namespace, fixed documented
   addresses, exact approval, reversible join/withdraw scope, buffered gas
@@ -231,6 +257,13 @@ runtime.
 - manual public draw and claim verification through the Vercel Preview UI;
 - a complete public UI lifecycle with 100 positions, pool locking, ten draws,
   and ten claims;
+- provisioning and independently backing up a suitable external encrypted
+  operator wallet store plus matching Base Sepolia checkpoint and transaction
+  journal; until all three validate against the same wallet order and project
+  identity, multi-wallet dry-run readiness remains blocked;
+- successful public read-only dry-runs for the first 2 and 5 stored wallets and
+  the aggregate 100-wallet range; no such wallet-backed run occurred in this
+  milestone because the external artifacts were absent;
 - promotion or release of the current Demo V1 through Vercel Production; the
   confirmed Preview must remain separate until a later explicit decision;
 - selection of an external test-token address remains open only for the
@@ -298,10 +331,11 @@ newer code exists.
 - claim expiry and alternate unclaimed-prize settlement remain `TO DECIDE`, so
   the current narrow implementation cannot reach `Finished` until all ten
   winners claim.
-- the durable wallet and journal foundation is implemented, but the runnable
+- the durable wallet and journal foundation is implemented, while the runnable
   local lifecycle deliberately keeps disposable in-memory wallets because its
-  simulated chain also disappears. No public operator entrypoint exists;
-  Base Sepolia writes remain blocked before broadcast.
+  simulated chain also disappears. The public operator entrypoint is strictly
+  read-only and requires an already-existing store, checkpoint, and journal;
+  it cannot create them or broadcast Base Sepolia writes.
 - provider-standard hash and nonce recovery is implemented conservatively. The
   smoke adapter also scans a bounded 128-block window for mined same-nonce
   replacements or cancellations. A pending replacement absent from standard
@@ -358,6 +392,8 @@ the UI and rechecks the connector directly before sending.
 - `cd packages/contracts && npm run operator:local:lifecycle`
 - `cd packages/contracts && npm run smoke:base-sepolia` (external read-only RPC;
   requires dedicated public configuration and was not run in this milestone)
+- `cd packages/contracts && npm run operator:base-sepolia:read-only -- preflight --wallet-count 2`
+- `cd packages/contracts && npm run operator:base-sepolia:read-only -- dry-run --start-index 0 --wallet-count 5`
 - `cd packages/contracts && npx tsc --noEmit`
 - `npx tsc --noEmit`
 - `npm run lint`

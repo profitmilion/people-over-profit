@@ -497,3 +497,9 @@ export class JsonCheckpointStore implements CheckpointStore {
     }
   }
 }
+
+export function readCheckpointPathFromEnvironment(env: NodeJS.ProcessEnv): string {
+  const value = env.OPERATOR_CHECKPOINT_PATH?.trim();
+  if (!value) throw new Error("OPERATOR_CHECKPOINT_PATH is required.");
+  return value;
+}

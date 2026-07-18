@@ -33,6 +33,78 @@ documentation.
   current overview of implementation, gaps, and risks.
 - Do not guess. Mark unclear facts as requiring later reconstruction.
 
+## 2026-07-18 - Base Sepolia multi-wallet read-only operator
+
+### At a glance
+
+A separate multi-wallet operator now connects to the recorded Demo V1 contracts
+on Base Sepolia for public reads and dry-run planning while keeping every write
+transport technically unavailable. The live network and contract identity
+preflight succeeded, but no encrypted wallet store, checkpoint, or journal is
+configured in this workspace, so 2-, 5-, and 100-wallet readiness remains
+blocked and no wallet-backed lifecycle dry-run was claimed.
+
+### Completed
+
+- Added `preflight`, `status`, `plan`, and `dry-run` CLI modes with bounded
+  first-2, first-5, full-100, custom-count, and explicit start-index ranges.
+- Added a provider-only Base Sepolia runtime fixed to chain `84532`, the
+  recorded dUSDC and POP33 addresses, deployed bytecode, token linkage, and all
+  fixed Demo V1 parameters.
+- Added read-only inspection of an existing AES-256-GCM/scrypt wallet store,
+  checkpoint, and transaction journal. Missing files are never created, wallet
+  keys are not returned to the runtime, and ordered wallet identity must match
+  the checkpoint and journal project identity.
+- Added per-wallet balances, latest/pending nonces, allowance, cooldown,
+  membership, claimable amount, journal state, operation plan, gas estimate,
+  wei cost, 2x reserve and aggregate lifecycle reporting in text and JSON.
+- Added explicit unavailable estimates for state-dependent future joins,
+  withdrawals, draws, and claims rather than substituting invented values.
+- Added tests for fixed identity failures, store safety, range boundaries,
+  duplicates, recovery blockers, confirmation depth, report redaction,
+  repeatability, nonce preservation, and absence of every signing/broadcast
+  primitive from the public runtime.
+
+### Verification boundary
+
+- Hardhat compilation and the contracts-package TypeScript check passed. All
+  182 contract/operator/smoke Mocha tests passed, including 15 isolated tests
+  for the new public read-only operator; automated tests used no public RPC.
+- The local Demo V1 smoke completed 100 joins, ten draws and ten claims to
+  `Finished`. The local operator lifecycle completed 617 unique confirmed
+  journal operations and ended at `Finished` with zero escrow and zero active
+  positions. Neither command used an external RPC.
+- Root lint, all 20 frontend domain tests, and the production build passed.
+  The contracts production audit reported zero findings. The root production
+  audit retained the known 38 transitive findings (27 moderate, 11 high, zero
+  critical); no automatic audit fix was run.
+- A credential-free public RPC preflight confirmed chain `84532`, bytecode,
+  exact runtime identity, pool 1 Open at 0/100, zero escrow, and ten remaining
+  draws and claims.
+- The preflight correctly reported missing external wallet store, checkpoint,
+  and journal as blockers. It did not generate wallets or state files.
+- No private key, funded account, wallet request, signature, transaction,
+  faucet, approval, join, withdrawal, draw, claim, deployment, Vercel change,
+  Production change, or Farcaster integration occurred.
+- A dry-run is planning evidence only and does not prove the public lifecycle.
+  A 2–5 wallet pilot still requires a separate stage and explicit approval;
+  the 100-wallet lifecycle remains unexecuted.
+
+### Limitations and next step
+
+Provision and independently back up a suitable external encrypted wallet
+store plus a matching Base Sepolia checkpoint and empty or fully reconciled
+journal. Then rerun only the first-2 and first-5 read-only preflight/dry-run and
+review gas funding requirements. Do not enable or execute writes in that stage.
+
+### Git
+
+- Branch: `codex/pop33-recovery`
+- Starting checkpoint: `aefc57e9256eb988795284f7f629ebcb7f791825`
+- Starting message: `docs: reconcile POP33 project sources of truth`
+- The milestone commit hash did not exist when this entry was written and is
+  intentionally not guessed.
+
 ## 2026-07-18 - Published Demo V1 contract sources
 
 ### At a glance

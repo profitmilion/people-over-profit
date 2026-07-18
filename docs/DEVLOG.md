@@ -33,6 +33,76 @@ documentation.
   current overview of implementation, gaps, and risks.
 - Do not guess. Mark unclear facts as requiring later reconstruction.
 
+## 2026-07-18 - Two-wallet Base Sepolia pilot verified and 99+1 lifecycle planned
+
+### At a glance
+
+The first guarded operator write pilot, using independent wallet indices 0 and
+1, completed successfully on Base Sepolia. Eight existing public transactions
+prove the intended reversible sequence for each wallet: faucet, exact approval,
+join, and Open-pool withdrawal. This documentation session independently
+checked their receipts and current public state and then defined a staged plan
+for a separate full `99 automatic + 1 manual` lifecycle test. It did not send
+another transaction.
+
+### Completed
+
+- Matched every pilot journal operation to a successful public receipt,
+  sender, destination, nonce, calldata, expected event, and semantic result.
+- Confirmed both wallets at nonce `4/4`, 330 dUSDC, zero allowance, zero active
+  position, and zero claimable prize, with pool 1 Open at zero active positions
+  and zero escrow. Their temporary positions were 5 and 6 and were withdrawn;
+  the pilot did not approach the 100-position boundary.
+- Confirmed that the manifest and encrypted five-wallet store retained their
+  pre-pilot hashes. The checkpoint and journal changed as expected and contain
+  no pending or manual-review operation.
+- Audited the deployed lifecycle against contract source and tests: the 100th
+  successful join atomically locks the pool; ten hourly testnet round times are
+  initialized; draws are sequential and permissionless but do not execute
+  automatically; winners are unique; and the tenth successful claim finishes
+  the pool and releases all 100 active positions.
+- Documented the recommended separate 99-wallet store, funding boundaries,
+  transaction budget, staged `5 -> 20 -> 50 -> 99 -> manual 100 -> 10 draws ->
+  10 claims` gates, stop conditions, architecture gaps, and small future tasks.
+
+### Verification boundary
+
+The pilot receipts were observed read-only through public Base Sepolia RPC.
+The local encrypted store was not decrypted and no password, private key, seed
+phrase, or funding credential was requested. No wallet was created or funded,
+and no faucet, approval, join, withdrawal, draw, claim, deployment, Production,
+Vercel, or Farcaster action was performed by this documentation session.
+
+Fifteen selected lifecycle tests passed, covering Open at 99, atomic lock and
+failed-payment rollback at 100, post-lock withdrawal rejection, round schedules
+and draw ordering, ten distinct winners, winner-only and single claims,
+`Claimable`, and final `Finished` position release.
+
+The 99+1 plan is not execution authorization. The current five-wallet pilot
+store must not be extended or reused. A future 99-wallet set, funding mechanism,
+and each write phase require separate review and explicit authorization.
+
+### Limitations and next step
+
+The current `join()` accepts no expected pool ID or expected participant count.
+An external account can therefore take the 100th position between the final
+precheck and Piotr's manual confirmation, after which his join could route to a
+new pool. Monitoring and a short handoff reduce but cannot eliminate this
+public-mempool race. A deterministic guard would require a reviewed contract
+change and new deployment; that remains a separate decision.
+
+The safest next implementation unit is a separately reviewed initializer and
+read-only inspection path for a new 99-wallet test set. It must not create the
+real store until Piotr explicitly runs the manual initializer in a later task.
+
+### Git
+
+- Branch: `codex/pop33-recovery`
+- Starting checkpoint: `e2ef6387398171459c73c6b71e1459d3bf2602a7`
+- Starting message: `feat(operator): prepare guarded two-wallet Base Sepolia pilot`
+- The documentation milestone commit hash did not exist when this entry was
+  written and is intentionally not guessed.
+
 ## 2026-07-18 - Guarded two-wallet Base Sepolia write pilot prepared
 
 ### At a glance

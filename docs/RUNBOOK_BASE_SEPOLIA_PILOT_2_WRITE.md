@@ -1,12 +1,12 @@
 # Base Sepolia two-wallet write pilot runbook
 
-## Current authorization boundary
+## Completed checkpoint — do not rerun
 
-This runbook prepares one reversible testnet pilot for exactly wallet indices
-0 and 1 from the existing five-wallet set, chain 84532, the recorded dUSDC and
-POP33 Demo V1 contracts, and pool 1. Piotr has not funded these wallets or run
-the launcher. No transaction from the new five-wallet set has been signed or
-broadcast.
+Piotr completed this reversible testnet pilot on 2026-07-18 for exactly wallet
+indices 0 and 1 from the five-wallet set, chain 84532, the recorded dUSDC and
+POP33 Demo V1 contracts, and pool 1. This runbook now records historical
+execution and recovery evidence. It is not authorization to run the launcher
+again, use wallets 2-4, or start a larger lifecycle test.
 
 The only available write sequence for each selected wallet is:
 
@@ -20,9 +20,43 @@ The only available write sequence for each selected wallet is:
 
 Wallet indices 2-4, external funding keys, draw, claim, deployment, contract or
 token changes, administration, the 100th join, Base Mainnet, and blind write
-retry are not available through this launcher.
+retry were not available through this launcher and were not used.
 
-## Stage A: manual ETH funding
+## Verified public evidence
+
+The bound journal contains eight confirmed operations and no pending,
+ambiguous, failed, or manual-review operation. Public Base Sepolia receipts
+have status `1`; their sender, destination, nonce, calldata, and expected event
+agree with the journal and operator scope.
+
+| Wallet | Action | Nonce | Block | Transaction hash |
+| --- | --- | ---: | ---: | --- |
+| 0 | faucet | 0 | 44319355 | `0x46fe97e7d5f05bf90ae2e425c18551fb4b2359ef8c43cff8d2cece2afcbf0d12` |
+| 0 | approve | 1 | 44319357 | `0x0c0e2007d85aa93b29597665261554dfbc42fcf0ea72f64bd9a2a1cc56dc6a74` |
+| 0 | join, position 5 | 2 | 44319359 | `0xdfbb3f3e7eb39fbdb7adfd23c0a5bc84b97e5e02e209cea7f22f42739cf12b2e` |
+| 0 | withdraw, position 5 | 3 | 44319361 | `0x76934d3dc31388bf09726b31ca27a4edea5f674ac6c02a643f12ddce7aa97831` |
+| 1 | faucet | 0 | 44319365 | `0xe90689de12e969b69cda8713a4442c99f009943c18b916f4d1e0b19753a902b6` |
+| 1 | approve | 1 | 44319367 | `0x0f143537dc477334c630e0c2319c2792fe5609ddaf262cb80efdcf318f22e025` |
+| 1 | join, position 6 | 2 | 44319369 | `0x67a326aa67da733eb458eb9d40565c1bc760b90f5e8b4ede96bc71ce44e126f4` |
+| 1 | withdraw, position 6 | 3 | 44319371 | `0xfa44837ab6402f3a0a5501d6cdd6de766946f266b6c59b3395958815ca91ada7` |
+
+Final public reads confirmed for both wallets: nonce `4/4`, 330 dUSDC, zero
+allowance, zero active positions, active position ID zero, and zero claimable
+prize. Pool 1 is `Open` with zero active positions, zero escrow, no lock time,
+zero completed draws, and zero claims.
+
+The post-pilot SHA-256 values are:
+
+- checkpoint: `55097C7ED0DCD74185AEA900B7917E09A0113294E4933BA76C55A5828F06C707`;
+- journal: `62AC7E111EE45BB310CD86A7BA07DCF715B401F9C4FA5848581E5C7C51C1F557`;
+- manifest: `E2BA9BD7D88FAF61B016AED0F6312E8E735741B92C6667988401EACCA88C7B04`;
+- encrypted wallet store: `9CBE4C2498E0223519E0D20FA288ADF51D4DB4D1DD5B4C222409895993D911B6`.
+
+The manifest and encrypted wallet-store hashes match their pre-pilot values.
+Checkpoint and journal changes are expected durable records of the eight
+confirmed operations.
+
+## Historical Stage A: manual ETH funding
 
 The public pilot addresses are:
 
@@ -46,9 +80,9 @@ transfers of 0.00005 ETH. Wait for both receipts and confirm the balances in a
 block explorer. Never provide the funding wallet seed phrase, private key, or
 keystore to this repository, launcher, Codex, ChatGPT, or any report.
 
-## Stage B: guarded operator execution
+## Historical Stage B: guarded operator execution
 
-From the repository root, Piotr later runs exactly:
+The command used from the repository root was:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File '.\packages\contracts\scripts\run-base-sepolia-pilot-2-write.ps1'
@@ -100,7 +134,7 @@ checkpoint. Wallet store and manifest SHA-256 hashes must remain unchanged;
 checkpoint and journal are expected to change. Preserve all four artifacts as
 one recovery unit.
 
-## Expected success messages
+## Observed success messages
 
 For each wallet the runner prints its index, public address, live buffered gas
 requirement, `COMPLETE: no active position, allowance 0, claimable 0`, and the
@@ -110,10 +144,10 @@ four public transaction hashes. The final line is:
 PILOT COMPLETE: both wallets are withdrawn and checkpoint/journal are consistent.
 ```
 
-The launcher then confirms unchanged wallet-store and manifest hashes. Expected
+The launcher confirmed unchanged wallet-store and manifest hashes. The observed
 final chain state is 330 dUSDC, allowance 0, no active position, no claimable
 prize, pool 1 still Open, and pool active count and escrow restored to their
-pre-wallet values. ETH is reduced only by gas.
+pre-wallet values. ETH was reduced only by gas.
 
 ## Stop immediately
 

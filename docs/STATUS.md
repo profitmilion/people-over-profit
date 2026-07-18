@@ -106,19 +106,32 @@ Non-rate-limit errors are not retried. Piotr subsequently completed `status`
 for all five wallets and `dry-run` for the first two and all five. All four
 external artifacts remained byte-for-byte unchanged and no write occurred.
 
-The five-wallet Base Sepolia pilot set was created with the separate manual
-PowerShell initializer. It uses the existing AES-256-GCM/scrypt store and a
-non-secret manifest, version 2 checkpoint, and version 2 empty journal bound to
-one store ID and ordered-address digest. A guarded write launcher is now
-prepared for exactly wallet indices 0 and 1 and pool 1. It reuses the reversible
-single-wallet smoke coordinator and durable recovery, instantiates signers only
-for the two selected store entries, requires two exact confirmations, and
-permits only faucet, exact 33 dUSDC approval, join, and Open-pool withdrawal.
-Manual ETH funding and manual execution by Piotr are still pending. No wallet
-in this five-wallet set has been funded and no transaction from it has been
-signed or broadcast. Wallets 2-4, draw, claim, deployment, administration,
-mainnet, and automatic funding remain unavailable. This testnet set is not
-production infrastructure; a 100-wallet store remains a separate future stage.
+The guarded Base Sepolia pilot for wallet indices 0 and 1 completed
+successfully on 2026-07-18. Each wallet confirmed exactly four transactions in
+order: faucet, exact 33 dUSDC approval, join of pool 1, and withdrawal while the
+pool remained Open. Public receipts, calldata, expected events, journal data,
+and current contract reads agree. Both wallets now have nonce `4/4`, 330 dUSDC,
+zero allowance, zero active position, and zero claimable prize. Pool 1 is Open
+with zero active positions and zero escrow. The manifest and encrypted wallet
+store remained byte-for-byte unchanged; the bound checkpoint and journal
+changed as expected to record the confirmed operations. There is no pending or
+manual-review operation.
+
+This successful reversible pilot is evidence for the guarded two-wallet write
+path only. Wallets 2-4 were not used, and no draw, claim, deployment,
+administration, mainnet, automatic funding, Production, Vercel, or Farcaster
+action occurred. A complete Base Sepolia lifecycle remains unexecuted. The
+recommended future test uses a new, separately initialized 99-wallet operator
+set for automatic participants and Piotr's separate public wallet for the
+manually confirmed 100th join. The existing five-wallet pilot store must not be
+extended or reused for that test. Funding, automated accumulation, the manual
+lock-boundary join, ten scheduled draws, and winner claims each require a
+separate reviewed and authorized stage.
+
+The evidence, boundary behavior, funding estimates, phase gates, and operator
+gaps for that future test are recorded in
+`docs/PLAN_BASE_SEPOLIA_FULL_LIFECYCLE_99_PLUS_1.md`. The plan is not write
+authorization.
 
 Production remains separate and does not host the current Demo V1 checkpoint.
 Farcaster is not implemented and is not required by this standalone Web3
@@ -286,12 +299,13 @@ runtime.
 - manual public draw and claim verification through the Vercel Preview UI;
 - a complete public UI lifecycle with 100 positions, pool locking, ten draws,
   and ten claims;
-- confirmation of an independent encrypted backup of the manually created
-  five-wallet pilot store, manifest, checkpoint, and journal;
-- manual funding and execution of the prepared guarded Base Sepolia write
-  pilot for wallet indices 0 and 1;
-- a later separately reviewed 100-wallet store and aggregate dry-run; the
-  five-wallet pilot store must not be reused for that stage;
+- confirmation, retention, and independent encrypted backup of the completed
+  five-wallet pilot store, manifest, checkpoint, and journal recovery unit;
+- a later separately reviewed 99-wallet participant store, funding subsystem,
+  aggregate dry-run, and staged `5 -> 20 -> 50 -> 99` accumulation; the
+  completed five-wallet pilot store must not be reused for that stage;
+- the manually confirmed 100th public join, ten scheduled draw executions, ten
+  winner claims, and final `Finished` reconciliation on Base Sepolia;
 - promotion or release of the current Demo V1 through Vercel Production; the
   confirmed Preview must remain separate until a later explicit decision;
 - selection of an external test-token address remains open only for the

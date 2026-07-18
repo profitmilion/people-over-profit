@@ -8,6 +8,56 @@ dUSDC faucet, approve, join, withdraw, draw, claim, sign, deploy, or broadcast.
 Any 2–5 wallet pilot requires a separate task, independent report review, and
 explicit approval. The 100-wallet lifecycle has not been executed.
 
+## Manual initialization of the five-wallet pilot set
+
+The reviewed initializer creates exactly five new test wallets and four bound
+files outside the repository. It does not fund them and cannot send a
+transaction. The real pilot set has not yet been created; only automated
+temporary fixtures were generated while testing the initializer.
+
+Piotr runs this manually from PowerShell:
+
+```powershell
+Set-Location -LiteralPath 'D:\piotr\Documents\pop33-ui-codex'
+powershell -NoProfile -ExecutionPolicy Bypass -File '.\packages\contracts\scripts\initialize-base-sepolia-pilot-5.ps1'
+```
+
+The default target is:
+
+```text
+%LOCALAPPDATA%\POP33\operator\base-sepolia-pilot-5
+```
+
+The script displays only the project, network, chain ID, wallet count, target
+directory and safety boundary. It requires the exact confirmation
+`CREATE POP33 BASE SEPOLIA PILOT 5`, then requests the new password twice with
+PowerShell `SecureString` prompts. The password is never a CLI argument and is
+not added to the PowerShell process environment. It is inserted only into a
+dedicated child `ProcessStartInfo` environment, removed from that object after
+launch and again during cleanup, and the unmanaged BSTR buffers are zeroed.
+Private keys and encrypted contents are never printed.
+
+Initialization refuses a target inside the worktree or any pre-existing target
+directory. It creates the complete set in a temporary sibling directory,
+validates decryption, count, uniqueness, store ID, ordered-address digest,
+checkpoint, empty journal and manifest, and only then renames the directory to
+its final location. A failure removes only that validated temporary directory.
+
+The final directory contains:
+
+- `pilot-5.operator-wallets.enc.json` — AES-256-GCM/scrypt wallet store;
+- `pilot-5.operator-checkpoint.json` — version 2 checkpoint with five ordered
+  public addresses and the shared binding;
+- `pilot-5.operator-journal.json` — version 2 empty transaction journal with
+  the same binding;
+- `pilot-5.operator-set-manifest.json` — non-secret project, purpose, chain,
+  deployment, wallet count, store ID, creation time, ordered addresses and file
+  mapping.
+
+The pilot set is testnet-only and is not a production wallet set. A future
+100-wallet set must use another directory, another store ID, another manifest,
+and a separately reviewed initialization stage.
+
 Run from `packages/contracts`:
 
 ```text
@@ -30,20 +80,22 @@ credential-free HTTPS URL:
 BASE_SEPOLIA_OPERATOR_RPC_URL
 OPERATOR_WALLET_STORE_PATH
 OPERATOR_WALLET_STORE_PASSWORD
+OPERATOR_SET_MANIFEST_PATH
 OPERATOR_CHECKPOINT_PATH
 OPERATOR_TRANSACTION_JOURNAL_PATH
 OPERATOR_REQUIRED_CONFIRMATIONS
 ```
 
-All three paths must be absolute, outside the repository, non-symlink paths
+All four paths must be absolute, outside the repository, non-symlink paths
 with the suffixes enforced by the existing durable-state code. The wallet
 password is accepted only from the current process environment. Set it
 transiently, never in `.env`, GitHub, Vercel, shell history, command arguments,
 logs, screenshots, or a report, and clear it after the command. The default
 confirmation requirement is 3 blocks.
 
-The operator never calls `openOrCreate`: a missing encrypted store, checkpoint,
-or journal is a blocker. It does not automatically generate any wallet.
+The read-only operator never calls `openOrCreate`: a missing encrypted store,
+manifest, checkpoint, or journal is a blocker. Only the separately confirmed
+manual initializer may create the five-wallet set.
 
 ## Preflight review
 
@@ -53,8 +105,8 @@ Do not continue unless the report confirms all of the following:
 - bytecode at dUSDC `0xA7FA084b34c888061757d4b5FBb08a7B53fee786`;
 - bytecode at POP33 `0x140DA1b29F0B00b003Cabe86AE1a473d6745f56F`;
 - exact token linkage and fixed Demo V1 parameters;
-- encrypted store integrity, unique ordered addresses, requested range, and
-  matching checkpoint/journal project identity;
+- encrypted store integrity, unique ordered addresses, requested range, and a
+  matching manifest/checkpoint/journal project identity and store ID;
 - no prepared, ready-to-broadcast, broadcast, pending, ambiguous, or
   manual-review operation;
 - required confirmation depth for confirmed journal transactions;
@@ -80,10 +132,23 @@ not change because of the command.
 
 ## Backup and recovery
 
-Back up the encrypted wallet store, checkpoint, and journal outside the
-repository. Back up the wallet-store password separately. Test decryption and
-file integrity on an offline copy before relying on a backup. Never copy
-decrypted key material into a report.
+Back up the entire four-file directory as one unit outside the repository. Back
+up the wallet-store password separately. Loss of the encrypted store or its
+password means loss of access to the five wallets; the store alone is not
+enough. Never copy decrypted key material into a report.
+
+Create the backup only with a locally reviewed encryption tool or an encrypted
+volume. For example, use the 7-Zip GUI with AES-256, `Encrypt file names`
+enabled, and a separately entered backup password; do not place a password in a
+command argument. Do not upload the directory or archive to GitHub or any cloud
+service automatically.
+
+To verify a backup, restore its four files into a separate external test
+directory, point the read-only operator variables at that copy, enter the
+wallet-store password only through a protected temporary PowerShell process,
+and run `preflight`. Integrity is confirmed only when AES-GCM decryption,
+manifest, store ID, ordered-address digest, checkpoint and empty/reconciled
+journal all validate. This check prints no private keys.
 
 On restart, reuse the same files. If the journal contains `prepared`,
 `ready_to_broadcast`, `broadcast`, `pending`, or `requires_manual_review`, stop
@@ -94,8 +159,7 @@ this runbook.
 
 ## Current checkpoint
 
-The public contract-only preflight succeeds, but this workspace has no
-configured external wallet store, checkpoint, or journal. Therefore the
-operator currently reports `NOT READY`. Provisioning and reviewing those
-artifacts is the next read-only milestone; it is not permission to fund or
-operate wallets.
+The secure initializer is implemented and tested, but Piotr has not manually
+run it. Therefore no real pilot store, manifest, checkpoint or journal exists
+yet and the operator still reports `NOT READY`. Manual initialization is not
+permission to fund or operate the wallets.

@@ -21,6 +21,13 @@ import {
 
 import { getAddress, isAddress } from "ethers";
 
+import {
+  assertMatchingOperatorSetBindings,
+  validateOperatorSetBinding,
+  walletOrderDigest,
+  type OperatorSetBinding,
+} from "./operator-set-identity.js";
+
 export type WalletStage =
   | "discovered"
   | "funded"
@@ -54,7 +61,8 @@ export interface WalletCheckpoint {
 }
 
 export interface OperatorCheckpoint {
-  schemaVersion: 1;
+  schemaVersion: 1 | 2;
+  setBinding?: OperatorSetBinding;
   revision: number;
   chainId: string;
   tokenAddress: string;
@@ -123,6 +131,7 @@ const CHECKPOINT_KEYS = [
   "operatorTransactions",
   "wallets",
 ] as const;
+const BOUND_CHECKPOINT_KEYS = [...CHECKPOINT_KEYS, "setBinding"] as const;
 const WALLET_KEYS = [
   "index",
   "address",
@@ -295,8 +304,20 @@ function assertTransactionSchema(
 
 export function assertClosedCheckpointSchema(value: unknown): asserts value is OperatorCheckpoint {
   assertCheckpointContainsNoSecretFields(value);
-  const checkpoint = assertExactKeys(value, CHECKPOINT_KEYS, "checkpoint");
-  if (checkpoint.schemaVersion !== 1) throw new Error("checkpoint.schemaVersion must equal 1.");
+  const candidate = requireRecord(value, "checkpoint");
+  for (const key of Object.keys(candidate)) {
+    if (!BOUND_CHECKPOINT_KEYS.includes(key as (typeof BOUND_CHECKPOINT_KEYS)[number])) {
+      throw new Error(`checkpoint.${key} is not allowed.`);
+    }
+  }
+  if (candidate.schemaVersion !== 1 && candidate.schemaVersion !== 2) {
+    throw new Error("checkpoint.schemaVersion must equal 1 or 2.");
+  }
+  const checkpoint = assertExactKeys(
+    value,
+    candidate.schemaVersion === 2 ? BOUND_CHECKPOINT_KEYS : CHECKPOINT_KEYS,
+    "checkpoint",
+  );
   requireSafeInteger(checkpoint.revision, "checkpoint.revision");
   requireDecimal(checkpoint.chainId, "checkpoint.chainId", 1n);
   const tokenAddress = requireAddress(checkpoint.tokenAddress, "checkpoint.tokenAddress");
@@ -368,6 +389,23 @@ export function assertClosedCheckpointSchema(value: unknown): asserts value is O
       ),
     );
   });
+
+  if (checkpoint.schemaVersion === 2) {
+    const binding = validateOperatorSetBinding(checkpoint.setBinding);
+    if (binding.chainId !== checkpoint.chainId) throw new Error("Checkpoint binding chain ID mismatch.");
+    if (binding.contractAddress !== contractAddress || binding.tokenAddress !== tokenAddress) {
+      throw new Error("Checkpoint binding deployment identity mismatch.");
+    }
+    if (binding.walletCount !== checkpoint.wallets.length) {
+      throw new Error("Checkpoint binding wallet count mismatch.");
+    }
+    if (binding.walletOrderDigest !== walletOrderDigest(
+      checkpoint.wallets.map((wallet) => (wallet as WalletCheckpoint).address),
+    )) {
+      throw new Error("Checkpoint binding wallet order mismatch.");
+    }
+    assertMatchingOperatorSetBindings(binding, checkpoint.setBinding, "Checkpoint");
+  }
 }
 
 function cloneCheckpoint(checkpoint: OperatorCheckpoint): OperatorCheckpoint {
@@ -455,7 +493,12 @@ export class JsonCheckpointStore implements CheckpointStore {
   async load(): Promise<OperatorCheckpoint | undefined> {
     const safePath = await assertSafeCheckpointPath(this.filePath);
     if (!(await requireRegularFileIfPresent(safePath))) return undefined;
-    const parsed: unknown = JSON.parse(await readFile(safePath, "utf8"));
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(await readFile(safePath, "utf8"));
+    } catch {
+      throw new Error("Checkpoint file is incomplete or invalid JSON.");
+    }
     assertClosedCheckpointSchema(parsed);
     return parsed;
   }

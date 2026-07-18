@@ -33,6 +33,82 @@ documentation.
   current overview of implementation, gaps, and risks.
 - Do not guess. Mark unclear facts as requiring later reconstruction.
 
+## 2026-07-18 - Secure five-wallet pilot-set initializer
+
+### At a glance
+
+A manually gated initializer now prepares the four external artifacts required
+for a five-wallet Base Sepolia read-only pilot: an encrypted wallet store, a
+non-secret set manifest, a bound checkpoint, and an empty bound transaction
+journal. Only disposable test fixtures were initialized. Piotr has not run the
+real launcher, no target pilot wallet exists yet, and no wallet was funded or
+used for a transaction.
+
+### Completed
+
+- Reused the existing scrypt and AES-256-GCM implementation with its random
+  salt, random IV, authenticated integrity, external path validation, private
+  file writes, and no-overwrite behavior; no second cryptographic format was
+  introduced.
+- Added a versioned operator-set binding for project `POP33`, purpose
+  `base-sepolia-operator-pilot`, chain `84532`, wallet count 5, the recorded
+  contract/token addresses, the encrypted store UUID, and a digest of the
+  ordered public addresses.
+- Added backwards-compatible version 2 checkpoint and journal formats. The
+  existing local version 1 state remains valid, while a public pilot hard-stops
+  unless manifest, checkpoint, journal, encrypted store ID, and address order
+  all match.
+- Added atomic directory initialization: exactly five wallets and all metadata
+  are created in a temporary external sibling directory, fully reopened and
+  validated, and only then renamed to the final target. Existing targets and
+  paths inside the worktree are refused.
+- Added one reviewed PowerShell launcher with an exact confirmation phrase,
+  two hidden `SecureString` prompts, case-sensitive password comparison,
+  a child-specific `ProcessStartInfo` environment, BSTR zeroing, and guaranteed
+  cleanup of the temporary child variables. Neither password nor keys are CLI
+  arguments or output, and the password is never added to the PowerShell
+  process environment.
+- Added backup and recovery guidance that keeps all four files together,
+  stores the password separately, avoids automatic cloud/GitHub upload, and
+  validates a restored encrypted copy without displaying key material.
+
+### Verification boundary
+
+- Initializer tests created only temporary five-wallet fixtures and confirmed
+  uniqueness, correct decryption, wrong-password rejection, no overwrite,
+  external paths, exact identity, store-ID binding, address order, corrupted
+  state rejection, repeatable opening, log redaction, first-2/all-5 read-only
+  dry-runs, and continued absence of every write transport.
+- The PowerShell launcher was parsed and inspected but was not interactively
+  executed. Codex did not request, receive, store, or display Piotr's password.
+- TypeScript, Hardhat compilation, all 196 contract/operator tests, the local
+  100-position smoke, the 617-operation local operator lifecycle, and the root
+  ESLint check passed. The 14 focused initializer tests also passed after the
+  final launcher review.
+- `npm audit --omit=dev` found zero production dependency vulnerabilities in
+  `packages/contracts`. The unchanged root dependency graph still reports 38
+  known findings (27 moderate and 11 high); dependency remediation was outside
+  this initializer milestone and no automatic or breaking audit fix was run.
+- No real pilot directory, production wallet, 100-wallet store, funding,
+  faucet, approval, join, withdrawal, draw, claim, deployment, Vercel change,
+  Production change, or Farcaster integration occurred.
+
+### Limitations and next step
+
+Piotr must manually run the reviewed PowerShell launcher, choose and retain the
+password outside the repository, make a separate encrypted backup of the full
+four-file directory, and then run only read-only preflight/dry-run for the first
+two and all five wallets. Funding and every write remain separate, unauthorized
+future stages. A 100-wallet set must never reuse this pilot store ID or folder.
+
+### Git
+
+- Branch: `codex/pop33-recovery`
+- Starting checkpoint: `63ae26964e21d689253e908da4e5c64146f0ce66`
+- Starting message: `feat(operator): add Base Sepolia read-only dry run`
+- The milestone commit hash did not exist when this entry was written and is
+  intentionally not guessed.
+
 ## 2026-07-18 - Base Sepolia multi-wallet read-only operator
 
 ### At a glance

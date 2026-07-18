@@ -17,7 +17,8 @@
     "smoke:demo-v1": "hardhat run scripts/smoke-demo-v1.ts",
     "operator:local:lifecycle": "hardhat run scripts/operator-local-lifecycle.ts",
     "smoke:base-sepolia": "node scripts/base-sepolia-smoke-cli.mjs",
-    "operator:base-sepolia:read-only": "node scripts/base-sepolia-read-only-operator-cli.mjs"
+    "operator:base-sepolia:read-only": "node scripts/base-sepolia-read-only-operator-cli.mjs",
+    "operator:base-sepolia:init-pilot-5": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/initialize-base-sepolia-pilot-5.ps1"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-ethers": "4.0.14",

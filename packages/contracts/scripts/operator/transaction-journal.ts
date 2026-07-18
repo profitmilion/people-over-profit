@@ -10,6 +10,10 @@ import {
   withExclusiveFileLock,
   type AtomicWriteHooks,
 } from "./durable-file.js";
+import {
+  validateOperatorSetBinding,
+  type OperatorSetBinding,
+} from "./operator-set-identity.js";
 
 const JOURNAL_SUFFIX = ".operator-journal.json";
 const FORMAT_VERSION = 1;
@@ -70,7 +74,8 @@ export interface JournalOperation {
 }
 
 export interface TransactionJournalData {
-  formatVersion: 1;
+  formatVersion: 1 | 2;
+  setBinding?: OperatorSetBinding;
   journalId: string;
   revision: number;
   chainId: string;
@@ -346,11 +351,18 @@ function validateOperation(value: unknown, identity: JournalIdentity): JournalOp
 }
 
 export function validateJournal(value: unknown, identity: JournalIdentity): TransactionJournalData {
-  const journal = exactObject(value, [
+  const candidate = value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+  if (candidate.formatVersion !== 1 && candidate.formatVersion !== 2) {
+    throw new Error("Unsupported transaction journal format version.");
+  }
+  const keys = [
     "formatVersion", "journalId", "revision", "chainId", "contractAddress", "tokenAddress",
     "createdAt", "updatedAt", "operations",
-  ], "journal");
-  if (journal.formatVersion !== FORMAT_VERSION) throw new Error("Unsupported transaction journal format version.");
+  ];
+  if (candidate.formatVersion === 2) keys.push("setBinding");
+  const journal = exactObject(value, keys, "journal");
   if (typeof journal.journalId !== "string" || !UUID.test(journal.journalId)) throw new Error("Journal ID is invalid.");
   if (!Number.isSafeInteger(journal.revision) || (journal.revision as number) < 0) throw new Error("Journal revision is invalid.");
   const chainId = requireDecimal(journal.chainId, "journal.chainId") as string;
@@ -365,8 +377,8 @@ export function validateJournal(value: unknown, identity: JournalIdentity): Tran
   const operations = journal.operations.map((operation) => validateOperation(operation, identity));
   const ids = new Set(operations.map((operation) => operation.operationId));
   if (ids.size !== operations.length) throw new Error("Transaction journal contains duplicate operations.");
-  return {
-    formatVersion: FORMAT_VERSION,
+  const result: TransactionJournalData = {
+    formatVersion: journal.formatVersion as 1 | 2,
     journalId: journal.journalId as string,
     revision: journal.revision as number,
     chainId,
@@ -376,6 +388,18 @@ export function validateJournal(value: unknown, identity: JournalIdentity): Tran
     updatedAt,
     operations,
   };
+  if (journal.formatVersion === 2) {
+    const binding = validateOperatorSetBinding(journal.setBinding);
+    if (
+      binding.chainId !== chainId ||
+      binding.contractAddress !== contractAddress ||
+      binding.tokenAddress !== tokenAddress
+    ) {
+      throw new Error("Transaction journal binding identity mismatch.");
+    }
+    result.setBinding = binding;
+  }
+  return result;
 }
 
 abstract class BaseTransactionJournal implements TransactionJournal {
@@ -443,10 +467,10 @@ abstract class BaseTransactionJournal implements TransactionJournal {
   }
 }
 
-function newJournal(identity: JournalIdentity): TransactionJournalData {
+function newJournal(identity: JournalIdentity, setBinding?: OperatorSetBinding): TransactionJournalData {
   const now = isoNow();
-  return {
-    formatVersion: FORMAT_VERSION,
+  const journal: TransactionJournalData = {
+    formatVersion: setBinding ? 2 : FORMAT_VERSION,
     journalId: randomUUID(),
     revision: 0,
     chainId: identity.chainId.toString(),
@@ -456,6 +480,8 @@ function newJournal(identity: JournalIdentity): TransactionJournalData {
     updatedAt: now,
     operations: [],
   };
+  if (setBinding) journal.setBinding = validateOperatorSetBinding(setBinding);
+  return journal;
 }
 
 export class MemoryTransactionJournal extends BaseTransactionJournal {
@@ -488,6 +514,23 @@ export class JsonTransactionJournal extends BaseTransactionJournal {
       return created;
     });
     return new JsonTransactionJournal(filePath, data, hooks);
+  }
+
+  static async createBound(
+    filePathValue: string,
+    identity: JournalIdentity,
+    setBinding: OperatorSetBinding,
+  ): Promise<JsonTransactionJournal> {
+    const filePath = await assertSafeExternalFilePath(filePathValue, JOURNAL_SUFFIX);
+    const data = await withExclusiveFileLock(filePath, async () => {
+      if (await pathIsRegularFile(filePath)) {
+        throw new Error("Transaction journal already exists; initialization will not overwrite it.");
+      }
+      const created = newJournal(identity, setBinding);
+      await atomicWritePrivateFile(filePath, `${JSON.stringify(created, null, 2)}\n`);
+      return created;
+    });
+    return new JsonTransactionJournal(filePath, data);
   }
 
   protected async persist(): Promise<void> {

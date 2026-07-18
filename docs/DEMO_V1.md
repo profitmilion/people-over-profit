@@ -130,12 +130,13 @@ Before wallet planning it verifies bytecode at both recorded addresses,
 `paymentToken()` linkage, token name/symbol/decimals, `DRIP_AMOUNT`,
 `DRIP_COOLDOWN`, `ENTRY_PRICE`, pool capacity, active-position limit, round
 count, and draw interval. It then reads an already-existing encrypted store,
-checkpoint, and journal without taking an exclusive write lock or creating a
-missing file. The store's project purpose is bound by requiring its complete
-ordered address list to match a checkpoint whose chain, token, and contract
-identity also matches the journal. A store from another project, a reordered
-wallet set, a pending or ambiguous journal operation, or insufficient
-confirmation depth is a blocker.
+manifest, checkpoint, and journal without taking an exclusive write lock or
+creating a missing file. The store's project purpose is bound by one store ID
+and ordered-address digest shared by the manifest, version 2 checkpoint, and
+version 2 journal. Another project, network, deployment, store ID, wallet
+order, pending or ambiguous journal operation, or insufficient confirmation
+depth is a blocker. Version 1 local state remains supported for the existing
+local lifecycle, but it is not accepted as a bound public pilot set.
 
 The terminal report abbreviates wallet addresses. The JSON output is a local
 technical report and contains public full addresses but no password, private
@@ -148,10 +149,13 @@ occurred. Historical safety budgets are labelled separately and use a visible
 2x reserve multiplier; they are not guarantees.
 
 The public identity preflight was run against Base Sepolia and confirmed pool
-1 as Open at 0/100. The external store, checkpoint, and journal were not
-configured, so wallet-backed 2-, 5-, and 100-wallet dry-runs remain blocked.
-No wallet or state file was created, no password or key was requested, and no
-transaction was signed or sent. See
+1 as Open at 0/100. A secure manual initializer is now available for exactly
+five new pilot wallets. It reuses the existing scrypt/AES-256-GCM store,
+requires two hidden PowerShell password entries and a fixed confirmation, and
+atomically publishes the four-file set only after complete validation. It has
+been exercised only in temporary automated fixtures: the real pilot store has
+not been created, no wallet has been funded, and no transaction was signed or
+sent. The future 100-wallet set is a separate milestone. See
 `docs/RUNBOOK_BASE_SEPOLIA_READ_ONLY_OPERATOR.md`.
 
 ### Separate reversible Base Sepolia smoke harness

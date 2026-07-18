@@ -85,7 +85,7 @@ export interface PublicReadOnlyRuntime {
 }
 
 export interface ArtifactCheck {
-  name: "wallet-store" | "checkpoint" | "journal" | "project-identity" | "recovery";
+  name: "wallet-store" | "manifest" | "checkpoint" | "journal" | "project-identity" | "recovery";
   ok: boolean;
   detail: string;
 }

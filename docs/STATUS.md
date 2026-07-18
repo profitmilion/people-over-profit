@@ -89,11 +89,23 @@ balances, allowance, cooldown, position, claimable amount, journal states and
 gas requirements, and supports bounded ranges from 1 to 100 wallets.
 
 The live public preflight confirmed the Base Sepolia runtime and pool 1 at
-0/100, but the required external wallet store, checkpoint, and journal are not
-configured in this workspace. The tool therefore stopped with explicit
-blockers and is not yet ready for a 2–5 wallet pilot or a 100-wallet plan. It did
-not create wallets or state files, load a private key, sign or send a
-transaction, fund ETH, or execute any lifecycle action.
+0/100, but the required external wallet store, manifest, checkpoint, and
+journal are not configured in this workspace. The tool therefore stopped with
+explicit blockers and is not yet ready for a 2–5 wallet pilot or a 100-wallet
+plan. It did not create wallets or state files, load a private key, sign or
+send a transaction, fund ETH, or execute any lifecycle action.
+
+A separate manual PowerShell initializer is now prepared for one five-wallet
+Base Sepolia pilot set. It reuses the existing AES-256-GCM/scrypt store and
+creates a non-secret manifest, version 2 checkpoint, and version 2 empty journal
+bound to one store ID and ordered-address digest. It requires an exact textual
+confirmation and two matching hidden `SecureString` password entries, refuses
+the worktree and existing targets, and validates the complete temporary set
+before its final directory rename. Only temporary automated fixtures have been
+created: Piotr has not run the real initializer, the pilot wallets do not exist
+yet, no wallet was funded, and no transaction was executed. This five-wallet
+testnet set is not production infrastructure; a 100-wallet store remains a
+separate future stage.
 
 Production remains separate and does not host the current Demo V1 checkpoint.
 Farcaster is not implemented and is not required by this standalone Web3
@@ -208,6 +220,10 @@ runtime.
   wallet-state inspection; live gas estimates where the current state permits;
   and explicit `NOT CURRENTLY ESTIMABLE` results otherwise. Its lower-level
   runtime exposes no funding, signing, or broadcast method.
+- A separately confirmed `operator:base-sepolia:init-pilot-5` PowerShell
+  launcher that creates exactly five external encrypted test wallets plus a
+  bound manifest, checkpoint, and empty journal; it never accepts the password
+  as a CLI argument and never prints keys or encrypted contents.
 - A separate, guarded Base Sepolia single-wallet smoke harness with a default
   read-only preflight, dedicated runtime-only key namespace, fixed documented
   addresses, exact approval, reversible join/withdraw scope, buffered gas
@@ -257,10 +273,10 @@ runtime.
 - manual public draw and claim verification through the Vercel Preview UI;
 - a complete public UI lifecycle with 100 positions, pool locking, ten draws,
   and ten claims;
-- provisioning and independently backing up a suitable external encrypted
-  operator wallet store plus matching Base Sepolia checkpoint and transaction
-  journal; until all three validate against the same wallet order and project
-  identity, multi-wallet dry-run readiness remains blocked;
+- Piotr's manual creation and independent encrypted backup of the prepared
+  five-wallet pilot store, manifest, checkpoint, and journal; until all four
+  validate against one store ID, wallet order and project identity,
+  multi-wallet dry-run readiness remains blocked;
 - successful public read-only dry-runs for the first 2 and 5 stored wallets and
   the aggregate 100-wallet range; no such wallet-backed run occurred in this
   milestone because the external artifacts were absent;

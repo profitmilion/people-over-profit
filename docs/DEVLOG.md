@@ -33,6 +33,63 @@ documentation.
   current overview of implementation, gaps, and risks.
 - Do not guess. Mark unclear facts as requiring later reconstruction.
 
+## 2026-07-18 - Bounded public-RPC retries for the read-only pilot
+
+### At a glance
+
+Piotr's manual Base Sepolia preflight succeeded for the first two wallets in
+the encrypted five-wallet pilot set. All artifacts and deployment identity
+checks passed, both wallets had zero balances and nonces, and no transaction
+was signed or broadcast. The next five-wallet status read stopped on public
+RPC error `-32016: over rate limit` while reading the pending nonce.
+
+### Completed
+
+- Added one reusable retry boundary around every individual public RPC read and
+  read-only gas estimate. It recognizes explicit JSON-RPC, message, and HTTP
+  rate-limit evidence but does not retry contract, password, artifact, or other
+  non-transient failures.
+- Bounded execution to five attempts with 500 ms exponential backoff, a
+  4-second delay cap, 20% jitter, sanitized attempt logging, and a clear hard
+  stop after exhaustion.
+- Replaced concurrent identity, round, wallet, and nonce reads with sequential
+  operations and added 200 ms pacing between wallets in the public entrypoint.
+- Preserved the technical read-only boundary: no signer, private-key runtime,
+  transaction transport, lifecycle execution, funding, or artifact mutation
+  was added.
+
+### Verification boundary
+
+- Automated tests cover immediate success, one and several transient failures,
+  exhausted attempts, immediate non-transient failure, wallet ordering and
+  concurrency, secret redaction, absence of write primitives, and byte-for-byte
+  preservation of pilot fixtures.
+- TypeScript, Hardhat compilation, all 205 contract/operator tests, the local
+  100-position smoke, the 617-operation local operator lifecycle, and the root
+  ESLint check passed. The focused retry/operator/pilot group passed 38 tests.
+- `npm audit --omit=dev` found zero production dependency vulnerabilities in
+  `packages/contracts`. The unchanged root dependency graph still reports 38
+  known findings (27 moderate and 11 high); no audit fix was run in this task.
+- Codex did not rerun the real password-protected pilot. The five-wallet status
+  and two- and five-wallet dry-runs remain manual steps for Piotr.
+- No Base Sepolia write, funding, faucet, approval, join, withdrawal, draw,
+  claim, deployment, frontend, Vercel, Production, or Farcaster change occurred.
+
+### Limitations and next step
+
+Piotr must manually rerun status for all five wallets, followed by dry-run for
+the first two and all five, while comparing SHA-256 for all four external
+artifacts before and after. A successful read-only report is not authorization
+for funding or any transaction.
+
+### Git
+
+- Branch: `codex/pop33-recovery`
+- Starting checkpoint: `5fc81e97a3849e11fe4c34c9848e977daf6c67e7`
+- Starting message: `feat(operator): add secure pilot wallet initialization`
+- The milestone commit hash did not exist when this entry was written and is
+  intentionally not guessed.
+
 ## 2026-07-18 - Secure five-wallet pilot-set initializer
 
 ### At a glance

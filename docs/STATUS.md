@@ -88,24 +88,29 @@ wallet store, checkpoint, and transaction journal, reports both wallet nonces,
 balances, allowance, cooldown, position, claimable amount, journal states and
 gas requirements, and supports bounded ranges from 1 to 100 wallets.
 
-The live public preflight confirmed the Base Sepolia runtime and pool 1 at
-0/100, but the required external wallet store, manifest, checkpoint, and
-journal are not configured in this workspace. The tool therefore stopped with
-explicit blockers and is not yet ready for a 2–5 wallet pilot or a 100-wallet
-plan. It did not create wallets or state files, load a private key, sign or
-send a transaction, fund ETH, or execute any lifecycle action.
+The earlier contract-only public preflight confirmed the Base Sepolia runtime
+and pool 1 at 0/100. Piotr has since manually created the external five-wallet
+pilot store, manifest, checkpoint, and empty journal. A real public read-only
+preflight for the first two stored wallets completed with all artifact checks
+`OK`, chain `84532`, range `2/2`, zero ETH and dUSDC, zero allowances and
+nonces, no active positions, and no journal operations. It did not load a key
+into a signer, sign or send a transaction, fund ETH, or execute a lifecycle
+action.
 
-A separate manual PowerShell initializer is now prepared for one five-wallet
-Base Sepolia pilot set. It reuses the existing AES-256-GCM/scrypt store and
-creates a non-secret manifest, version 2 checkpoint, and version 2 empty journal
-bound to one store ID and ordered-address digest. It requires an exact textual
-confirmation and two matching hidden `SecureString` password entries, refuses
-the worktree and existing targets, and validates the complete temporary set
-before its final directory rename. Only temporary automated fixtures have been
-created: Piotr has not run the real initializer, the pilot wallets do not exist
-yet, no wallet was funded, and no transaction was executed. This five-wallet
-testnet set is not production infrastructure; a 100-wallet store remains a
-separate future stage.
+The following five-wallet `status` run reached the public RPC rate limit at
+`eth_getTransactionCount(address, "pending")` and stopped without hiding the
+error. All public RPC reads and read-only estimates now share a five-attempt
+bounded retry with 500 ms exponential backoff capped at 4 seconds, 20% jitter,
+sanitized attempt logs, sequential reads, and 200 ms pacing between wallets.
+Non-rate-limit errors are not retried. The two- and five-wallet dry-runs still
+await Piotr's manual rerun.
+
+The five-wallet Base Sepolia pilot set was created with the separate manual
+PowerShell initializer. It uses the existing AES-256-GCM/scrypt store and a
+non-secret manifest, version 2 checkpoint, and version 2 empty journal bound to
+one store ID and ordered-address digest. No pilot wallet has been funded and no
+transaction has been executed. This five-wallet testnet set is not production
+infrastructure; a 100-wallet store remains a separate future stage.
 
 Production remains separate and does not host the current Demo V1 checkpoint.
 Farcaster is not implemented and is not required by this standalone Web3
@@ -273,13 +278,12 @@ runtime.
 - manual public draw and claim verification through the Vercel Preview UI;
 - a complete public UI lifecycle with 100 positions, pool locking, ten draws,
   and ten claims;
-- Piotr's manual creation and independent encrypted backup of the prepared
-  five-wallet pilot store, manifest, checkpoint, and journal; until all four
-  validate against one store ID, wallet order and project identity,
-  multi-wallet dry-run readiness remains blocked;
-- successful public read-only dry-runs for the first 2 and 5 stored wallets and
-  the aggregate 100-wallet range; no such wallet-backed run occurred in this
-  milestone because the external artifacts were absent;
+- confirmation of an independent encrypted backup of the manually created
+  five-wallet pilot store, manifest, checkpoint, and journal;
+- successful public read-only `status` for all five wallets and dry-runs for
+  the first 2 and all 5 stored wallets after the bounded-rate-limit update;
+- a later separately reviewed 100-wallet store and aggregate dry-run; the
+  five-wallet pilot store must not be reused for that stage;
 - promotion or release of the current Demo V1 through Vercel Production; the
   confirmed Preview must remain separate until a later explicit decision;
 - selection of an external test-token address remains open only for the

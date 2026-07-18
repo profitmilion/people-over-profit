@@ -1,6 +1,7 @@
 import { formatEther, getAddress, ZeroAddress } from "ethers";
 
 import { DEMO_V1_PARAMETERS } from "../lib/demo-v1-config.js";
+import { ReadOnlyRpcRateLimitExhaustedError } from "./read-only-rpc-retry.js";
 
 export const PUBLIC_OPERATOR_CHAIN_ID = 84_532n;
 export const PUBLIC_OPERATOR_TOKEN_ADDRESS = getAddress(
@@ -256,7 +257,8 @@ async function estimate(
       safetyMultiplier: "2x",
       reason: "Live eth_estimateGas completed without signing or broadcasting.",
     };
-  } catch {
+  } catch (error) {
+    if (error instanceof ReadOnlyRpcRateLimitExhaustedError) throw error;
     return {
       action: input.action,
       wallet: input.from,
@@ -270,10 +272,17 @@ async function estimate(
   }
 }
 
-async function mapBatched<T, R>(items: readonly T[], worker: (item: T) => Promise<R>): Promise<R[]> {
+async function mapSequential<T, R>(
+  items: readonly T[],
+  worker: (item: T) => Promise<R>,
+  pacingMs: number,
+): Promise<R[]> {
   const output: R[] = [];
-  for (let offset = 0; offset < items.length; offset += 5) {
-    output.push(...await Promise.all(items.slice(offset, offset + 5).map(worker)));
+  for (let index = 0; index < items.length; index += 1) {
+    if (index > 0 && pacingMs > 0) {
+      await new Promise<void>((resolve) => setTimeout(resolve, pacingMs));
+    }
+    output.push(await worker(items[index]));
   }
   return output;
 }
@@ -286,6 +295,7 @@ export async function runBaseSepoliaReadOnlyOperator(input: {
   rpcHost?: string;
   artifacts: ArtifactAudit;
   now?: Date;
+  walletPacingMs?: number;
 }): Promise<PublicOperatorReport> {
   const walletCount = assertPublicOperatorWalletCount(input.walletCount);
   const startIndex = input.startIndex ?? 0;
@@ -300,17 +310,18 @@ export async function runBaseSepoliaReadOnlyOperator(input: {
     throw new Error("Selected operator wallet range contains duplicate addresses.");
   }
 
-  const [chainId, latestBlock, latestTimestamp, tokenCode, contractCode, feePerGas, identity, openPoolIds] =
-    await Promise.all([
-      input.runtime.getChainId(),
-      input.runtime.getLatestBlockNumber(),
-      input.runtime.getLatestBlockTimestamp(),
-      input.runtime.getCode(PUBLIC_OPERATOR_TOKEN_ADDRESS),
-      input.runtime.getCode(PUBLIC_OPERATOR_CONTRACT_ADDRESS),
-      input.runtime.getFeePerGas(),
-      input.runtime.getContractIdentity(),
-      input.runtime.getOpenPoolIds(),
-    ]);
+  const walletPacingMs = input.walletPacingMs ?? 0;
+  if (!Number.isSafeInteger(walletPacingMs) || walletPacingMs < 0 || walletPacingMs > 5_000) {
+    throw new Error("Wallet pacing must be an integer between 0 and 5000 milliseconds.");
+  }
+  const chainId = await input.runtime.getChainId();
+  const latestBlock = await input.runtime.getLatestBlockNumber();
+  const latestTimestamp = await input.runtime.getLatestBlockTimestamp();
+  const tokenCode = await input.runtime.getCode(PUBLIC_OPERATOR_TOKEN_ADDRESS);
+  const contractCode = await input.runtime.getCode(PUBLIC_OPERATOR_CONTRACT_ADDRESS);
+  const feePerGas = await input.runtime.getFeePerGas();
+  const identity = await input.runtime.getContractIdentity();
+  const openPoolIds = await input.runtime.getOpenPoolIds();
   requireEqual(chainId, PUBLIC_OPERATOR_CHAIN_ID, "Base Sepolia chain ID");
   requireCode(tokenCode, "dUSDC");
   requireCode(contractCode, "POP33");
@@ -332,11 +343,13 @@ export async function runBaseSepoliaReadOnlyOperator(input: {
   if (feePerGas <= 0n) throw new Error("Provider returned no usable positive fee per gas.");
 
   const selectedPoolId = openPoolIds[0] ?? identity.poolCount;
-  const [pool, rounds] = await Promise.all([
-    input.runtime.getPool(selectedPoolId),
-    input.runtime.getRounds(selectedPoolId, identity.roundCount),
-  ]);
-  const snapshots = await mapBatched(addresses, (address) => input.runtime.getWallet(address, selectedPoolId));
+  const pool = await input.runtime.getPool(selectedPoolId);
+  const rounds = await input.runtime.getRounds(selectedPoolId, identity.roundCount);
+  const snapshots = await mapSequential(
+    addresses,
+    (address) => input.runtime.getWallet(address, selectedPoolId),
+    walletPacingMs,
+  );
   const gasPlan: GasEstimateReport[] = [];
   const wallets: WalletDryRunReport[] = [];
   const perWalletSafetyGas = GAS_SAFETY.faucet + GAS_SAFETY.approve + GAS_SAFETY.join + GAS_SAFETY.withdraw;

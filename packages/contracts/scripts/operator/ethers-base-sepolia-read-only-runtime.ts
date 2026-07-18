@@ -11,6 +11,10 @@ import {
   type PublicRoundSnapshot,
   type PublicWalletSnapshot,
 } from "./base-sepolia-read-only-operator.js";
+import {
+  withReadOnlyRpcRetry,
+  type ReadOnlyRpcRetryOptions,
+} from "./read-only-rpc-retry.js";
 
 const TOKEN_ABI = [
   "function name() view returns (string)",
@@ -52,48 +56,63 @@ export class EthersBaseSepoliaReadOnlyRuntime implements PublicReadOnlyRuntime {
   private readonly provider: JsonRpcProvider;
   private readonly token: Contract;
   private readonly pop33: Contract;
+  private readonly retryOptions: ReadOnlyRpcRetryOptions;
 
-  constructor(rpcUrl: string) {
+  constructor(rpcUrl: string, retryOptions: ReadOnlyRpcRetryOptions = {}) {
     this.provider = new JsonRpcProvider(rpcUrl);
     this.token = new Contract(PUBLIC_OPERATOR_TOKEN_ADDRESS, TOKEN_ABI, this.provider);
     this.pop33 = new Contract(PUBLIC_OPERATOR_CONTRACT_ADDRESS, POP33_ABI, this.provider);
+    this.retryOptions = retryOptions;
+  }
+
+  private read<T>(label: string, operation: () => Promise<T>): Promise<T> {
+    return withReadOnlyRpcRetry(label, operation, this.retryOptions);
   }
 
   async getChainId(): Promise<bigint> {
-    return (await this.provider.getNetwork()).chainId;
+    return (await this.read("eth_chainId", () => this.provider.getNetwork())).chainId;
   }
 
   getLatestBlockNumber(): Promise<number> {
-    return this.provider.getBlockNumber();
+    return this.read("eth_blockNumber", () => this.provider.getBlockNumber());
   }
 
   async getLatestBlockTimestamp(): Promise<bigint> {
-    const block = await this.provider.getBlock("latest");
+    const block = await this.read("eth_getBlockByNumber(latest)", () => this.provider.getBlock("latest"));
     if (!block) throw new Error("Provider did not return the latest Base Sepolia block.");
     return BigInt(block.timestamp);
   }
 
   getCode(address: string): Promise<string> {
-    return this.provider.getCode(address);
+    return this.read("eth_getCode", () => this.provider.getCode(address));
   }
 
   async getFeePerGas(): Promise<bigint> {
-    const fees = await this.provider.getFeeData();
+    const fees = await this.read("fee data", () => this.provider.getFeeData());
     const value = fees.maxFeePerGas ?? fees.gasPrice;
     if (value === null) throw new Error("Provider returned no usable fee data.");
     return value;
   }
 
   async getContractIdentity(): Promise<PublicContractIdentity> {
-    const [
-      paymentToken, tokenName, tokenSymbol, tokenDecimals, dripAmount, dripCooldown,
-      entryAmount, maxParticipants, maxActivePositions, roundCount, drawInterval, poolCount,
-    ] = await Promise.all([
-      this.pop33.paymentToken(), this.token.name(), this.token.symbol(), this.token.decimals(),
-      this.token.DRIP_AMOUNT(), this.token.DRIP_COOLDOWN(), this.pop33.ENTRY_PRICE(),
-      this.pop33.MAX_POSITIONS_PER_POOL(), this.pop33.MAX_ACTIVE_POSITIONS_PER_USER(),
-      this.pop33.DRAW_ROUNDS(), this.pop33.DRAW_INTERVAL(), this.pop33.poolCount(),
-    ]);
+    const paymentToken = await this.read("POP33.paymentToken", () => this.pop33.paymentToken());
+    const tokenName = await this.read("dUSDC.name", () => this.token.name());
+    const tokenSymbol = await this.read("dUSDC.symbol", () => this.token.symbol());
+    const tokenDecimals = await this.read("dUSDC.decimals", () => this.token.decimals());
+    const dripAmount = await this.read("dUSDC.DRIP_AMOUNT", () => this.token.DRIP_AMOUNT());
+    const dripCooldown = await this.read("dUSDC.DRIP_COOLDOWN", () => this.token.DRIP_COOLDOWN());
+    const entryAmount = await this.read("POP33.ENTRY_PRICE", () => this.pop33.ENTRY_PRICE());
+    const maxParticipants = await this.read(
+      "POP33.MAX_POSITIONS_PER_POOL",
+      () => this.pop33.MAX_POSITIONS_PER_POOL(),
+    );
+    const maxActivePositions = await this.read(
+      "POP33.MAX_ACTIVE_POSITIONS_PER_USER",
+      () => this.pop33.MAX_ACTIVE_POSITIONS_PER_USER(),
+    );
+    const roundCount = await this.read("POP33.DRAW_ROUNDS", () => this.pop33.DRAW_ROUNDS());
+    const drawInterval = await this.read("POP33.DRAW_INTERVAL", () => this.pop33.DRAW_INTERVAL());
+    const poolCount = await this.read("POP33.poolCount", () => this.pop33.poolCount());
     return {
       paymentToken, tokenName, tokenSymbol, tokenDecimals, dripAmount, dripCooldown,
       entryAmount, maxParticipants, maxActivePositions, roundCount, drawInterval, poolCount,
@@ -101,11 +120,11 @@ export class EthersBaseSepoliaReadOnlyRuntime implements PublicReadOnlyRuntime {
   }
 
   getOpenPoolIds(): Promise<bigint[]> {
-    return this.pop33.getOpenPoolIds();
+    return this.read("POP33.getOpenPoolIds", () => this.pop33.getOpenPoolIds());
   }
 
   async getPool(poolId: bigint): Promise<PublicPoolSnapshot> {
-    const pool = await this.pop33.getPool(poolId);
+    const pool = await this.read("POP33.getPool", () => this.pop33.getPool(poolId));
     return {
       id: pool.id,
       status: pool.status,
@@ -118,9 +137,13 @@ export class EthersBaseSepoliaReadOnlyRuntime implements PublicReadOnlyRuntime {
   }
 
   async getRounds(poolId: bigint, count: bigint): Promise<PublicRoundSnapshot[]> {
-    const rounds = await Promise.all(
-      Array.from({ length: Number(count) }, (_, index) => this.pop33.getDrawRound(poolId, index + 1)),
-    );
+    const rounds = [];
+    for (let index = 0; index < Number(count); index += 1) {
+      rounds.push(await this.read(
+        `POP33.getDrawRound(${index + 1})`,
+        () => this.pop33.getDrawRound(poolId, index + 1),
+      ));
+    }
     return rounds.map((round) => ({
       number: round.number,
       scheduledAt: round.scheduledAt,
@@ -134,21 +157,33 @@ export class EthersBaseSepoliaReadOnlyRuntime implements PublicReadOnlyRuntime {
 
   async getWallet(addressValue: string, poolId: bigint): Promise<PublicWalletSnapshot> {
     const address = getAddress(addressValue);
-    const [
-      nativeBalance, tokenBalance, allowance, nextDripAt, activePositions, activePositionId,
-      claimablePrizes, nonceLatest, noncePending,
-    ] =
-      await Promise.all([
-        this.provider.getBalance(address),
-        this.token.balanceOf(address),
-        this.token.allowance(address, PUBLIC_OPERATOR_CONTRACT_ADDRESS),
-        this.token.nextDripAt(address),
-        this.pop33.activePositionsByUser(address),
-        this.pop33.getActivePositionId(poolId, address),
-        this.pop33.claimablePrizesByUser(address),
-        this.provider.getTransactionCount(address, "latest"),
-        this.provider.getTransactionCount(address, "pending"),
-      ]);
+    const nativeBalance = await this.read("wallet eth_getBalance", () => this.provider.getBalance(address));
+    const tokenBalance = await this.read("wallet dUSDC.balanceOf", () => this.token.balanceOf(address));
+    const allowance = await this.read(
+      "wallet dUSDC.allowance",
+      () => this.token.allowance(address, PUBLIC_OPERATOR_CONTRACT_ADDRESS),
+    );
+    const nextDripAt = await this.read("wallet dUSDC.nextDripAt", () => this.token.nextDripAt(address));
+    const activePositions = await this.read(
+      "wallet POP33.activePositionsByUser",
+      () => this.pop33.activePositionsByUser(address),
+    );
+    const activePositionId = await this.read(
+      "wallet POP33.getActivePositionId",
+      () => this.pop33.getActivePositionId(poolId, address),
+    );
+    const claimablePrizes = await this.read(
+      "wallet POP33.claimablePrizesByUser",
+      () => this.pop33.claimablePrizesByUser(address),
+    );
+    const nonceLatest = await this.read(
+      "wallet eth_getTransactionCount(latest)",
+      () => this.provider.getTransactionCount(address, "latest"),
+    );
+    const noncePending = await this.read(
+      "wallet eth_getTransactionCount(pending)",
+      () => this.provider.getTransactionCount(address, "pending"),
+    );
     return {
       address, nativeBalance, tokenBalance, allowance, nextDripAt,
       activePositions, activePositionId, claimablePrizes, nonceLatest, noncePending,
@@ -163,12 +198,12 @@ export class EthersBaseSepoliaReadOnlyRuntime implements PublicReadOnlyRuntime {
     round?: bigint;
   }): Promise<bigint> {
     const request = this.encodeAction(input);
-    return this.provider.estimateGas({
+    return this.read(`eth_estimateGas(${input.action})`, () => this.provider.estimateGas({
       from: getAddress(input.from),
       to: request.to,
       data: request.data,
       value: 0n,
-    });
+    }));
   }
 
   private encodeAction(input: {

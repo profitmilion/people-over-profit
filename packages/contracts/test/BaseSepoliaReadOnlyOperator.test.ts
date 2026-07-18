@@ -28,6 +28,7 @@ import {
   inspectExistingEncryptedWalletStore,
 } from "../scripts/operator/encrypted-wallet-store.js";
 import { inspectExistingTransactionJournal } from "../scripts/operator/transaction-journal.js";
+import { ReadOnlyRpcRateLimitExhaustedError } from "../scripts/operator/read-only-rpc-retry.js";
 
 const PASSWORD = "runtime-only-test-password";
 const NOW = 2_000_000_000n;
@@ -83,6 +84,10 @@ class FakeReadOnlyRuntime implements PublicReadOnlyRuntime {
     claimedPrizeCount: 0n,
   };
   wallets = new Map<string, Partial<PublicWalletSnapshot>>();
+  walletCallOrder: string[] = [];
+  activeWalletReads = 0;
+  maximumConcurrentWalletReads = 0;
+  walletReadDelayMs = 0;
 
   async getChainId() { return this.chainId; }
   async getLatestBlockNumber() { return 123; }
@@ -99,20 +104,33 @@ class FakeReadOnlyRuntime implements PublicReadOnlyRuntime {
     }));
   }
   async getWallet(value: string): Promise<PublicWalletSnapshot> {
-    const override = this.wallets.get(value.toLowerCase()) ?? {};
-    return {
-      address: value,
-      nativeBalance: 10n ** 18n,
-      tokenBalance: DEMO_V1_PARAMETERS.entryPrice,
-      allowance: DEMO_V1_PARAMETERS.entryPrice,
-      nextDripAt: 0n,
-      activePositions: 0n,
-      activePositionId: 0n,
-      claimablePrizes: 0n,
-      nonceLatest: 0,
-      noncePending: 0,
-      ...override,
-    };
+    this.walletCallOrder.push(value.toLowerCase());
+    this.activeWalletReads += 1;
+    this.maximumConcurrentWalletReads = Math.max(
+      this.maximumConcurrentWalletReads,
+      this.activeWalletReads,
+    );
+    try {
+      if (this.walletReadDelayMs > 0) {
+        await new Promise<void>((resolve) => setTimeout(resolve, this.walletReadDelayMs));
+      }
+      const override = this.wallets.get(value.toLowerCase()) ?? {};
+      return {
+        address: value,
+        nativeBalance: 10n ** 18n,
+        tokenBalance: DEMO_V1_PARAMETERS.entryPrice,
+        allowance: DEMO_V1_PARAMETERS.entryPrice,
+        nextDripAt: 0n,
+        activePositions: 0n,
+        activePositionId: 0n,
+        claimablePrizes: 0n,
+        nonceLatest: 0,
+        noncePending: 0,
+        ...override,
+      };
+    } finally {
+      this.activeWalletReads -= 1;
+    }
   }
   async estimateAction(input: { action: Exclude<PlannedAction, "fund"> }): Promise<bigint> {
     if (this.estimateFailure.has(input.action)) throw new Error("state dependent revert");
@@ -162,6 +180,17 @@ describe("Base Sepolia read-only operator", function () {
       runtime: new FakeReadOnlyRuntime(), mode: "status", startIndex: 99,
       walletCount: 2, artifacts: artifacts(100),
     }), /beyond operator index 99/);
+  });
+
+  it("reads wallets sequentially and preserves their configured order", async function () {
+    const runtime = new FakeReadOnlyRuntime();
+    runtime.walletReadDelayMs = 2;
+    const report = await runBaseSepoliaReadOnlyOperator({
+      runtime, mode: "status", walletCount: 5, artifacts: artifacts(5),
+    });
+    assert.deepEqual(runtime.walletCallOrder, [1, 2, 3, 4, 5].map(address));
+    assert.deepEqual(report.wallets.map((wallet) => wallet.address.toLowerCase()), runtime.walletCallOrder);
+    assert.equal(runtime.maximumConcurrentWalletReads, 1);
   });
 
   it("rejects duplicate selected addresses", async function () {
@@ -217,6 +246,18 @@ describe("Base Sepolia read-only operator", function () {
     const joins = report.gasPlan.filter((entry) => entry.action === "join");
     assert.equal(joins.length, 2);
     assert.ok(joins.every((entry) => entry.status === "NOT CURRENTLY ESTIMABLE" && entry.gasUnits === null));
+  });
+
+  it("hard-stops instead of hiding an exhausted rate limit during gas estimation", async function () {
+    const runtime = new FakeReadOnlyRuntime();
+    runtime.estimateAction = async () => {
+      throw new ReadOnlyRpcRateLimitExhaustedError(
+        "Read-only RPC eth_estimateGas remained rate-limited after 5 attempts.",
+      );
+    };
+    await assert.rejects(runBaseSepoliaReadOnlyOperator({
+      runtime, mode: "dry-run", walletCount: 2, artifacts: artifacts(2),
+    }), /remained rate-limited after 5 attempts/);
   });
 
   it("blocks missing wallets, artifact mismatches, pending recovery, and insufficient confirmations", async function () {
@@ -299,10 +340,15 @@ describe("Base Sepolia read-only operator", function () {
   });
 
   it("contains no transaction-signing or broadcast primitive in the public runtime", async function () {
-    const source = await readFile(
-      new URL("../scripts/operator/ethers-base-sepolia-read-only-runtime.ts", import.meta.url),
-      "utf8",
-    );
-    assert.doesNotMatch(source, /sendTransaction|writeContract|walletClient|\bSigner\b|privateKey|deployer/i);
+    for (const relative of [
+      "../scripts/operator/ethers-base-sepolia-read-only-runtime.ts",
+      "../scripts/operator/read-only-rpc-retry.ts",
+    ]) {
+      const source = await readFile(new URL(relative, import.meta.url), "utf8");
+      assert.doesNotMatch(
+        source,
+        /sendTransaction|sendRawTransaction|eth_sendTransaction|writeContract|walletClient|\bSigner\b|privateKey|deployer/i,
+      );
+    }
   });
 });

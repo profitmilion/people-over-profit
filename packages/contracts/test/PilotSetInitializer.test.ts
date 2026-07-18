@@ -303,6 +303,8 @@ describe("secure five-wallet pilot set initializer", function () {
 
   it("feeds safe read-only dry-runs for the first two and all five wallets", async function () {
     const fixture = await createFixture();
+    const artifactPaths = Object.values(paths(fixture.targetDirectory));
+    const before = await Promise.all(artifactPaths.map((file) => readFile(file, "utf8")));
     const artifacts = await auditBaseSepoliaOperatorArtifacts(
       1_000,
       artifactEnvironment(fixture.targetDirectory),
@@ -320,6 +322,8 @@ describe("secure five-wallet pilot set initializer", function () {
       assert.equal(report.readOnly, true);
       assert.equal(report.readyForSeparatelyAuthorizedPilot, true);
     }
+    const after = await Promise.all(artifactPaths.map((file) => readFile(file, "utf8")));
+    assert.deepEqual(after, before);
   });
 
   it("keeps every write primitive absent from initializer and public runtime sources", async function () {

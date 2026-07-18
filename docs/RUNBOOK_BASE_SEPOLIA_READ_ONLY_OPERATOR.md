@@ -97,6 +97,25 @@ The read-only operator never calls `openOrCreate`: a missing encrypted store,
 manifest, checkpoint, or journal is a blocker. Only the separately confirmed
 manual initializer may create the five-wallet set.
 
+### Public RPC rate limits
+
+Every public chain read and read-only gas estimate uses one shared bounded
+rate-limit policy. It recognizes JSON-RPC `-32016`, the commonly used
+rate-limit code `-32005`, explicit rate-limit/throttling messages, and HTTP
+`429` when the provider exposes it. Non-rate-limit failures are never retried.
+
+The policy permits at most five attempts. Delays start at 500 ms, double up to
+4 seconds, and add at most 20% jitter. Each retry prints only a sanitized
+operation label, next attempt number, bounded delay, and redacted error. After
+the fifth failed attempt the operator hard-stops and preserves the final
+failure. Contract identity mismatches, wrong passwords, corrupt artifacts,
+reverts, and other non-transient errors stop immediately.
+
+Global reads, contract identity fields, rounds, wallet fields, latest/pending
+nonces, and gas estimates are requested sequentially. Public execution also
+paces successive wallets by 200 ms. Retry never signs or broadcasts and never
+modifies the wallet store, manifest, checkpoint, or journal.
+
 ## Preflight review
 
 Do not continue unless the report confirms all of the following:
@@ -159,7 +178,13 @@ this runbook.
 
 ## Current checkpoint
 
-The secure initializer is implemented and tested, but Piotr has not manually
-run it. Therefore no real pilot store, manifest, checkpoint or journal exists
-yet and the operator still reports `NOT READY`. Manual initialization is not
+Piotr manually created the external five-wallet pilot set. A public Base
+Sepolia preflight for the first two wallets succeeded with all artifact checks
+`OK`, chain `84532`, range `2/2`, zero balances and nonces, an empty journal,
+and no signature or broadcast. The following five-wallet `status` read stopped
+when the public RPC returned `-32016: over rate limit` for pending nonce.
+
+Bounded retry, exponential backoff, jitter, sequential reads, and 200 ms wallet
+pacing are now implemented. Piotr still needs to rerun `status` for five and
+`dry-run` for two and five. The successful preflight and retry support are not
 permission to fund or operate the wallets.

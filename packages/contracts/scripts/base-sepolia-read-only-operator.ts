@@ -37,6 +37,7 @@ async function main(): Promise<void> {
     startIndex,
     rpcHost: new URL(rpcUrl).host,
     artifacts,
+    walletPacingMs: 200,
   });
   if (format === "text" || format === "both") console.log(renderPublicOperatorText(report));
   if (format === "both") console.log("\n--- JSON REPORT ---");

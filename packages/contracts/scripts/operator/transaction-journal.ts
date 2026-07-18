@@ -516,6 +516,21 @@ export class JsonTransactionJournal extends BaseTransactionJournal {
     return new JsonTransactionJournal(filePath, data, hooks);
   }
 
+  static async openExisting(
+    filePathValue: string,
+    identity: JournalIdentity,
+    hooks?: AtomicWriteHooks,
+  ): Promise<JsonTransactionJournal> {
+    const filePath = await assertSafeExternalFilePath(filePathValue, JOURNAL_SUFFIX);
+    if (!(await pathIsRegularFile(filePath))) {
+      throw new Error("Transaction journal does not exist; write pilot will not create it.");
+    }
+    let parsed: unknown;
+    try { parsed = JSON.parse(await readFile(filePath, "utf8")); }
+    catch { throw new Error("Transaction journal is incomplete or invalid JSON."); }
+    return new JsonTransactionJournal(filePath, validateJournal(parsed, identity), hooks);
+  }
+
   static async createBound(
     filePathValue: string,
     identity: JournalIdentity,

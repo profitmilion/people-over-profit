@@ -6,6 +6,7 @@ import type {
   OperationMeaning,
   TransactionJournal,
 } from "../operator/transaction-journal.js";
+import { sanitizeOperatorError } from "../operator/transaction-journal.js";
 import {
   executeJournaledOperation,
   recoverTransactionJournal,
@@ -13,6 +14,7 @@ import {
   type CoordinatorFailurePoint,
   type TransactionRecoveryProvider,
 } from "../operator/transaction-recovery.js";
+import { withReadOnlyRpcRetry } from "../operator/read-only-rpc-retry.js";
 
 export const BASE_SEPOLIA_SMOKE_CHAIN_ID = 84_532n;
 export const BASE_SEPOLIA_SMOKE_TOKEN_ADDRESS = getAddress(
@@ -482,7 +484,10 @@ async function requireCurrentPoolSafety(runtime: SmokeRuntime, poolId: bigint): 
 
 async function requireActionGas(runtime: SmokeRuntime, action: SmokeWriteAction, positionId?: bigint): Promise<void> {
   const [estimate, feePerGas, balance] = await Promise.all([
-    readWithRetry(`${action} gas estimate`, () => runtime.estimateAction(action, positionId)),
+    withReadOnlyRpcRetry(
+      `${action} pre-broadcast simulation`,
+      () => runtime.estimateAction(action, positionId),
+    ),
     readWithRetry("gas price", () => runtime.getFeePerGas()),
     readWithRetry("smoke wallet native balance", () => runtime.getNativeBalance()),
   ]);
@@ -539,15 +544,26 @@ async function executeSmokeStep(input: {
   receiptTimeoutMs: number;
   failureHook?(point: CoordinatorFailurePoint): Promise<void> | void;
 }): Promise<{ operation: JournalOperation; evidence: SmokeOperationEvidence }> {
-  await requireActionGas(input.runtime, input.action, input.positionId);
+  const meaning = meaningFor(
+    input.action,
+    input.runtime.walletAddress,
+    input.poolId,
+    input.positionId,
+  );
+  const prepared = await input.journal.prepare(meaning);
+  try {
+    await requireActionGas(input.runtime, input.action, input.positionId);
+  } catch (error) {
+    if (prepared.status === "prepared") {
+      await input.journal.transition(prepared.operationId, "failed", {
+        error: sanitizeOperatorError(error),
+      });
+    }
+    throw error;
+  }
   const result = await executeJournaledOperation({
     journal: input.journal,
-    meaning: meaningFor(
-      input.action,
-      input.runtime.walletAddress,
-      input.poolId,
-      input.positionId,
-    ),
+    meaning,
     getNonce: () => readWithRetry("pending wallet nonce", () => input.runtime.getPendingNonce()),
     broadcast: async (nonce) => withReceiptTimeout(
       await input.runtime.broadcast(input.action, nonce, input.positionId),

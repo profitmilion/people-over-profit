@@ -368,7 +368,7 @@ export class EncryptedWalletProvider implements OperatorWalletProvider {
 
   private constructor(
     private readonly filePath: string,
-    private readonly plaintext: WalletStorePlaintext,
+    private readonly plaintext: WalletStorePlaintext | undefined,
     private readonly wallets: readonly OperatorWallet[],
   ) {
     this.walletsByAddress = new Map(
@@ -409,6 +409,35 @@ export class EncryptedWalletProvider implements OperatorWalletProvider {
     return new EncryptedWalletProvider(filePath, plaintext, wallets);
   }
 
+  static async openExistingSelected(
+    options: EncryptedWalletStoreOptions & { walletIndices: readonly number[] },
+  ): Promise<EncryptedWalletProvider> {
+    assertPassword(options.password);
+    assertWalletCount(options.walletCount);
+    const filePath = await assertSafeExternalFilePath(options.filePath, WALLET_STORE_SUFFIX);
+    if (!(await pathIsRegularFile(filePath))) {
+      throw new Error("Wallet store does not exist; write pilot will not create it.");
+    }
+    const uniqueIndices = [...new Set(options.walletIndices)];
+    if (
+      uniqueIndices.length !== options.walletIndices.length ||
+      uniqueIndices.some((index) => !Number.isSafeInteger(index) || index < 0 || index >= options.walletCount)
+    ) {
+      throw new Error("Selected wallet indices must be unique and within the existing store.");
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(await readFile(filePath, "utf8"));
+    } catch {
+      throw new Error("Wallet store file is incomplete or invalid JSON.");
+    }
+    const plaintext = await decrypt(parseEnvelope(parsed), options.password, options.walletCount);
+    const wallets = uniqueIndices.map((index) =>
+      new Wallet(plaintext.wallets[index].privateKey, options.provider),
+    );
+    return new EncryptedWalletProvider(filePath, undefined, wallets);
+  }
+
   listWallets(): readonly OperatorWallet[] {
     return this.wallets;
   }
@@ -419,8 +448,12 @@ export class EncryptedWalletProvider implements OperatorWalletProvider {
 
   async reencrypt(password: string, hooks?: AtomicWriteHooks): Promise<void> {
     assertPassword(password);
+    const plaintext = this.plaintext;
+    if (!plaintext) {
+      throw new Error("A selected signer view cannot reencrypt the complete wallet store.");
+    }
     await withExclusiveFileLock(this.filePath, () =>
-      writeEncrypted(this.filePath, this.plaintext, password, hooks),
+      writeEncrypted(this.filePath, plaintext, password, hooks),
     );
   }
 }

@@ -97,20 +97,28 @@ nonces, no active positions, and no journal operations. It did not load a key
 into a signer, sign or send a transaction, fund ETH, or execute a lifecycle
 action.
 
-The following five-wallet `status` run reached the public RPC rate limit at
+The first five-wallet `status` run reached the public RPC rate limit at
 `eth_getTransactionCount(address, "pending")` and stopped without hiding the
 error. All public RPC reads and read-only estimates now share a five-attempt
 bounded retry with 500 ms exponential backoff capped at 4 seconds, 20% jitter,
 sanitized attempt logs, sequential reads, and 200 ms pacing between wallets.
-Non-rate-limit errors are not retried. The two- and five-wallet dry-runs still
-await Piotr's manual rerun.
+Non-rate-limit errors are not retried. Piotr subsequently completed `status`
+for all five wallets and `dry-run` for the first two and all five. All four
+external artifacts remained byte-for-byte unchanged and no write occurred.
 
 The five-wallet Base Sepolia pilot set was created with the separate manual
 PowerShell initializer. It uses the existing AES-256-GCM/scrypt store and a
 non-secret manifest, version 2 checkpoint, and version 2 empty journal bound to
-one store ID and ordered-address digest. No pilot wallet has been funded and no
-transaction has been executed. This five-wallet testnet set is not production
-infrastructure; a 100-wallet store remains a separate future stage.
+one store ID and ordered-address digest. A guarded write launcher is now
+prepared for exactly wallet indices 0 and 1 and pool 1. It reuses the reversible
+single-wallet smoke coordinator and durable recovery, instantiates signers only
+for the two selected store entries, requires two exact confirmations, and
+permits only faucet, exact 33 dUSDC approval, join, and Open-pool withdrawal.
+Manual ETH funding and manual execution by Piotr are still pending. No wallet
+in this five-wallet set has been funded and no transaction from it has been
+signed or broadcast. Wallets 2-4, draw, claim, deployment, administration,
+mainnet, and automatic funding remain unavailable. This testnet set is not
+production infrastructure; a 100-wallet store remains a separate future stage.
 
 Production remains separate and does not host the current Demo V1 checkpoint.
 Farcaster is not implemented and is not required by this standalone Web3
@@ -280,8 +288,8 @@ runtime.
   and ten claims;
 - confirmation of an independent encrypted backup of the manually created
   five-wallet pilot store, manifest, checkpoint, and journal;
-- successful public read-only `status` for all five wallets and dry-runs for
-  the first 2 and all 5 stored wallets after the bounded-rate-limit update;
+- manual funding and execution of the prepared guarded Base Sepolia write
+  pilot for wallet indices 0 and 1;
 - a later separately reviewed 100-wallet store and aggregate dry-run; the
   five-wallet pilot store must not be reused for that stage;
 - promotion or release of the current Demo V1 through Vercel Production; the

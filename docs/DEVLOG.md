@@ -33,6 +33,60 @@ documentation.
   current overview of implementation, gaps, and risks.
 - Do not guess. Mark unclear facts as requiring later reconstruction.
 
+## 2026-07-18 - Guarded two-wallet Base Sepolia write pilot prepared
+
+### At a glance
+
+The five-wallet pilot completed public read-only status and dry-run checks for
+the first two and all five wallets without modifying any artifact or sending a
+transaction. A separately guarded launcher is now prepared for a reversible
+faucet, exact approval, join, and Open-pool withdrawal sequence using only
+wallet indices 0 and 1. It has not been funded or executed.
+
+### Completed
+
+- Reused the existing Base Sepolia smoke signer, receipt verification,
+  transaction journal, and conservative recovery coordinator instead of
+  introducing another write transport.
+- Added existing-store-only signer selection: the authenticated store envelope
+  is checked, but only entries 0 and 1 become connected signer objects.
+- Added a shared-journal wallet scope that permits only faucet, exact 33 dUSDC
+  approval, join, and withdrawal for pool 1 and rejects wallets 2-4, draw,
+  claim, deployment, administration, another chain, contract, or token.
+- Added two exact authorization phrases, dynamic buffered gas checks, sequential
+  wallet execution, final zero-position/zero-allowance/zero-claimable checks,
+  bound checkpoint updates, and immutable store/manifest hash checks.
+- Documented manual MetaMask funding separately from operator execution. No
+  funding-wallet secret or automatic funding path is accepted.
+
+### Verification boundary
+
+- Automated coverage includes exact confirmations, exact wallet range, shared
+  journal isolation, prohibited actions and identities, selected signer
+  loading, wrong-password rejection, missing-store refusal, plus the existing
+  smoke tests for wrong chain, deployment identity, insufficient ETH, receipt
+  ambiguity, recovery, redaction, and absence of draw/claim paths.
+- The launcher and operator were not run against the real password-protected
+  set. No password, private key, seed phrase, or funding credential was
+  requested or received.
+- No Base Sepolia funding, faucet, approval, join, withdrawal, draw, claim,
+  deployment, Production, Vercel, frontend, or Farcaster action occurred.
+
+### Limitations and next step
+
+Piotr must manually fund wallet 0 and wallet 1 with testnet ETH, review their
+public balances and the unchanged pilot identity, and then manually run the
+PowerShell launcher. Any pending or ambiguous operation requires journal and
+on-chain recovery review before another write decision.
+
+### Git
+
+- Branch: `codex/pop33-recovery`
+- Starting checkpoint: `7b0f6dd6aae2a80689e778128c3efedf1251b546`
+- Starting message: `fix(operator): handle Base Sepolia read rate limits`
+- The milestone commit hash did not exist when this entry was written and is
+  intentionally not guessed.
+
 ## 2026-07-18 - Bounded public-RPC retries for the read-only pilot
 
 ### At a glance

@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { DEMO_V1_PARAMETERS } from "../scripts/lib/demo-v1-config.js";
+import { JsonRpcProvider } from "ethers";
 import { auditBaseSepoliaOperatorArtifacts } from "../scripts/operator/base-sepolia-artifact-audit.js";
 import {
   PUBLIC_OPERATOR_CHAIN_ID,
@@ -30,6 +31,7 @@ import {
   openPilotOperatorSet,
   pilotSetPublicSummary,
 } from "../scripts/operator/pilot-set-initializer.js";
+import { EncryptedWalletProvider } from "../scripts/operator/encrypted-wallet-store.js";
 
 const TEST_PASSWORD = "fixture-only-password-123";
 const WRONG_PASSWORD = "fixture-only-password-999";
@@ -188,6 +190,42 @@ describe("secure five-wallet pilot set initializer", function () {
       password: WRONG_PASSWORD,
     }), /wrong password or file integrity failure/);
     assert.throws(() => assertMatchingPilotPasswords(TEST_PASSWORD, WRONG_PASSWORD), /do not match/);
+  });
+
+  it("opens only selected pilot signers and never creates a missing store", async function () {
+    const fixture = await createFixture();
+    const files = paths(fixture.targetDirectory);
+    const opened = await openPilotOperatorSet({
+      directory: fixture.targetDirectory,
+      password: TEST_PASSWORD,
+    });
+    const provider = new JsonRpcProvider("http://127.0.0.1:8545");
+    const selected = await EncryptedWalletProvider.openExistingSelected({
+      filePath: files.walletStore,
+      password: TEST_PASSWORD,
+      walletCount: 5,
+      walletIndices: [0, 1],
+      provider,
+    });
+    assert.deepEqual(
+      selected.listWallets().map((wallet) => wallet.address),
+      opened.walletAddresses.slice(0, 2),
+    );
+    await assert.rejects(EncryptedWalletProvider.openExistingSelected({
+      filePath: join(fixture.root, "missing.operator-wallets.enc.json"),
+      password: TEST_PASSWORD,
+      walletCount: 5,
+      walletIndices: [0, 1],
+      provider,
+    }), /does not exist/);
+    await assert.rejects(EncryptedWalletProvider.openExistingSelected({
+      filePath: files.walletStore,
+      password: WRONG_PASSWORD,
+      walletCount: 5,
+      walletIndices: [0, 1],
+      provider,
+    }), /wrong password or file integrity failure/);
+    await provider.destroy();
   });
 
   it("requires the exact confirmation before generating wallets", async function () {

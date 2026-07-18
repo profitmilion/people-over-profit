@@ -185,6 +185,11 @@ and no signature or broadcast. The following five-wallet `status` read stopped
 when the public RPC returned `-32016: over rate limit` for pending nonce.
 
 Bounded retry, exponential backoff, jitter, sequential reads, and 200 ms wallet
-pacing are now implemented. Piotr still needs to rerun `status` for five and
-`dry-run` for two and five. The successful preflight and retry support are not
-permission to fund or operate the wallets.
+pacing are now implemented. Piotr subsequently completed `status` for five and
+`dry-run` for two and five. The four artifacts were byte-for-byte unchanged and
+no transaction was signed or broadcast.
+
+A separately guarded write pilot for wallet indices 0 and 1 is prepared but
+has not been run. Its manual funding, authorization, execution, and recovery
+rules are in `docs/RUNBOOK_BASE_SEPOLIA_PILOT_2_WRITE.md`. Read-only success is
+not by itself authorization to execute that launcher.

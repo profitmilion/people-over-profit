@@ -68,6 +68,8 @@ class FakeSmokeRuntime implements SmokeRuntime {
   pendingNonce = 0;
   waitNever = false;
   broadcastError: Error | null = null;
+  broadcastErrorAction: SmokeWriteAction | null = null;
+  estimateRevertAction: SmokeWriteAction | null = null;
   tokenState: SmokeTokenState = {
     name: "POP33 Demo USD",
     symbol: "dUSDC",
@@ -139,12 +141,15 @@ class FakeSmokeRuntime implements SmokeRuntime {
     return structuredClone(this.stalePositions.shift() ?? this.position);
   }
   async estimateAction(action: SmokeWriteAction): Promise<bigint> {
+    if (this.estimateRevertAction === action) throw new Error(`${action} contract execution reverted`);
     return action === "join" ? 200_000n : action === "withdraw" ? 120_000n : 60_000n;
   }
   async getPendingNonce(): Promise<number> { return this.pendingNonce; }
 
   async broadcast(action: SmokeWriteAction, nonce: number): Promise<BroadcastResponse> {
-    if (this.broadcastError) throw this.broadcastError;
+    if (this.broadcastError && (this.broadcastErrorAction === null || this.broadcastErrorAction === action)) {
+      throw this.broadcastError;
+    }
     this.broadcastActions.push(action);
     const hash = `0x${(this.transactions.size + 1).toString(16).padStart(64, "0")}`;
     const transaction: RecoveryTransaction = {
@@ -534,6 +539,40 @@ describe("Base Sepolia single-wallet smoke harness", function () {
     assert.equal(runtime.broadcastActions.length, 1);
     assert.equal(store.snapshot().operations[0].status, "requires_manual_review");
   });
+
+  for (const failedAction of ["faucet", "approve", "join", "withdraw"] as const) {
+    it(`stops an ambiguous ${failedAction} broadcast without retry`, async function () {
+      const runtime = new FakeSmokeRuntime();
+      runtime.broadcastErrorAction = failedAction;
+      runtime.broadcastError = new Error(`${failedAction} provider submission failed ambiguously`);
+      const store = journal();
+      await assert.rejects(
+        runSmokeWriteFlow({ runtime, journal: store, preflight: await preflight(runtime) }),
+        /ambiguous/,
+      );
+      const failed = store.snapshot().operations.find((operation) => operation.action === failedAction);
+      assert.equal(failed?.status, "requires_manual_review");
+      assert.equal(store.snapshot().operations.filter((operation) => operation.action === failedAction).length, 1);
+    });
+  }
+
+  for (const revertedAction of ["faucet", "approve", "join", "withdraw"] as const) {
+    it(`stops a simulated ${revertedAction} contract revert before signing`, async function () {
+      const runtime = new FakeSmokeRuntime();
+      const report = await preflight(runtime);
+      runtime.estimateRevertAction = revertedAction;
+      const store = journal();
+      await assert.rejects(
+        runSmokeWriteFlow({ runtime, journal: store, preflight: report }),
+        new RegExp(`${revertedAction} contract execution reverted`),
+      );
+      assert.equal(runtime.broadcastActions.includes(revertedAction), false);
+      const failed = store.snapshot().operations.filter((operation) => operation.action === revertedAction);
+      assert.equal(failed.length, 1);
+      assert.equal(failed[0].status, "failed");
+      assert.equal(failed[0].transactionHash, null);
+    });
+  }
 
   it("preserves broadcast evidence when interrupted after broadcast", async function () {
     const runtime = new FakeSmokeRuntime();

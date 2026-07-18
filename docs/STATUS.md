@@ -1,6 +1,6 @@
 # POP33 Development Status
 
-Last reviewed: 2026-07-17
+Last reviewed: 2026-07-18
 
 Branch reviewed: `codex/pop33-recovery`
 
@@ -39,8 +39,22 @@ pair and exercise the faucet through the full lifecycle. Runtime bytecode,
 creation inputs, getters, constructor linkage, and the empty initial pool were
 verified on-chain. One faucet drip was tested; no approve or POP33 lifecycle
 write was performed during deployment. Source publication in BaseScan is
-pending. A separate local `#/demo-v1` integration now targets the new ABI and
-addresses; it has not been released through Vercel.
+pending.
+
+The separate `#/demo-v1` integration is now confirmed as an independent public
+Web3 application on a Vercel Preview for branch `codex/pop33-recovery` and
+source commit `9b51afc015f4848ac7b184507dda00f753e6e86d`. The branch alias is
+`https://pop33-demo-git-codex-pop33-recovery-profitmilions-projects.vercel.app`.
+After the four public Demo V1 environment values were added to the Preview
+scope and Vercel redeployed it, the landing page, `/#/demo-v1`, and
+`/#/archive-v1` loaded successfully. The runtime read the recorded Base
+Sepolia contract and dUSDC addresses and showed pool 1 as Open with zero active
+positions, zero escrow, and ten Pending rounds. This verification was
+read-only: no wallet was connected and no faucet, approval, join, withdrawal,
+draw, claim, or other public transaction was submitted through the hosted UI.
+Production remains separate and does not host the current Demo V1 checkpoint.
+Farcaster is not implemented and is not required by this standalone Web3
+runtime.
 
 ## Business-rule implementation matrix
 
@@ -157,6 +171,9 @@ addresses; it has not been released through Vercel.
   `docs/DEMO_V1.md`.
 - Separate `#/demo-v1` and `#/archive-v1` routes with isolated environment
   variables, ABI, data reads, guarded transaction actions, and domain tests.
+- A public Vercel Preview for `codex/pop33-recovery` at commit `9b51afc` with
+  Preview-scoped Demo V1 variables. Its landing page and both Demo V1 routes
+  were manually verified read-only against the current Base Sepolia contracts.
 
 ## Partial / in progress
 
@@ -169,9 +186,12 @@ addresses; it has not been released through Vercel.
   user per pool, and the active-position lifecycle;
 - consistent configuration across UI, hooks, and environment variables;
 - production randomness and asynchronous request/fulfillment recovery;
-- actual deployment and independent recording of both dUSDC and Pop33 Base
-  Sepolia addresses; selection of an external test-token address remains open
-  only for the preserved alternative deployment path;
+- public wallet connection and faucet, approval, join, withdrawal, draw, and
+  claim transactions through the Vercel Preview UI;
+- promotion or release of the current Demo V1 through Vercel Production; the
+  confirmed Preview must remain separate until a later explicit decision;
+- selection of an external test-token address remains open only for the
+  preserved alternative deployment path;
 - source publication for the recorded Base Sepolia deployment;
 - unified cycle and position domain model;
 - Farcaster integration;

@@ -33,6 +33,74 @@ documentation.
   current overview of implementation, gaps, and risks.
 - Do not guess. Mark unclear facts as requiring later reconstruction.
 
+## 2026-07-18 - Verified independent Web3 Demo V1 on public Vercel Preview
+
+### At a glance
+
+The current Demo V1 was manually verified as a public, standalone Web3
+application on a Vercel Preview. The landing page and both Demo V1 routes
+loaded through a normal public URL and read the recorded contracts on Base
+Sepolia. Farcaster is not integrated and was not required for this runtime.
+
+### Completed
+
+- Confirmed the Vercel environment as `Preview`, the branch as
+  `codex/pop33-recovery`, the source commit as
+  `9b51afc015f4848ac7b184507dda00f753e6e86d`, and the deployment status as
+  `Ready`.
+- Confirmed the branch alias:
+  `https://pop33-demo-git-codex-pop33-recovery-profitmilions-projects.vercel.app`.
+- Confirmed that the Vercel Preview environment contained the four public Demo
+  V1 values:
+  `VITE_POP33_DEMO_V1_CONTRACT_ADDRESS`,
+  `VITE_POP33_DEMO_V1_TOKEN_ADDRESS`, `VITE_POP33_DEMO_V1_CHAIN_ID`, and
+  `VITE_POP33_DEMO_V1_RPC_URL`.
+- Confirmed after the resulting Preview redeployment that the previous
+  missing-configuration message no longer appeared.
+- Confirmed that the landing page linked to the current Demo V1 rather than
+  requiring a Farcaster environment.
+
+### Public runtime verification
+
+- `/#/demo-v1` read Base Sepolia chain `84532`, `Pop33BasicV1` at
+  `0x140DA1b29F0B00b003Cabe86AE1a473d6745f56F`, and dUSDC at
+  `0xA7FA084b34c888061757d4b5FBb08a7B53fee786`.
+- The page showed the 33 dUSDC entry, 330 dUSDC faucet amount, 86,400-second
+  cooldown, ten-active-position limit, and one open pool.
+- Pool 1 showed `Open`, 0/100 positions, zero escrow, 0/10 draw progress,
+  0/10 claim progress, and ten Pending rounds.
+- `/#/archive-v1` showed the same pool and ten Pending rounds with no schedules,
+  executed draws, winners, assigned prizes, or claims, plus the contract
+  inspection link.
+
+### Verification boundary
+
+- This was a read-only browser verification. No wallet was connected and no
+  faucet, approval, join, withdrawal, draw, claim, or other transaction was
+  submitted through the public URL.
+- No smart contract was deployed or changed, and no Base Sepolia transaction
+  was sent as part of this milestone.
+- Vercel Production was not promoted, redeployed, or changed. The last observed
+  Production remained on branch `master`, commit `93ecdf7`, at
+  `pop33-demo.vercel.app`; it is not evidence for the current Demo V1 runtime.
+- Farcaster remains unimplemented. The verified Preview is the independent Web3
+  application and does not depend on a social-platform runtime.
+
+### Next logical step
+
+Review the hosted transaction UX and safety boundaries, then separately decide
+whether to authorize one controlled wallet flow through the public Preview.
+Production and Farcaster remain outside that next read/write verification
+decision.
+
+### Git
+
+- Branch: `codex/pop33-recovery`
+- Starting checkpoint: `9b51afc015f4848ac7b184507dda00f753e6e86d`
+- Starting message: `docs: record successful resumed Base Sepolia smoke test`
+- The documentation commit hash did not exist when this entry was written and
+  is intentionally not embedded in the commit that it identifies.
+
 ## 2026-07-17 - Successful resumed Base Sepolia reversible smoke test
 
 ### At a glance

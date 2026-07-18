@@ -49,9 +49,25 @@ After the four public Demo V1 environment values were added to the Preview
 scope and Vercel redeployed it, the landing page, `/#/demo-v1`, and
 `/#/archive-v1` loaded successfully. The runtime read the recorded Base
 Sepolia contract and dUSDC addresses and showed pool 1 as Open with zero active
-positions, zero escrow, and ten Pending rounds. This verification was
-read-only: no wallet was connected and no faucet, approval, join, withdrawal,
-draw, claim, or other public transaction was submitted through the hosted UI.
+positions, zero escrow, and ten Pending rounds. That initial verification was
+read-only.
+
+The hardened Preview deployment from commit `e64c689` has now also passed one
+controlled, reversible public UI write test on Base Sepolia with the dedicated
+test wallet displayed as `0xE9cA...5F4a`. The session started with 330 dUSDC,
+zero allowance, no active position, and pool 1 Open at 0/100 with zero escrow.
+The UI obtained an exact 33 dUSDC approval and joined position 4 to pool 1,
+then semantically verified the receipt result: 297 dUSDC balance, zero
+allowance, one active position, pool 1 at 1/100, and 33 dUSDC escrow. An
+Open-pool withdrawal then marked position 4 inactive, returned exactly 33
+dUSDC, and restored the verified final state to 330 dUSDC, zero allowance, no
+active position, pool 1 at 0/100, and zero escrow. The faucet was not used in
+this session. Draw, claim, pool locking, and the complete 100-position and
+ten-round public UI lifecycle were not tested.
+
+The public Preview is therefore confirmed for contract reads and for this
+narrow approval, join, and withdrawal write flow.
+
 Production remains separate and does not host the current Demo V1 checkpoint.
 Farcaster is not implemented and is not required by this standalone Web3
 runtime.
@@ -187,9 +203,10 @@ runtime.
   verification. Join reports the actual position and pool and reconciles the
   exact payment, allowance, membership, and escrow; withdrawal verifies the
   inactive position, exact 33 dUSDC refund, membership, and escrow.
-- A public Vercel Preview for `codex/pop33-recovery` at commit `9b51afc` with
-  Preview-scoped Demo V1 variables. Its landing page and both Demo V1 routes
-  were manually verified read-only against the current Base Sepolia contracts.
+- A public Vercel Preview for `codex/pop33-recovery`. Its landing page and both
+  Demo V1 routes were manually verified read-only at commit `9b51afc`; at
+  deployment commit `e64c689`, `/#/demo-v1` also passed one controlled exact
+  approval, join, and Open-pool withdrawal with semantic post-receipt checks.
 
 ## Partial / in progress
 
@@ -202,10 +219,12 @@ runtime.
   user per pool, and the active-position lifecycle;
 - consistent configuration across UI, hooks, and environment variables;
 - production randomness and asynchronous request/fulfillment recovery;
-- manual execution and verification of wallet connection, faucet, exact
-  approval, join, and Open-pool withdrawal through the Vercel Preview UI; no
-  public write has been performed yet;
+- manual public faucet verification through the Vercel Preview UI; the tested
+  wallet already held 330 dUSDC, so faucet was not used in the successful
+  approval, join, and withdrawal session;
 - manual public draw and claim verification through the Vercel Preview UI;
+- a complete public UI lifecycle with 100 positions, pool locking, ten draws,
+  and ten claims;
 - promotion or release of the current Demo V1 through Vercel Production; the
   confirmed Preview must remain separate until a later explicit decision;
 - selection of an external test-token address remains open only for the

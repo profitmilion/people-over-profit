@@ -33,6 +33,62 @@ documentation.
   current overview of implementation, gaps, and risks.
 - Do not guess. Mark unclear facts as requiring later reconstruction.
 
+## 2026-07-18 - Verified reversible public UI transaction flow
+
+### At a glance
+
+The public Vercel Preview for `codex/pop33-recovery`, deployed from commit
+`e64c689`, passed its first controlled and reversible transaction test through
+`/#/demo-v1` on Base Sepolia. The dedicated test wallet displayed as
+`0xE9cA...5F4a` completed an exact approval, join, and Open-pool withdrawal.
+The frontend displayed confirmed and semantically verified results for both
+join and withdrawal.
+
+### Completed
+
+- Used the public Preview branch alias at
+  `https://pop33-demo-git-codex-pop33-recovery-profitmilions-projects.vercel.app`.
+- Connected the dedicated `Pop33 Smoke Clean` wallet on Base Sepolia chain
+  `84532`; its initial UI state was approximately 0.00010 ETH, 330 dUSDC, zero
+  allowance, no active positions, and pool 1 Open at 0/100 with zero escrow.
+- Approved exactly 33 dUSDC and submitted a separate join transaction.
+- Confirmed that join created position 4 in pool 1. The UI showed 297 dUSDC,
+  zero allowance, one active position, pool 1 at 1/100, and 33 dUSDC escrow.
+- Withdrew position 4 while pool 1 remained Open. The UI verified that the
+  position became inactive and that the exact 33 dUSDC refund restored 330
+  dUSDC, zero allowance, no active positions, pool 1 at 0/100, and zero escrow.
+- Confirmed that draw and claim progress remained 0/10 after the reversible
+  test.
+
+### Verification boundary
+
+- The faucet was not exercised in this session because the wallet already held
+  330 dUSDC.
+- This test covered one dedicated wallet and one position. It did not exercise
+  100 participants, the transition to `Locked`, any draw or claim, or the full
+  100-position and ten-round lifecycle through the public UI.
+- No mainnet funds were used. This remains a Base Sepolia Demo V1 checkpoint,
+  not evidence of a production or mainnet-ready product.
+- Vercel Production and Farcaster remained unchanged; Farcaster is still not
+  implemented.
+- No transaction hashes are recorded because none were supplied by a verified
+  local source for this documentation checkpoint.
+
+### Next logical step
+
+Retain the clean reversible state and separately review the scope and safety
+requirements before authorizing any public faucet, pool-locking, draw, claim,
+or complete lifecycle test. Production and Farcaster remain outside that work.
+
+### Git
+
+- Branch: `codex/pop33-recovery`
+- Deployment and starting checkpoint:
+  `e64c6891c241a18a2f2156e3228af3670c4be7af`
+- Starting message: `fix: harden Demo V1 public transaction flow`
+- The documentation commit hash did not exist when this entry was written and
+  is intentionally not embedded in the commit that it identifies.
+
 ## 2026-07-18 - Verified independent Web3 Demo V1 on public Vercel Preview
 
 ### At a glance

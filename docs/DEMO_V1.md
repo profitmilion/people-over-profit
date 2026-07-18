@@ -341,10 +341,14 @@ The reversible public UI procedure refuses a selected pool above 89 active
 positions. Faucet, join, and withdrawal then use bounded read-only retries to
 verify the semantic post-receipt state; writes themselves are never retried.
 
-### Public Preview reversible write procedure (not yet executed)
+### Public Preview reversible write procedure and first execution
 
-This is the prepared manual procedure for the first public UI write test. It is
-not evidence that any public faucet, approval, join, or withdrawal has occurred.
+This procedure was used for the first controlled public UI write test on the
+Preview deployment from commit `e64c689`. The dedicated wallet completed the
+exact approval, join, and Open-pool withdrawal; the verified results are
+recorded in `STATUS.md` and `DEVLOG.md`. The faucet step was skipped because the
+wallet already held 330 dUSDC. The steps remain the reference safety checklist
+for any separately authorized follow-up.
 
 1. Use a dedicated wallet and open `/#/demo-v1` through the confirmed Preview
    alias, not Production.
@@ -352,8 +356,9 @@ not evidence that any public faucet, approval, join, or withdrawal has occurred.
    Base Sepolia ETH balance for gas.
 3. Confirm that the runtime identity check succeeds and the selected pool is
    `Open` and within the 89-position reversible safety margin.
-4. Request one faucet drip and wait until the UI verifies the exact 330 dUSDC
-   increase and the new cooldown.
+4. If the wallet needs test tokens, request one faucet drip and wait until the
+   UI verifies the exact 330 dUSDC increase and the new cooldown. The first
+   public write session did not use the faucet.
 5. Start `Approve if needed, then join`. If approval is required, confirm that
    the first wallet request is exactly 33 dUSDC. A pre-existing allowance above
    33 dUSDC is intentionally blocked.
@@ -389,9 +394,9 @@ Known frontend limitations:
 - the draw trigger remains permissionless and its temporary block-derived
   selection is explicitly unsuitable for production;
 - deployment source publication in BaseScan remains separate and pending;
-- the hardened source is not deployed by this documentation/code checkpoint;
-  the previously verified public Preview remains read-only evidence until a
-  later authorized deployment and manual write test.
+- the public Preview at deployment commit `e64c689` has verified one exact
+  approval, join, and Open-pool withdrawal, but its faucet, draw, claim, pool
+  locking, and full 100-position lifecycle remain publicly untested.
 
 ### Existing legacy integration preserved during migration
 

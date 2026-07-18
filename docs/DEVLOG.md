@@ -33,6 +33,58 @@ documentation.
   current overview of implementation, gaps, and risks.
 - Do not guess. Mark unclear facts as requiring later reconstruction.
 
+## 2026-07-18 - Published Demo V1 contract sources
+
+### At a glance
+
+The source for both current POP33 Demo V1 contracts on Base Sepolia was
+published and independently confirmed in BaseScan and Sourcify. BaseScan shows
+an exact match for `Pop33DemoUSDC` at
+`0xA7FA084b34c888061757d4b5FBb08a7B53fee786` and `Pop33BasicV1` at
+`0x140DA1b29F0B00b003Cabe86AE1a473d6745f56F`. Sourcify reports exact creation
+and runtime matches for both addresses on chain `84532`.
+
+### Completed
+
+- Added the official `@nomicfoundation/hardhat-verify` tooling compatible with
+  the existing Hardhat 3 workspace.
+- Added a read-only Base Sepolia verification network with `accounts: []`, a
+  runtime-only `ETHERSCAN_API_KEY`, and a runtime-only public RPC URL.
+- Added separate, explicit BaseScan commands for the demo token and main
+  contract, both using the deployment-compatible `default` build profile and
+  the provider-specific `verify etherscan` task.
+- Confirmed the published compiler as `0.8.28+commit.7893614a`, optimizer
+  enabled with 200 runs, and EVM version `cancun`.
+- Confirmed both constructor argument sets, including the deployed dUSDC
+  address used by `Pop33BasicV1`.
+- Reconfirmed that the repository sources were unchanged from the deployment
+  source commit and that the local runtime bytecode matched both deployed
+  contracts after applying the artifacts' immutable references.
+
+### Verification boundary
+
+- No private key or signer was used. Source publication did not deploy a
+  contract, send a transaction, or modify blockchain state.
+- The generic multi-provider Hardhat task reported Blockscout `Unknown UID`
+  even though BaseScan and Sourcify succeeded. The maintained commands now
+  target Etherscan API V2 directly, so a real BaseScan error remains fatal and
+  an unrelated Blockscout polling error cannot produce a false overall result.
+- Blockscout's public API later showed both contracts as fully verified, but
+  Blockscout is additional evidence rather than the required explorer for this
+  milestone.
+- Source verification proves source-to-bytecode correspondence; it is not a
+  security audit. The Demo V1 testnet randomness remains manipulable, and the
+  complete 100-wallet lifecycle remains unexecuted.
+- Production and Farcaster remained unchanged.
+
+### Git
+
+- Branch: `codex/pop33-recovery`
+- Starting checkpoint: `b512572c3458072626d35a5fad979cc8b09de97b`
+- Starting message: `docs: record verified public UI transaction test`
+- The milestone commit hash did not exist when this entry was written and is
+  intentionally not embedded in the commit that it identifies.
+
 ## 2026-07-18 - Verified reversible public UI transaction flow
 
 ### At a glance

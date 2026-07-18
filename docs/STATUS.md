@@ -38,8 +38,17 @@ the linkage between dUSDC and `Pop33BasicV1`. Local commands deploy the same
 pair and exercise the faucet through the full lifecycle. Runtime bytecode,
 creation inputs, getters, constructor linkage, and the empty initial pool were
 verified on-chain. One faucet drip was tested; no approve or POP33 lifecycle
-write was performed during deployment. Source publication in BaseScan is
-pending.
+write was performed during deployment.
+
+The source for both current Demo V1 contracts is now published as an exact
+match in BaseScan and is also available as an exact creation/runtime match in
+Sourcify. Before publication, the local sources were confirmed unchanged from
+the deployment source commit, the compiler settings and constructor arguments
+were reconstructed from build-info and artifacts, and the local runtime
+bytecode matched the deployed bytecode after applying the recorded immutable
+references. Source verification did not change the bytecode or blockchain
+state and is not a security audit. The temporary testnet randomness remains
+manipulable, and the complete 100-wallet lifecycle has not been executed.
 
 The separate `#/demo-v1` integration is now confirmed as an independent public
 Web3 application on a Vercel Preview for branch `codex/pop33-recovery` and

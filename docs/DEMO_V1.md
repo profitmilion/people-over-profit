@@ -252,7 +252,8 @@ Before submitting a deployment transaction, the script validates:
 The pre-transaction summary excludes the RPC URL and private key. After
 deployment, the script validates contract state and prints the contract,
 token, chain ID, deployer, and Demo V1 parameters. Explorer verification is not
-automatic and no verification plugin is installed in this checkpoint.
+automatic. The separate verification tooling described below uses no signer or
+deployment account.
 
 ## Deployment register
 
@@ -262,7 +263,7 @@ and initial state were checked directly through Base Sepolia RPC.
 
 | Version | Network | Chain ID | Demo token contract | Pop33 contract | Source commit | Deployment date | Status | Randomness | Warnings and limitations |
 | --- | --- | ---: | --- | --- | --- | --- | --- | --- | --- |
-| POP33 Demo V1 dUSDC pair | Base Sepolia | 84532 | `0xA7FA084b34c888061757d4b5FBb08a7B53fee786` | `0x140DA1b29F0B00b003Cabe86AE1a473d6745f56F` | `1db086dd958cf34bb72bd8f7b8c9f93dab4361a0` | 2026-07-14 UTC | **DEPLOYED — LOCALLY INTEGRATED, NOT PUBLICLY RELEASED** | temporary block-derived selection | dUSDC has no value; faucet supply is uncapped and cooldown is multi-wallet bypassable; Base Sepolia ETH required; no VRF, Automation, KYC, or production safety |
+| POP33 Demo V1 dUSDC pair | Base Sepolia | 84532 | `0xA7FA084b34c888061757d4b5FBb08a7B53fee786` | `0x140DA1b29F0B00b003Cabe86AE1a473d6745f56F` | `1db086dd958cf34bb72bd8f7b8c9f93dab4361a0` | 2026-07-14 UTC | **DEPLOYED — PUBLIC PREVIEW ACTIVE; SOURCES VERIFIED** | temporary block-derived selection | dUSDC has no value; faucet supply is uncapped and cooldown is multi-wallet bypassable; Base Sepolia ETH required; no VRF, Automation, KYC, or production safety |
 
 ### Deployment transactions
 
@@ -297,15 +298,49 @@ Verified POP33 state:
 - pool 1 is `Open`, with zero active positions and zero escrow;
 - `positionCount = 0`; no approve, join, draw, or claim was performed.
 
-Explorer source publication is **PENDING**. Runtime bytecode and getters are
-verified on-chain, but the source is not yet published in BaseScan and the
-verification plugin is not installed. After a separate review and installation
-of the Hardhat verification plugin, the exact intended commands are:
+### Published contract sources
+
+Both deployed contracts are published as exact matches in BaseScan and as
+exact creation/runtime matches in Sourcify:
+
+- `Pop33DemoUSDC` at
+  `0xA7FA084b34c888061757d4b5FBb08a7B53fee786`;
+- `Pop33BasicV1` at
+  `0x140DA1b29F0B00b003Cabe86AE1a473d6745f56F`.
+
+The published compiler settings are Solidity `0.8.28` with full compiler
+version `0.8.28+commit.7893614a`, optimizer enabled with 200 runs, and EVM
+version `cancun`. The published constructor arguments are:
+
+- `Pop33DemoUSDC(330000000, 86400)`;
+- `Pop33BasicV1(0xA7FA084b34c888061757d4b5FBb08a7B53fee786, 3600)`.
+
+Before publication, the repository sources were confirmed unchanged from the
+deployment source commit and the compiled runtime bytecode was compared with
+both deployed addresses using the artifacts' immutable references. Publishing
+the sources did not deploy a contract, send a transaction, or modify bytecode
+or blockchain state. Source verification establishes source-to-bytecode
+correspondence; it is not a security audit.
+
+Future BaseScan verification uses `@nomicfoundation/hardhat-verify` with the
+`default` build profile and the provider-specific `verify etherscan` task. Set
+`BASE_SEPOLIA_RPC_URL` and `ETHERSCAN_API_KEY` only in the invoking process,
+then run from `packages/contracts`:
 
 ```text
-npx hardhat verify --network baseSepolia 0xA7FA084b34c888061757d4b5FBb08a7B53fee786 330000000 86400
-npx hardhat verify --network baseSepolia 0x140DA1b29F0B00b003Cabe86AE1a473d6745f56F 0xA7FA084b34c888061757d4b5FBb08a7B53fee786 3600
+npm run verify:base-sepolia:demo-token
+npm run verify:base-sepolia:pop33
 ```
+
+The `baseSepoliaVerify` network has `accounts: []` and does not read the
+deployer private key. Do not store the API key in the repository or `.env`.
+The generic multi-provider task returned Blockscout `Unknown UID` while its
+BaseScan and Sourcify submissions succeeded. The maintained commands therefore
+target the official Etherscan API V2 provider directly: a real BaseScan error
+still fails the command, while an unrelated Blockscout polling failure cannot
+override the BaseScan result. Blockscout's public API subsequently reported
+both addresses as fully verified, but that additional explorer is not the
+required source of truth for this checkpoint.
 
 For every later deployment, copy the row and record the exact deployed
 addresses, reviewed source commit, UTC date, and one of `planned`, `active`, or
@@ -393,7 +428,8 @@ Known frontend limitations:
   join, and withdrawal;
 - the draw trigger remains permissionless and its temporary block-derived
   selection is explicitly unsuitable for production;
-- deployment source publication in BaseScan remains separate and pending;
+- both deployed sources are published in BaseScan and Sourcify, but source
+  verification is not a security audit;
 - the public Preview at deployment commit `e64c689` has verified one exact
   approval, join, and Open-pool withdrawal, but its faucet, draw, claim, pool
   locking, and full 100-position lifecycle remain publicly untested.

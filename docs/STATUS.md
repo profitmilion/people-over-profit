@@ -1,6 +1,6 @@
 # POP33 Development Status
 
-Last reviewed: 2026-07-18
+Last reviewed: 2026-07-19
 
 Branch reviewed: `codex/pop33-recovery`
 
@@ -128,6 +128,19 @@ extended or reused for that test. Funding, automated accumulation, the manual
 lock-boundary join, ten scheduled draws, and winner claims each require a
 separate reviewed and authorized stage.
 
+A separate exact-99 encrypted-store initializer and local read-only inspector
+are now prepared for the future full-lifecycle participant set. They reuse the
+existing scrypt and AES-256-GCM store format while keeping a distinct fixed
+file identity. Dry-run performs no write or wallet generation. Future
+initialization is create-only, requires an exact confirmation and two hidden
+matching password entries, validates a temporary encrypted file before its
+final rename, and creates no checkpoint or transaction journal. The inspector
+returns only format metadata, public index/address pairs, an encrypted-file
+fingerprint, uniqueness and exact-count results; it has no RPC, signer,
+funding, or transaction transport. Only temporary test fixtures were created.
+Piotr's real 99-wallet store has not been initialized, no wallet was funded,
+and no public transaction occurred in this checkpoint.
+
 The evidence, boundary behavior, funding estimates, phase gates, and operator
 gaps for that future test are recorded in
 `docs/PLAN_BASE_SEPOLIA_FULL_LIFECYCLE_99_PLUS_1.md`. The plan is not write
@@ -250,6 +263,12 @@ runtime.
   launcher that creates exactly five external encrypted test wallets plus a
   bound manifest, checkpoint, and empty journal; it never accepts the password
   as a CLI argument and never prints keys or encrypted contents.
+- A separate `operator:base-sepolia:wallet-store-99` PowerShell tool with a
+  default dry-run, future explicitly confirmed exact-99 initializer, and local
+  read-only inspector. It uses one external fixed file, validates the encrypted
+  temporary file before final rename, refuses overwrite, exposes no key or
+  encrypted payload, creates no journal/checkpoint, and contains no RPC,
+  signing, funding, or transaction path. The real store has not been created.
 - A separate, guarded Base Sepolia single-wallet smoke harness with a default
   read-only preflight, dedicated runtime-only key namespace, fixed documented
   addresses, exact approval, reversible join/withdraw scope, buffered gas
@@ -301,8 +320,9 @@ runtime.
   and ten claims;
 - confirmation, retention, and independent encrypted backup of the completed
   five-wallet pilot store, manifest, checkpoint, and journal recovery unit;
-- a later separately reviewed 99-wallet participant store, funding subsystem,
-  aggregate dry-run, and staged `5 -> 20 -> 50 -> 99` accumulation; the
+- later separately authorized creation and independent backup of the prepared
+  99-wallet participant store, followed by a funding subsystem, aggregate
+  operator dry-run, and staged `5 -> 20 -> 50 -> 99` accumulation; the
   completed five-wallet pilot store must not be reused for that stage;
 - the manually confirmed 100th public join, ten scheduled draw executions, ten
   winner claims, and final `Finished` reconciliation on Base Sepolia;

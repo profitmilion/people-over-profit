@@ -24,7 +24,9 @@ should use:
 - a separately selected draw executor; and
 - signer access to each winning participant wallet for its own claim.
 
-No such store or funding subsystem was created in this task.
+The exact-99 initializer and local read-only inspector were prepared and tested
+on 2026-07-19, but Piotr's real store and the funding subsystem were not
+created. Running the initializer remains a separate authorization.
 
 ## Confirmed deployed behavior
 
@@ -243,7 +245,8 @@ faucet/approve/join/withdraw sequence. The following production-like testnet
 capabilities are absent and must remain absent until separately implemented and
 reviewed:
 
-- exact 99-wallet initializer and independent-backup workflow;
+- separately authorized real execution and independent-backup validation for
+  the prepared exact 99-wallet initializer;
 - manifest-bound, capped funding subsystem and recovery journal;
 - Base Sepolia accumulation runner with cumulative range gates and hard 99
   stop;
@@ -262,9 +265,12 @@ reviewed:
 
 Implement and review these as separate commits and manual checkpoints:
 
-1. Add an exact 99-wallet initializer and read-only inspector, reusing the
-   encrypted-store primitives but creating no real store during automated
-   tests. Provide a manual launcher, backup gate, and immutable manifest.
+1. **Code prepared 2026-07-19; execution still blocked.** The exact 99-wallet
+   initializer and local read-only inspector reuse the encrypted-store
+   primitives and create no real store during automated tests. The manual
+   launcher and backup gate are documented. The immutable operator manifest
+   remains a later artifact because this narrow initializer deliberately
+   creates no checkpoint or transaction journal.
 2. Add full read-only preflight and dry-run reporting for the new 99-address
    set, including pool capacity, participant uniqueness, live fee ranges, and
    artifact preservation.
@@ -284,7 +290,7 @@ Implement and review these as separate commits and manual checkpoints:
 8. Run the stages only after their own tests, documentation, dry-run, artifact
    backup, exact authorization, and post-phase read-only audit.
 
-The first safe next task is item 1: prepare and test the separate 99-wallet
-initializer and inspector without creating Piotr's real store and without any
-funding or Base Sepolia write. Its eventual manual execution must be a new,
-explicitly authorized step.
+The first safe next task is an independent review of item 1 and its fixture-only
+evidence. Its eventual manual execution, inspector verification, and encrypted
+backup must be a new, explicitly authorized step. Funding and every Base
+Sepolia write remain later stages.

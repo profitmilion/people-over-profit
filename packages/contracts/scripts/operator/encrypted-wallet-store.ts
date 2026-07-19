@@ -1,11 +1,13 @@
 import {
+  createHash,
   createCipheriv,
   createDecipheriv,
   randomBytes,
   randomUUID,
   scrypt,
 } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { readFile, rename, unlink } from "node:fs/promises";
+import { basename, dirname, join } from "node:path";
 
 import { getAddress, Wallet, type Provider } from "ethers";
 
@@ -70,9 +72,18 @@ export interface DecryptedWalletRecord {
 }
 
 export interface EncryptedWalletStoreInspection {
+  formatVersion: 1;
   storeId: string;
   walletCount: number;
   addresses: string[];
+  fingerprint: string;
+}
+
+export interface CreateEncryptedWalletStoreOptions {
+  filePath: string;
+  password: string;
+  walletCount: number;
+  hooks?: AtomicWriteHooks;
 }
 
 export interface EncryptedWalletStoreOptions {
@@ -344,8 +355,10 @@ export async function inspectExistingEncryptedWalletStore(input: {
   }
 
   let parsed: unknown;
+  let serialized: string;
   try {
-    parsed = JSON.parse(await readFile(filePath, "utf8"));
+    serialized = await readFile(filePath, "utf8");
+    parsed = JSON.parse(serialized);
   } catch {
     throw new Error("Wallet store file is incomplete or invalid JSON.");
   }
@@ -355,10 +368,66 @@ export async function inspectExistingEncryptedWalletStore(input: {
     input.expectedWalletCount,
   );
   return {
+    formatVersion: FORMAT_VERSION,
     storeId: plaintext.storeId,
     walletCount: plaintext.walletCount,
     addresses: plaintext.wallets.map((wallet) => wallet.address),
+    fingerprint: `sha256:${createHash("sha256").update(serialized, "utf8").digest("hex")}`,
   };
+}
+
+export async function createEncryptedWalletStoreFile(
+  input: CreateEncryptedWalletStoreOptions,
+): Promise<EncryptedWalletStoreInspection> {
+  assertPassword(input.password);
+  assertWalletCount(input.walletCount);
+  const filePath = await assertSafeExternalFilePath(input.filePath, WALLET_STORE_SUFFIX);
+
+  return withExclusiveFileLock(filePath, async () => {
+    if (await pathIsRegularFile(filePath)) {
+      throw new Error("Encrypted wallet store already exists; creation will not overwrite it.");
+    }
+
+    const temporaryPath = join(
+      dirname(filePath),
+      `.${basename(filePath)}.${randomUUID()}.validation${WALLET_STORE_SUFFIX}`,
+    );
+    let renamed = false;
+    try {
+      const plaintext = newPlaintext(input.walletCount);
+      await writeEncrypted(temporaryPath, plaintext, input.password, input.hooks);
+      const validated = await inspectExistingEncryptedWalletStore({
+        filePath: temporaryPath,
+        password: input.password,
+        expectedWalletCount: input.walletCount,
+      });
+      if (
+        validated.storeId !== plaintext.storeId ||
+        validated.walletCount !== plaintext.walletCount ||
+        validated.addresses.some(
+          (address, index) => address.toLowerCase() !== plaintext.wallets[index].address.toLowerCase(),
+        )
+      ) {
+        throw new Error("Encrypted wallet store validation failed before final rename.");
+      }
+      if (await pathIsRegularFile(filePath)) {
+        throw new Error("Encrypted wallet store target appeared during creation; refusing to overwrite it.");
+      }
+      await rename(temporaryPath, filePath);
+      renamed = true;
+      return inspectExistingEncryptedWalletStore({
+        filePath,
+        password: input.password,
+        expectedWalletCount: input.walletCount,
+      });
+    } finally {
+      if (!renamed) {
+        await unlink(temporaryPath).catch((error: NodeJS.ErrnoException) => {
+          if (error.code !== "ENOENT") throw error;
+        });
+      }
+    }
+  });
 }
 
 export class EncryptedWalletProvider implements OperatorWalletProvider {

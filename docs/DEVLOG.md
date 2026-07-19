@@ -33,6 +33,68 @@ documentation.
   current overview of implementation, gaps, and risks.
 - Do not guess. Mark unclear facts as requiring later reconstruction.
 
+## 2026-07-19 - Exact-99 wallet-store initializer and inspector prepared
+
+### At a glance
+
+A separate future initializer and local read-only inspector are now prepared
+for the 99 automatic participants in the planned Base Sepolia full-lifecycle
+test. Only temporary fixture stores were created by tests. Piotr's real store
+was not initialized, no wallet was funded, and no transaction was performed.
+
+### Completed
+
+- Reused the existing version 1 scrypt and AES-256-GCM encrypted wallet-store
+  format without migrating or modifying the completed five-wallet pilot.
+- Added a fixed, separate full-lifecycle file identity and a write-free dry-run
+  that reports the planned location, exact count, target existence, and safety
+  boundaries without generating wallet material.
+- Added a create-only exact-99 initializer with exact confirmation, two hidden
+  matching password entries, private temporary-file creation, authenticated
+  reopen and validation before final rename, cleanup on failure, and overwrite
+  refusal.
+- Added a local read-only inspector limited to format/store metadata, public
+  indices and addresses, encrypted-file SHA-256 fingerprint, duplicate and
+  missing-address findings, exact-count status, and structural validation.
+- Kept checkpoint, manifest, transaction journal, RPC, funding, faucet,
+  lifecycle action, signer, and broadcast capabilities out of this narrow
+  artifact stage.
+
+### Verification boundary
+
+The focused fixture-only suite passed 9 tests covering dry-run and import side
+effects, exact count and confirmation, overwrite refusal, pilot isolation,
+temporary-file cleanup, read-only byte preservation, missing and duplicate
+addresses, output redaction, hidden prompts, and absence of RPC/signing/
+transaction transport. All 229 contracts/operator tests passed. Contract
+compilation, contracts and root TypeScript checks, root lint, all 20 frontend
+domain tests, and the production build passed. The contracts production
+dependency audit reported zero findings. The end-to-end dry-run left its
+planned target absent and generated no wallet material.
+
+No real operator path was used. The PowerShell `Initialize` mode was not run.
+No real wallet, store, checkpoint, manifest, journal, funding, faucet,
+approval, join, withdrawal, draw, claim, deployment, Vercel, Production, or
+Farcaster action occurred.
+
+### Limitations and next step
+
+The store format does not retain a creation timestamp, so the inspector reports
+that field as unavailable. A later operator manifest, checkpoint, journal,
+funding subsystem, and lifecycle coordinator remain separate reviewed tasks.
+
+The next safe step is independent review of this code and fixture evidence.
+Only a later explicit authorization may run `Initialize`; that step must be
+followed by local inspection and an independently validated encrypted backup,
+then stop before funding.
+
+### Git
+
+- Branch: `codex/pop33-recovery`
+- Starting checkpoint: `91f3c4557f207c8636d6af97e8d6d5cedc68012b`
+- Starting message: `docs: record pilot and plan full lifecycle test`
+- The milestone commit hash does not exist because no commit was requested.
+
 ## 2026-07-18 - Two-wallet Base Sepolia pilot verified and 99+1 lifecycle planned
 
 ### At a glance

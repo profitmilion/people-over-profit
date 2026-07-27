@@ -10,10 +10,10 @@ explicit approval. The 100-wallet lifecycle has not been executed.
 
 ## Manual initialization of the five-wallet pilot set
 
-The reviewed initializer creates exactly five new test wallets and four bound
-files outside the repository. It does not fund them and cannot send a
-transaction. The real pilot set has not yet been created; only automated
-temporary fixtures were generated while testing the initializer.
+The reviewed initializer created exactly five new test wallets and four bound
+files outside the repository. It did not fund them and cannot send a
+transaction. The external set was later funded for the guarded scope, and its
+two-wallet write pilot completed successfully on 2026-07-18.
 
 Piotr runs this manually from PowerShell:
 
@@ -189,7 +189,8 @@ pacing are now implemented. Piotr subsequently completed `status` for five and
 `dry-run` for two and five. The four artifacts were byte-for-byte unchanged and
 no transaction was signed or broadcast.
 
-A separately guarded write pilot for wallet indices 0 and 1 is prepared but
-has not been run. Its manual funding, authorization, execution, and recovery
-rules are in `docs/RUNBOOK_BASE_SEPOLIA_PILOT_2_WRITE.md`. Read-only success is
-not by itself authorization to execute that launcher.
+The separately guarded write pilot for wallet indices 0 and 1 completed
+successfully on 2026-07-18. Its funding, authorization, execution, receipts,
+and recovery evidence are recorded in
+`docs/RUNBOOK_BASE_SEPOLIA_PILOT_2_WRITE.md`. That completed reversible pilot
+does not authorize reuse of the five-wallet set or any future lifecycle write.

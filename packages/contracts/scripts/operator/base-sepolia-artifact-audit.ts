@@ -29,6 +29,12 @@ import {
   type TransactionJournalData,
 } from "./transaction-journal.js";
 
+export {
+  preflightExact99OperatorArtifacts,
+  renderExact99Preflight,
+  type Exact99PreflightReport,
+} from "./exact-99-operator-artifacts.js";
+
 const RECOVERY_STATUSES = new Set([
   "prepared",
   "ready_to_broadcast",

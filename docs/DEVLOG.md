@@ -33,6 +33,55 @@ documentation.
   current overview of implementation, gaps, and risks.
 - Do not guess. Mark unclear facts as requiring later reconstruction.
 
+## 2026-07-27 - Exact-99 artifact identity and recovery foundation prepared
+
+### At a glance
+
+A fixture-only artifact profile now organizes the future exact-99 participant
+set around one manifest, lifecycle checkpoint, append-only journal, and local
+redacted preflight. It preserves the approved
+`5 -> 20 -> 50 -> 99 -> manual 100 -> 10 draws -> 10 claims` plan and keeps
+the completed five-wallet pilot profile compatible.
+
+### Completed
+
+- Added a closed manifest schema binding the Base Sepolia deployment, purpose,
+  set/store IDs, exactly 99 ordered public addresses, order digest, encrypted
+  store fingerprint, creation time, fixed file identities, and hard stop 99.
+- Added lifecycle checkpoint stages from `initialized` through `finished`,
+  including cumulative action counters, last confirmed operation, recovery
+  flags, forward-only stage updates, and stale-writer detection.
+- Added an append-only operation-event journal with safe forward status
+  transitions and terminal-state protection.
+- Added local exact-99 preflight checks for count, uniqueness, order, hashes,
+  shared artifact identity, recovery blockers, and automatic-join hard stop.
+- Added runtime-artifact patterns to the root `.gitignore`.
+- Corrected stale statements that predated the successfully completed
+  two-wallet Base Sepolia pilot.
+
+### Verification boundary
+
+Only deterministic public fixture addresses and temporary local JSON files
+were used. The focused suite passed 17 tests before the full verification run.
+The code contains no wallet generation, RPC provider, signer, transaction
+transport, funding, faucet, approval, join, draw, or claim implementation.
+Piotr's real 99-wallet store and artifact set were not created.
+
+### Limitations and next step
+
+The existing PowerShell exact-99 initializer still creates only the encrypted
+store. Real artifact materialization, backup, network preflight, funding, and
+all public lifecycle actions remain separate authorization boundaries. The
+next engineering task after review and Git checkpoint is the fixture-only,
+capped funding subsystem.
+
+### Git
+
+- Branch: `codex/pop33-recovery`
+- Starting checkpoint: `49d3cfe90b8383299d9fa4a4df754c895106ee6e`
+- Commit: pending Piotr's explicit approval
+- Proposed message: `feat(operator): add exact-99 artifact preflight`
+
 ## 2026-07-19 - Exact-99 wallet-store initializer and inspector prepared
 
 ### At a glance

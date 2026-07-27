@@ -247,7 +247,7 @@ reviewed:
 
 - separately authorized real execution and independent-backup validation for
   the prepared exact 99-wallet initializer;
-- manifest-bound, capped funding subsystem and recovery journal;
+- manifest-bound, capped funding subsystem;
 - Base Sepolia accumulation runner with cumulative range gates and hard 99
   stop;
 - boundary monitor and special public manual-100 interface (the current UI
@@ -255,8 +255,9 @@ reviewed:
 - durable scheduled-draw executor with one-round authorization and recovery;
 - winner-to-store mapping and per-winner claim runner, including a manual-
   wallet branch and higher final-claim gas handling;
-- aggregate checkpoint schema for pool count, escrow, schedules, winners,
-  assigned/claimed totals, and final position release;
+- later network-state expansion of the prepared lifecycle checkpoint for pool
+  count, escrow, schedules, winners, assigned/claimed totals, and final
+  position release;
 - phase-specific read-only reconciliation and evidence export; and
 - an explicit incident procedure for external joins, wrong-pool routing,
   ambiguous receipts, unavailable winner keys, and stalled claims.
@@ -268,12 +269,14 @@ Implement and review these as separate commits and manual checkpoints:
 1. **Code prepared 2026-07-19; execution still blocked.** The exact 99-wallet
    initializer and local read-only inspector reuse the encrypted-store
    primitives and create no real store during automated tests. The manual
-   launcher and backup gate are documented. The immutable operator manifest
-   remains a later artifact because this narrow initializer deliberately
-   creates no checkpoint or transaction journal.
-2. Add full read-only preflight and dry-run reporting for the new 99-address
-   set, including pool capacity, participant uniqueness, live fee ranges, and
-   artifact preservation.
+   launcher and backup gate are documented.
+2. **Local artifact foundation prepared 2026-07-27; no real artifacts
+   created.** The exact-99 manifest, lifecycle checkpoint, append-only journal,
+   and local redacted artifact preflight now bind exactly 99 ordered public
+   addresses to one store ID and encrypted-file fingerprint. Fixture tests
+   cover the `5 -> 20 -> 50 -> 99` gates, recovery blockers, hard stop, and
+   five-wallet pilot compatibility. Live pool capacity, fee ranges, and other
+   chain reads remain a later separately authorized network preflight.
 3. Add the isolated funding subsystem with aggregate caps, exact destinations,
    a separate signer/store/journal, and fixture-only tests; keep real funding a
    later manual step.
@@ -290,7 +293,8 @@ Implement and review these as separate commits and manual checkpoints:
 8. Run the stages only after their own tests, documentation, dry-run, artifact
    backup, exact authorization, and post-phase read-only audit.
 
-The first safe next task is an independent review of item 1 and its fixture-only
-evidence. Its eventual manual execution, inspector verification, and encrypted
-backup must be a new, explicitly authorized step. Funding and every Base
-Sepolia write remain later stages.
+The first safe next task is an independent review and Git checkpoint of items 1
+and 2, followed by a separate fixture-only design and implementation of item 3.
+Eventual manual store initialization, artifact materialization, inspector
+verification, encrypted backup, RPC preflight, funding, and every Base Sepolia
+write remain separately authorized stages.

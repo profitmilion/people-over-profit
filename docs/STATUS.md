@@ -1,6 +1,6 @@
 # POP33 Development Status
 
-Last reviewed: 2026-07-19
+Last reviewed: 2026-07-27
 
 Branch reviewed: `codex/pop33-recovery`
 
@@ -134,7 +134,14 @@ existing scrypt and AES-256-GCM store format while keeping a distinct fixed
 file identity. Dry-run performs no write or wallet generation. Future
 initialization is create-only, requires an exact confirmation and two hidden
 matching password entries, validates a temporary encrypted file before its
-final rename, and creates no checkpoint or transaction journal. The inspector
+final rename. The existing launcher still creates no checkpoint or transaction
+journal. A separate fixture-only exact-99 artifact layer now prepares a safe
+manifest, lifecycle checkpoint, append-only journal, atomic local updates, and
+a redacted local preflight. It binds exactly 99 ordered public addresses to the
+store ID and encrypted-file fingerprint, preserves the cumulative
+`5 -> 20 -> 50 -> 99` gates, detects pending/ambiguous/manual-review state, and
+enforces the automatic hard stop at 99. The five-wallet pilot profile remains
+compatible. The inspector
 returns only format metadata, public index/address pairs, an encrypted-file
 fingerprint, uniqueness and exact-count results; it has no RPC, signer,
 funding, or transaction transport. Only temporary test fixtures were created.

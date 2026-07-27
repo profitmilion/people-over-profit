@@ -152,10 +152,11 @@ The public identity preflight was run against Base Sepolia and confirmed pool
 1 as Open at 0/100. A secure manual initializer is now available for exactly
 five new pilot wallets. It reuses the existing scrypt/AES-256-GCM store,
 requires two hidden PowerShell password entries and a fixed confirmation, and
-atomically publishes the four-file set only after complete validation. It has
-been exercised only in temporary automated fixtures: the real pilot store has
-not been created, no wallet has been funded, and no transaction was signed or
-sent. The future 100-wallet set is a separate milestone. See
+atomically publishes the four-file set only after complete validation. That
+external five-wallet set was later created, and the separately guarded
+two-wallet faucet/approve/join/withdraw pilot completed successfully on
+2026-07-18. This is evidence only for the reversible pilot path. The future
+99+1 full-lifecycle set remains a separate, unexecuted milestone. See
 `docs/RUNBOOK_BASE_SEPOLIA_READ_ONLY_OPERATOR.md`.
 
 ### Separate reversible Base Sepolia smoke harness

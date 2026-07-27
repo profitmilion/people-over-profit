@@ -1,8 +1,8 @@
 # Base Sepolia full-lifecycle 99-wallet store tools
 
-Status: code and fixture tests prepared; real store not initialized
+Status: store and exact-99 artifact code prepared; real store not initialized
 
-Prepared: 2026-07-19
+Prepared: 2026-07-19; artifact layer added 2026-07-27
 
 Network identity: Base Sepolia (`84532`), with no RPC use in these tools
 
@@ -25,9 +25,11 @@ name inside it:
 
 The directory must be outside the repository. The file name differs from the
 five-wallet pilot store, and the tool never reads, imports, migrates, extends,
-or overwrites that pilot. It also does not create a manifest, checkpoint, or
-transaction journal. Those artifacts belong to later, separately reviewed
-operator stages.
+or overwrites that pilot. The existing PowerShell `Initialize` mode still
+creates only the encrypted store. A separate fixture-tested artifact layer is
+now prepared for the manifest, checkpoint, append-only journal, and local
+preflight. It has not been run against a real store and is not yet exposed as
+an authorized public-network runner.
 
 The store reuses format version 1 from the existing durable operator-wallet
 implementation: scrypt with the existing fixed parameters derives a 256-bit
@@ -91,6 +93,34 @@ It never returns or prints a private key, mnemonic, password, derived key,
 plaintext store, ciphertext, IV, authentication tag, or KDF salt. It performs
 no RPC call and no write, repair, migration, signing, or transaction action.
 
+## Exact-99 artifact layer
+
+`scripts/operator/exact-99-operator-artifacts.ts` prepares four roles without
+generating wallets or providing any RPC or transaction transport:
+
+- the encrypted store remains the only private wallet-material container;
+- the manifest binds purpose, Base Sepolia chain and deployment addresses,
+  store ID, exactly 99 ordered public addresses, their order digest, the
+  encrypted-file SHA-256 fingerprint, creation time, file identities, and the
+  automatic hard stop at 99;
+- the checkpoint records the lifecycle stage, cumulative funding/faucet/
+  approval/join/draw/claim counts, last confirmed operation, timestamps, and
+  explicit pending/ambiguous/manual-review flags;
+- the append-only journal records immutable operation events and permits only
+  safe forward status transitions. A confirmed or failed terminal event cannot
+  move backwards.
+
+The supported checkpoint stages are `initialized`, `inspected`, `funded`,
+`checkpoint-5`, `checkpoint-20`, `checkpoint-50`, `checkpoint-99`,
+`awaiting-manual-100`, `locked`, `drawing`, `claiming`, `finished`, and
+`manual-review`.
+
+The local exact-99 preflight validates the decrypted store inspection against
+the three public artifacts. It checks exact count, uniqueness, address order,
+store ID and fingerprint, shared set identity, manifest fingerprint, recovery
+state, and the 99-join hard stop. Its report is redacted and performs no chain
+read. The established five-wallet pilot audit remains unchanged.
+
 ## Future manual initialization gate
 
 Before separately authorizing `Initialize` mode:
@@ -114,5 +144,10 @@ The future execution sequence remains:
 
 `5 -> 20 -> 50 -> 99 -> manual 100 -> 10 draws -> 10 claims`
 
-This tool implements only preparation for the first artifact in that plan. It
-does not implement or authorize any lifecycle write.
+The prepared code covers the local identity and recovery artifact foundation
+for that plan. It does not implement or authorize any lifecycle write.
+
+The next engineering stage is a fixture-only, capped funding subsystem and its
+integration plan. Real initialization, artifact materialization, backup, RPC
+preflight, funding, and every lifecycle phase still require separate explicit
+authorization.

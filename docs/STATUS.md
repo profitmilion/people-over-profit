@@ -27,7 +27,16 @@ approved `Open -> Locked -> Drawing -> Claimable -> Finished` lifecycle,
 including ten scheduled rounds, bounded non-repeating test winner selection,
 explicit prize accounting, pull-based claims, and position release at
 `Finished`. The legacy frontend and its existing Base Sepolia deployment remain
-available on their original routes and configuration.
+in the repository, but the ordinary `#/demo` route no longer exposes the old
+wallet action. The browser-local simulator remains explicitly isolated at
+`#/demo?view=dev`.
+
+The public product surface is now intentionally limited to the landing page,
+`#/demo-v1`, and `#/archive-v1`. The landing describes the deployed 33 dUSDC,
+100-position, ten-round Demo V1 parameters and clearly separates the future
+product vision from current testnet functionality. The preserved `#/demo` and
+`#/archive` entries are labelled legacy/DEV and are not linked from the public
+Demo V1 navigation.
 
 The controlled Demo V1 pair is now deployed on Base Sepolia. It
 includes the POP33-owned, six-decimal POP33 Demo USD (`dUSDC`) faucet token and
@@ -223,7 +232,7 @@ runtime.
 | Approved rule | Implementation status | Notes |
 | --- | --- | --- |
 | One payment creates one position in a specific pool/cycle | **implemented in deployed Demo V1 and local frontend** | `Pop33BasicV1` transfers exactly 33 dUSDC with `SafeERC20`; the separate UI performs an exact approval and then `join()`. |
-| One primary participation action creates one position per successful use | **partial** | In `/demo`, `POP IT` now invokes only the Base Sepolia transaction and does not mutate local simulation state. The current contract join remains nonpayable, so the approved payment flow is still absent. |
+| One primary participation action creates one position per successful use | **implemented in deployed Demo V1 and public frontend** | `#/demo-v1` performs the exact 33 dUSDC approval and paid `join()` flow against `Pop33BasicV1`; the preserved old nonpayable integration is no longer exposed on ordinary `#/demo`. |
 | Automatic assignment to an available pool | **implemented in deployed Demo V1 and exposed locally** | The contract selects the oldest qualifying open pool and creates another only when required, up to 10 open pools. |
 | Maximum one active position per user in the same pool | **implemented in deployed Demo V1 contract** | Indexed membership prevents a second active position in one pool and routes a subsequent join to another qualifying pool. |
 | Maximum 10 active positions per user | **implemented in deployed Demo V1 and exposed locally** | The contract enforces the limit; the UI reads the count and disables an ineligible join. |
@@ -241,7 +250,7 @@ runtime.
 | Hourly Base Sepolia round eligibility after `lockedAt` | **implemented in deployed Demo V1 contract** | Round `n` is eligible at `lockedAt + n * drawInterval`; boundary, early, duplicate, and out-of-order behavior is tested. Automation and production randomness remain deferred. |
 | `Open -> Locked -> Drawing -> Claimable -> Finished` | **implemented in deployed Demo V1 and represented locally** | Pool and all ten round states are read from contract getters; all ten claims remain required for `Finished`. |
 | Demo mirrors the final/mainnet product model | **partial** | The separate Demo V1 implements paid positions, Open-pool withdrawal, draws, claims, and the authoritative lifecycle on Base Sepolia. Production randomness, identity/compliance, and the complete public 100-position execution remain unfinished; the legacy `/demo` and developer simulation remain separate historical layers. |
-| Demo differences limited mainly to network, test tokens, safety parameters, and developer tools | **partial** | The current Demo V1 follows that direction, but production integrations and the preserved legacy layers have not fully converged on one release architecture. |
+| Demo differences limited mainly to network, test tokens, safety parameters, and developer tools | **partial** | The public surface now follows the current Demo V1 architecture and isolates legacy/DEV layers. Production randomness, automation, compliance, and the complete Base Sepolia lifecycle remain unfinished. |
 
 ## Implemented
 
@@ -255,18 +264,26 @@ runtime.
 - Winners history and archive UI.
 - Injected wallet connection.
 - Base Sepolia wagmi configuration.
-- On-chain `openNextAndJoin()` transaction call.
-- Basic on-chain aggregate and per-wallet reads.
+- Retained legacy `openNextAndJoin()` integration code, no longer exposed as an
+  action on ordinary `#/demo`.
+- Basic legacy on-chain aggregate and per-wallet reads retained for historical
+  and developer reference.
 - Transaction pending, confirmation, and error states.
-- Separation of the Base Sepolia `POP IT` action from browser-local simulation
-  state.
+- `#/demo-v1` as the sole public product flow and `#/archive-v1` as its public
+  on-chain archive.
+- Ordinary `#/demo` presents only a legacy notice and a link to the current
+  Demo V1; it cannot invoke the old contract.
 - A synchronous single-intent guard covering wallet approval, submission, and
   confirmation to prevent rapid duplicate transaction requests.
 - Wallet network readiness is derived from the active connector account chain,
   with a second `connector.getChainId()` check immediately before
   `writeContractAsync`; unsupported networks cannot open a transaction request.
 - Local cycle presentation and controls confined to `/demo?view=dev` and
-  explicitly labelled as non-on-chain developer simulation.
+  explicitly labelled as browser-local, non-on-chain developer simulation that
+  does not represent current Demo V1 economics or its complete lifecycle.
+- The landing presents only the current Base Sepolia Demo V1 values: 33 dUSDC,
+  100 positions, ten 330 dUSDC rounds, and an hourly test schedule. Future
+  Mainnet scale and integrations are visibly separated as non-Demo vision.
 - The local simulation component no longer depends on wallet or on-chain
   transaction status and its `POP IT` action is governed only by local state.
 - An isolated Hardhat 3 + TypeScript workspace under `packages/contracts`.
@@ -394,8 +411,6 @@ runtime.
 ## Partial / in progress
 
 - alignment of the demo with the intended mainnet product architecture;
-- convergence of the preserved legacy `/demo` integration with the separate,
-  authoritative Demo V1 routes and contract model;
 - consistent configuration across UI, hooks, and environment variables;
 - production randomness and asynchronous request/fulfillment recovery;
 - manual public faucet verification through the Vercel Preview UI; the tested

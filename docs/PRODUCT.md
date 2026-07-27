@@ -106,13 +106,17 @@ or `coupon`, is `TO DECIDE`.
 
 The repository currently provides:
 
-- a public landing page;
-- a public Vercel Preview with separate Demo V1 and archive routes;
+- a public landing page whose product CTA points only to `#/demo-v1`;
+- one public product flow at `#/demo-v1` and one public on-chain archive at
+  `#/archive-v1`;
 - injected-wallet connection and Base Sepolia network support;
 - contract-backed Demo V1 reads, faucet, exact approval, join, eligible
   Open-pool withdrawal, draw, and claim controls;
 - one confirmed public reversible approval, join, and exact-refund flow;
-- a local cycle simulation used for development;
+- a local cycle simulation isolated at `#/demo?view=dev`;
+- a legacy notice at ordinary `#/demo`, with no old-contract wallet action;
+- a browser-local DEV archive at `#/archive`, separate from the public
+  on-chain archive;
 - a developer panel;
 - a getter-based draw and pool archive;
 - a local operator that exercises the complete Basic V1 lifecycle.
@@ -136,7 +140,10 @@ Detailed personas, eligibility, and geographic availability are `TO DECIDE`.
 
 May include browser-local state, simulated participants, accelerated safety
 parameters, and developer controls. These tools should exercise the intended
-product model rather than define an alternative business model.
+product model rather than define an alternative business model. The preserved
+local simulator is explicitly labelled as a developer tool, may use
+`localStorage`, and does not represent the current Demo V1 economics or full
+on-chain lifecycle.
 
 ### Base Sepolia demo
 
@@ -154,6 +161,11 @@ status, and intended end-to-end demonstration are defined in `docs/DEMO_V1.md`.
 It is deployed on Base Sepolia, connected to the separate public Demo V1
 frontend, and source-verified in BaseScan. The current release remains on
 Vercel Preview; Production and Farcaster are separate, unfinished stages.
+
+The public frontend surface for this release consists of the landing page,
+`#/demo-v1`, and `#/archive-v1`. Preserved legacy contract components and the
+browser-local simulator remain development/history layers and are not
+alternative public POP33 products.
 
 ### Future production
 

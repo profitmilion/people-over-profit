@@ -99,7 +99,8 @@ export const ArchivePage: React.FC = () => {
         <p className="text-xs sm:text-sm text-neutral-400 max-w-2xl">
           This page contains browser-local cycle data from the developer
           simulation. It is not on-chain state and is intended only for testing
-          the local draw workflow.
+          the local draw workflow. It does not represent the current Demo V1
+          economics or complete on-chain lifecycle.
         </p>
 
         <div className="mt-1 text-[11px] text-neutral-500">

@@ -174,57 +174,53 @@ export default function ProdView() {
     <div className="mx-auto max-w-3xl p-4 space-y-6">
       {/* Header – simple, product-style, no fake logo */}
       <header className="flex flex-col items-center justify-center gap-2 text-center">
-        <h1 className="text-2xl font-bold tracking-tight text-slate-50">POP33 DEMO</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-slate-50">
+          POP33 local simulator
+        </h1>
         <p className="text-xs sm:text-sm text-neutral-400">
-          Daily draw simulator - up to {MAX_USER_CYCLES} active tickets per user.
+          Historical browser-local cycle model for developer testing.
         </p>
 
 
       </header>
 
-      {/* Subscription status / high-level info (DEMO placeholder) */}
+      {/* Historical simulator profile */}
       <section className="rounded-2xl border border-neutral-800 p-4 bg-neutral-950/40 space-y-3">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-sky-300">
-          Subscription status
+          Legacy simulation profile
         </h2>
 
         <div className="text-sm text-neutral-100 space-y-2 leading-relaxed">
           <p>
-            Your monthly subscription gives you priority access to the{" "}
-            <span className="font-semibold">1,000,000 prize pool</span>.
-          </p>
-
-          <p>
-            Each ticket represents a{" "}
-            <span className="font-semibold">verified on-chain entry</span>, available
-            only to active subscribers.
+            This developer-only profile uses browser-local participant IDs. It
+            does not create an on-chain position or subscription.
           </p>
 
           <ul className="list-disc list-inside space-y-1 text-neutral-200">
             <li>
-              You can hold up to{" "}
+              Up to{" "}
               <span className="font-semibold text-neutral-100">
                 {MAX_USER_CYCLES}
               </span>{" "}
-              tickets
+              simulated active cycles
             </li>
             <li>
               <span className="font-semibold text-neutral-100">
-                Daily draw (every ~24h)
+                Historical local interval: approximately 24 hours
               </span>
             </li>
             <li>
-              One ticket ={" "}
+              One local cycle may contain{" "}
               <span className="font-semibold text-neutral-100">
-                up to 30 draws
+                up to 30 simulated draws
               </span>
             </li>
           </ul>
 
           <p className="text-neutral-300">
-            Each ticket becomes active once its participant pool is complete. Holding
-            multiple tickets lets you participate in multiple draw sets in parallel –
-            each with its own independent chance to win.
+            These are retained simulator settings, not current Demo V1 product
+            rules. The public on-chain Demo V1 uses 33 dUSDC positions, 100
+            positions per pool and ten scheduled rounds.
           </p>
         </div>
       </section>

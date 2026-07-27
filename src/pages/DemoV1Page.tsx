@@ -122,12 +122,12 @@ export default function DemoV1Page() {
             </div>
             <h1 className="mt-1 text-2xl font-semibold">POP33 Basic V1</h1>
             <p className="mt-2 max-w-2xl text-sm text-slate-400">
-              Separate integration for the deployed 33 dUSDC pool lifecycle. The legacy demo remains available unchanged.
+              The public on-chain demo for the deployed 33 dUSDC pool lifecycle.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
+            <Link className="text-sm text-slate-400 hover:text-slate-200" to="/">Home</Link>
             <Link className="text-sm text-emerald-400 hover:text-emerald-300" to="/archive-v1">Demo V1 archive</Link>
-            <Link className="text-sm text-slate-400 hover:text-slate-200" to="/demo">Legacy demo</Link>
             <ConnectButton />
           </div>
         </header>

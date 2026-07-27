@@ -33,6 +33,68 @@ documentation.
   current overview of implementation, gaps, and risks.
 - Do not guess. Mark unclear facts as requiring later reconstruction.
 
+## 2026-07-27 - Demo V1 established as the sole public product flow
+
+### At a glance
+
+The public frontend now presents one current POP33 product path:
+`landing -> #/demo-v1 -> #/archive-v1`. The preserved old contract integration,
+browser-local simulator, and local archive remain in the repository as clearly
+labelled legacy/DEV layers and are no longer alternative public product flows.
+
+### Completed
+
+- Changed ordinary `#/demo` into a legacy notice with a link to the current
+  Demo V1 and removed its old-contract wallet action from the rendered route.
+- Preserved the browser-local simulator at `#/demo?view=dev` while stating that
+  it may use `localStorage`, does not use the current contract, and does not
+  represent current Demo V1 economics or its full lifecycle.
+- Kept `#/archive-v1` as the public on-chain archive and strengthened the
+  non-production labelling of the preserved browser-local `#/archive`.
+- Removed the public `Legacy demo` link from Demo V1.
+- Rewrote the landing around the deployed Base Sepolia facts: valueless dUSDC,
+  33 dUSDC per position, 100 positions, ten 330 dUSDC rounds, an hourly test
+  schedule, test-only randomness, and no real prizes.
+- Separated future Mainnet, production-randomness, automation, and scale ideas
+  from current Demo V1 functionality.
+- Corrected the local simulator's historical profile so it no longer claims an
+  on-chain position or active subscription.
+
+### Verification
+
+- `npx tsc --noEmit`: passed.
+- `npm test`: passed, `20/20`.
+- `npm run build`: passed; only existing dependency-annotation and bundle-size
+  warnings were reported.
+- Scoped ESLint over all changed frontend files: passed.
+- Local headless-Chrome smoke checks passed for `#/`, `#/demo-v1`,
+  `#/archive-v1`, `#/demo`, `#/demo?view=dev`, and `#/archive`.
+- The local Vite server was stopped after verification; port `4174` had zero
+  listeners.
+- No wallet was connected and no faucet, approval, join, withdrawal, draw,
+  claim, deployment, or other public transaction occurred.
+
+### Limitations and next step
+
+- This stage deliberately did not change the reversible 90/100 frontend
+  boundary, the 100th join, multi-pool UX, draw/claim behavior, the on-chain
+  archive, contracts, Vercel, or exact-99.
+- The contract/operator suite was not rerun because no contract or operator
+  file changed; the incoming checkpoint's confirmed result remains `397/397`.
+- The next separately reviewed product stage should address the most important
+  remaining public lifecycle blocker without weakening the locked-pool safety
+  boundary.
+
+### Git
+
+- Branch: `codex/pop33-recovery`.
+- Source baseline:
+  `211d7d9e06850746bbd6c347252a55a225f36a9d`.
+- Commit: not created in this session; the worktree is intentionally awaiting
+  review.
+- Proposed message:
+  `refactor(frontend): make Demo V1 the sole public product flow`.
+
 ## 2026-07-27 - Public execution protocol and journal v2 specified fixture-only
 
 ### At a glance

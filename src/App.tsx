@@ -15,11 +15,13 @@ export default function App() {
           {/* Landing jako pierwszy kontakt */}
           <Route path="/" element={<Pop33Landing />} />
 
-          {/* DEMO i Archiwum jako hash-routes (bez 404 od Vercel) */}
-          <Route path="/demo" element={<Pop33Demo />} />
-          <Route path="/archive" element={<ArchivePage />} />
+          {/* Publiczne Demo V1 i publiczne archiwum on-chain */}
           <Route path="/demo-v1" element={<DemoV1Page />} />
           <Route path="/archive-v1" element={<DemoV1ArchivePage />} />
+
+          {/* Zachowane wejścia legacy/DEV; zwykłe /demo nie wykonuje starej akcji */}
+          <Route path="/demo" element={<Pop33Demo />} />
+          <Route path="/archive" element={<ArchivePage />} />
 
           {/* Catch-all: wracamy na landing */}
           <Route path="*" element={<Pop33Landing />} />

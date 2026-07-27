@@ -22,20 +22,19 @@ const Pop33Landing: React.FC = () => {
                     {/* Lewa kolumna */}
                     <div className="space-y-7">
                         <div className="inline-flex items-center rounded-full bg-slate-900/80 px-4 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-300">
-                            POP33 Demo / People Over Profit
+                            POP33 Demo V1 · Base Sepolia
                         </div>
 
                         <div className="space-y-4">
                             <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl md:text-5xl">
-                                One simple lottery &amp; crowdfunding flow
+                                One on-chain pool. Ten test rounds.
                             </h1>
 
                             <p className="max-w-xl text-sm leading-relaxed text-slate-300">
-                                POP33 is a transparent model built around one repeatable flow:
-                                join the round, wait for the daily draw, see the result. This
-                                The main demo now uses the POP33 contract on Base Sepolia.
-                                Farcaster integration and the full-scale PMN economy remain
-                                future development areas.
+                                Demo V1 is the current POP33 product flow on Base Sepolia:
+                                connect a wallet, use valueless test dUSDC to join a
+                                100-position pool, follow ten scheduled rounds and inspect
+                                the results on-chain.
                             </p>
                         </div>
 
@@ -44,19 +43,19 @@ const Pop33Landing: React.FC = () => {
                         {/* Kluczowe liczby / USP */}
                         <div className="grid gap-4 sm:grid-cols-3">
                             <InfoTile
-                                label="Entry levels (beta)"
-                                value="0.33 – 3.33 – 13.33 – 33 USDC"
-                                note="We start low and move toward 33 USDC only when the community is ready."
+                                label="Test position"
+                                value="33 dUSDC"
+                                note="POP33 Demo USD is a valueless test token, not real USDC."
                             />
                             <InfoTile
-                                label="Draw rhythm"
-                                value="30 draws / month"
-                                note="The vision: a simple daily draw in one global structure."
+                                label="Pool"
+                                value="100 positions"
+                                note="A full test pool holds 3,300 dUSDC in on-chain escrow."
                             />
                             <InfoTile
-                                label="Transparent archive"
-                                value="Visible winners"
-                                note="Results stay available in a public-style archive inside the app."
+                                label="Test rounds"
+                                value="10 × 330 dUSDC"
+                                note="One winner per round on a shortened hourly test schedule."
                             />
                         </div>
 
@@ -73,8 +72,8 @@ const Pop33Landing: React.FC = () => {
                             </Link>
 
                             <p className="max-w-xs text-center text-[11px] text-slate-500 min-[1600px]:text-left mt-1">
-                                Base Sepolia testnet only. No real funds are used. The local
-                                browser simulation is available separately as a developer tool.
+                                Base Sepolia only. No real funds or real prizes. Winner
+                                selection uses explicitly non-production test randomness.
                             </p>
                         </div>
                     </div>
@@ -90,71 +89,65 @@ const Pop33Landing: React.FC = () => {
                             <div className="mt-4 space-y-5">
                                 <StepRow
                                     title="Connect on Base Sepolia"
-                                    description="Connect a supported wallet and switch it to Base Sepolia before using the on-chain POP IT action."
+                                    description="Connect a supported wallet, switch to Base Sepolia and make sure it has test ETH for gas."
                                 />
                                 <StepRow
-                                    title="Wait for the draw"
-                                    description="The current testnet contract records the entry. Complete production payments and draw mechanics are still under development."
+                                    title="Get dUSDC and join"
+                                    description="Use the test-token faucet, approve exactly 33 dUSDC and create one on-chain position in an available pool."
                                 />
                                 <StepRow
-                                    title="See results & archive"
-                                    description="On-chain statistics are shown in the main demo. The local cycle archive belongs only to the separate DEV simulation."
+                                    title="Follow rounds and claims"
+                                    description="A full pool has ten scheduled test rounds. Winners claim 330 dUSDC, and the on-chain archive shows the recorded results."
                                 />
-                                
                             </div>
                         </div>
                     </div>
                 </SectionFrame>
 
-                {/* GŁÓWNA SEKCJA MARKETINGOWA – wizja + korzyści */}
+                {/* ODDZIELONA SEKCJA PRZYSZŁEJ WIZJI */}
                 <SectionFrame className="space-y-6 px-4 py-6 md:px-6 md:py-8">
                     <div className="space-y-3">
+                        <div className="inline-flex rounded-full border border-sky-500/40 bg-sky-500/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-sky-300">
+                            Future product vision · not part of Demo V1
+                        </div>
                         <h2 className="text-xl font-semibold tracking-tight">
-                            Why POP33 can become a community-scale win model
+                            Where POP33 may evolve after the testnet demo
                         </h2>
 
                         <SectionDots />
 
                         <p className="max-w-2xl text-sm leading-relaxed text-slate-300">
-                            POP33 is not just a lottery. It is a social-economic model built
-                            on fairness, shared value and transparent mechanics. The full
-                            vision only activates if we reach a real community cap and all
-                            conditions are met – but the direction is clear from day one.
+                            POP33 is intended to become a transparent, community-oriented
+                            product on Base. Mainnet economics, production randomness,
+                            automation, eligibility and any broader community mechanisms
+                            remain future work and require separate decisions.
                         </p>
                     </div>
 
-                    {/* Duża karta – wizja / warunkowe obietnice */}
                     <div className="mt-2 rounded-2xl bg-slate-900/85 p-4 shadow-sm md:p-5 space-y-2">
                         <p className="text-sm font-semibold text-slate-50">
-                            Vision: million-scale community economy
+                            Current boundary
                         </p>
                         <p className="text-xs leading-relaxed text-slate-300">
-                            If POP33 reaches the required cap and all conditions are met, the
-                            full model may unlock: up to 1 000 000 USD monthly for winners,
-                            sponsored free tickets for observers, ecosystem rewards for
-                            long-term participants and a growing PMN Profit Milion economy.
-                            This is a vision, not a guarantee, and it depends entirely on
-                            real adoption.
+                            Demo V1 is a Base Sepolia lifecycle test with dUSDC that has no
+                            monetary value. It is not a Mainnet product, does not offer real
+                            prizes and does not prove production-grade randomness or
+                            automation.
                         </p>
                     </div>
 
-                    {/* 4 mniejsze karty – konkretne korzyści */}
-                    <div className="mt-4 grid gap-4 md:grid-cols-2">
+                    <div className="mt-4 grid gap-4 md:grid-cols-3">
                         <StepCard
-                            title="Fair by design"
-                            body="POP33 removes typical gambling traps: no VIP tiers, no endless upgrades, no uncontrolled spending. Everyone in a round has the same simple chance."
+                            title="Future Mainnet product"
+                            body="Real assets, release controls and operating rules require separate product, legal and security approval."
                         />
                         <StepCard
-                            title="Free tickets for observers"
-                            body="A small portion of every paid ticket can fund free entries for people who watch from the side. They can still join, play and win – even with zero balance."
+                            title="Production randomness"
+                            body="The current permissionless draw is for testing only. A verifiable production mechanism remains to be selected."
                         />
                         <StepCard
-                            title="HODL & DCA potential"
-                            body="Parts of the model are planned to support long-term DCA / HODL mechanics for loyal users. Exact rules and risks will be described in the Whitepaper and Manifest."
-                        />
-                        <StepCard
-                            title="Scaling with users"
-                            body="We start with very small entry levels and only move toward the final 33 USDC tier when the community size and on-chain activity make it realistic and safe."
+                            title="Community scale"
+                            body="The long-term scale and community model are a direction, not functionality available in Demo V1."
                         />
                     </div>
 

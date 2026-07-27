@@ -277,9 +277,14 @@ Implement and review these as separate commits and manual checkpoints:
    cover the `5 -> 20 -> 50 -> 99` gates, recovery blockers, hard stop, and
    five-wallet pilot compatibility. Live pool capacity, fee ranges, and other
    chain reads remain a later separately authorized network preflight.
-3. Add the isolated funding subsystem with aggregate caps, exact destinations,
-   a separate signer/store/journal, and fixture-only tests; keep real funding a
-   later manual step.
+3. **Fixture-only code prepared 2026-07-27; execution absent.** The isolated
+   exact-99 funding subsystem now binds deterministic wei-only plans to the
+   manifest, public signer identity, total/per-wallet caps, signer reserve,
+   checkpoint, and append-only journal. Local `plan`, `inspect`, and `simulate`
+   modes cover success, failure, timeout, ambiguity, restart, and already-funded
+   recipients. No provider, signer credential, funding transport, real plan
+   file, or public transfer exists. Real limit selection and funding remain
+   later manual stages.
 4. Add the Base Sepolia accumulation coordinator for explicitly approved
    cumulative ranges, semantic receipt checks, and an unreachable automatic
    100th join.
@@ -293,8 +298,8 @@ Implement and review these as separate commits and manual checkpoints:
 8. Run the stages only after their own tests, documentation, dry-run, artifact
    backup, exact authorization, and post-phase read-only audit.
 
-The first safe next task is an independent review and Git checkpoint of items 1
-and 2, followed by a separate fixture-only design and implementation of item 3.
-Eventual manual store initialization, artifact materialization, inspector
-verification, encrypted backup, RPC preflight, funding, and every Base Sepolia
-write remain separately authorized stages.
+The first safe next task is an independent review and Git checkpoint of item 3,
+followed by the fixture-only accumulation coordinator in item 4. Eventual
+manual store initialization, artifact materialization, inspector verification,
+encrypted backup, live gas-based funding limits, RPC preflight, funding, and
+every Base Sepolia write remain separately authorized stages.

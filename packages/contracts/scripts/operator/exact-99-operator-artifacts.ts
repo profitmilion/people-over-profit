@@ -120,12 +120,14 @@ export type Exact99OperationType =
   | "claim";
 
 export type Exact99OperationStatus =
+  | "planned"
   | "prepared"
   | "pending"
   | "confirmed"
   | "failed"
   | "ambiguous"
-  | "manual-review";
+  | "manual-review"
+  | "skipped-already-funded";
 
 export interface Exact99JournalReceipt {
   status: 0 | 1;
@@ -199,15 +201,18 @@ const OPERATION_TYPES = new Set<Exact99OperationType>([
   "funding", "faucet", "approve", "join", "manual-100", "draw", "claim",
 ]);
 const OPERATION_STATUSES = new Set<Exact99OperationStatus>([
-  "prepared", "pending", "confirmed", "failed", "ambiguous", "manual-review",
+  "planned", "prepared", "pending", "confirmed", "failed", "ambiguous",
+  "manual-review", "skipped-already-funded",
 ]);
 const ALLOWED_STATUS_TRANSITIONS: Record<Exact99OperationStatus, ReadonlySet<Exact99OperationStatus>> = {
+  planned: new Set(["prepared", "failed", "manual-review", "skipped-already-funded"]),
   prepared: new Set(["pending", "confirmed", "failed", "ambiguous", "manual-review"]),
   pending: new Set(["confirmed", "failed", "ambiguous", "manual-review"]),
   ambiguous: new Set(["confirmed", "failed", "manual-review"]),
   "manual-review": new Set(["confirmed", "failed"]),
   confirmed: new Set(),
   failed: new Set(),
+  "skipped-already-funded": new Set(),
 };
 const STAGE_ORDER = new Map<Exact99LifecycleStage, number>([
   ["initialized", 0],
@@ -629,7 +634,7 @@ function validateJournalEntry(value: unknown, index: number): Exact99JournalEntr
     }
     receipt = { status: source.status, gasUsed: source.gasUsed };
   }
-  if (["pending", "confirmed", "failed", "ambiguous"].includes(status) && hash === null) {
+  if (["pending", "confirmed", "ambiguous"].includes(status) && hash === null) {
     throw new Error(`${label}.${status} requires a transaction hash.`);
   }
   if (status === "confirmed" && (blockNumber === null || receipt?.status !== 1)) {

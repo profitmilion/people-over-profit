@@ -28,12 +28,75 @@ import {
   sanitizeOperatorError,
   type TransactionJournalData,
 } from "./transaction-journal.js";
+import {
+  preflightExact99OperatorArtifacts,
+  type Exact99Checkpoint,
+  type Exact99Journal,
+  type Exact99Manifest,
+  type Exact99PreflightCheck,
+  type Exact99PreflightReport,
+} from "./exact-99-operator-artifacts.js";
+import {
+  inspectExact99Funding,
+  type Exact99FundingInspection,
+  type Exact99FundingPlan,
+} from "./exact-99-funding.js";
 
 export {
   preflightExact99OperatorArtifacts,
   renderExact99Preflight,
   type Exact99PreflightReport,
 } from "./exact-99-operator-artifacts.js";
+
+export interface Exact99PreflightWithFunding {
+  profile: "exact-99-with-funding";
+  readOnly: true;
+  artifacts: Exact99PreflightReport;
+  funding: Exact99FundingInspection;
+  checks: Exact99PreflightCheck[];
+  blockers: string[];
+  readyForFutureNetworkPreflight: boolean;
+}
+
+export function preflightExact99OperatorArtifactsWithFunding(input: {
+  store: Parameters<typeof preflightExact99OperatorArtifacts>[0]["store"];
+  manifest: Exact99Manifest;
+  checkpoint: Exact99Checkpoint;
+  journal: Exact99Journal;
+  fundingPlan: Exact99FundingPlan;
+}): Exact99PreflightWithFunding {
+  const artifacts = preflightExact99OperatorArtifacts({
+    store: input.store,
+    manifest: input.manifest,
+    checkpoint: input.checkpoint,
+    journal: input.journal,
+  });
+  const funding = inspectExact99Funding({
+    manifest: input.manifest,
+    checkpoint: input.checkpoint,
+    journal: input.journal,
+    plan: input.fundingPlan,
+  });
+  const checks = [
+    ...artifacts.checks,
+    ...funding.checks.map((check) => ({
+      ...check,
+      name: `funding:${check.name}`,
+    })),
+  ];
+  const blockers = checks
+    .filter((check) => !check.ok)
+    .map((check) => `${check.name}: ${check.detail}`);
+  return {
+    profile: "exact-99-with-funding",
+    readOnly: true,
+    artifacts,
+    funding,
+    checks,
+    blockers,
+    readyForFutureNetworkPreflight: blockers.length === 0,
+  };
+}
 
 const RECOVERY_STATUSES = new Set([
   "prepared",

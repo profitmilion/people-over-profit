@@ -17,6 +17,7 @@ dist-ssr
 *.operator-wallets.enc.json
 *.operator-set-manifest.json
 *.operator-journal.json
+*.operator-funding-plan.json
 *.operator-state.tmp
 *.operator-*.tmp
 *.operator-*.bak

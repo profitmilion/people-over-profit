@@ -147,7 +147,9 @@ The future execution sequence remains:
 The prepared code covers the local identity and recovery artifact foundation
 for that plan. It does not implement or authorize any lifecycle write.
 
-The next engineering stage is a fixture-only, capped funding subsystem and its
-integration plan. Real initialization, artifact materialization, backup, RPC
-preflight, funding, and every lifecycle phase still require separate explicit
-authorization.
+The fixture-only capped funding subsystem and its artifact/preflight integration
+are documented in `docs/RUNBOOK_BASE_SEPOLIA_EXACT_99_FUNDING.md`. The next
+engineering stage after review is the fixture-only cumulative accumulation
+coordinator. Real initialization, artifact materialization, backup, live
+gas-based limit selection, RPC preflight, funding, and every lifecycle phase
+still require separate explicit authorization.

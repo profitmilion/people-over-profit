@@ -33,6 +33,56 @@ documentation.
   current overview of implementation, gaps, and risks.
 - Do not guess. Mark unclear facts as requiring later reconstruction.
 
+## 2026-07-27 - Capped exact-99 funding subsystem prepared fixture-only
+
+### At a glance
+
+A deterministic local funding plan, inspection, and simulator now prove the
+future 99 operator recipients can be constrained to the exact manifest,
+per-wallet and total budgets, and a public funding-signer identity with a
+required reserve. No ETH was sent and no public execution path was added.
+
+### Completed
+
+- Bound all 99 indexed recipients and deterministic operation IDs to the
+  existing set/store IDs, manifest fingerprint, and ordered-address digest.
+- Required canonical decimal wei strings and rejected zero, negative,
+  unit-labelled, per-wallet-over-limit, total-over-budget, insufficient-balance,
+  and reserve-violating inputs.
+- Added public fixture signer identity checks for address, chain, purpose,
+  maximum budget, starting balance, and reserve without any credential.
+- Extended the shared append-only journal with `planned` and terminal
+  `skipped-already-funded` states while retaining forward-only transitions,
+  immutable transaction hashes, stop-on-first-error, and recovery blockers.
+- Added local success, failure, timeout, ambiguous, manual-review,
+  already-funded, and restart simulation.
+- Integrated funding-plan and confirmed-count reconciliation into the exact-99
+  local preflight.
+
+### Verification boundary
+
+The focused funding suite passed 26 tests. The complete contract/operator suite
+passed all 272 tests, and contracts TypeScript checking, contract compilation,
+and `git diff --check` passed. All addresses, balances, hashes, receipts, and
+outcomes were synthetic fixtures. The illustrative funding values are test
+inputs, not approved operating constants. The module contains no provider,
+private key, mnemonic, environment-secret access, transaction transport, or
+public execution mode.
+
+### Limitations and next step
+
+There is no real funding-plan file or live gas input, signer, public RPC
+preflight, or transfer runner. After independent review and a Git checkpoint,
+the next engineering task is the fixture-only cumulative accumulation
+coordinator for `5 -> 20 -> 50 -> 99`.
+
+### Git
+
+- Branch: `codex/pop33-recovery`
+- Starting checkpoint: `76901794cee282c794ee8c3bed5cf86d8fac23b0`
+- Commit: pending Piotr's explicit approval
+- Proposed message: `feat(operator): add capped exact-99 funding plan`
+
 ## 2026-07-27 - Exact-99 artifact identity and recovery foundation prepared
 
 ### At a glance

@@ -148,6 +148,18 @@ funding, or transaction transport. Only temporary test fixtures were created.
 Piotr's real 99-wallet store has not been initialized, no wallet was funded,
 and no public transaction occurred in this checkpoint.
 
+A fixture-only capped funding subsystem is also prepared for that exact-99
+identity. It accepts recipients only from the validated ordered manifest,
+requires canonical decimal wei strings, binds a public fixture signer identity,
+and enforces a configurable minimum target, per-wallet ceiling, aggregate
+budget, starting balance, and signer reserve. Deterministic local `plan`,
+`inspect`, and `simulate` functions cover confirmed, failed, pending,
+ambiguous, manual-review, already-funded, and restart behavior through the
+shared append-only journal and checkpoint. The illustrative test amounts are
+not approved operating constants; real values still require fresh gas and fee
+evidence. No provider, signer credential, transaction transport, real funding
+plan file, ETH transfer, or public runner was added.
+
 The evidence, boundary behavior, funding estimates, phase gates, and operator
 gaps for that future test are recorded in
 `docs/PLAN_BASE_SEPOLIA_FULL_LIFECYCLE_99_PLUS_1.md`. The plan is not write

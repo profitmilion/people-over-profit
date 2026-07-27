@@ -149,7 +149,10 @@ for that plan. It does not implement or authorize any lifecycle write.
 
 The fixture-only capped funding subsystem and its artifact/preflight integration
 are documented in `docs/RUNBOOK_BASE_SEPOLIA_EXACT_99_FUNDING.md`. The next
-engineering stage after review is the fixture-only cumulative accumulation
-coordinator. Real initialization, artifact materialization, backup, live
-gas-based limit selection, RPC preflight, funding, and every lifecycle phase
-still require separate explicit authorization.
+fixture-only coordinator is documented in
+`docs/RUNBOOK_BASE_SEPOLIA_EXACT_99_ACCUMULATION_COORDINATOR.md`. It fixes the
+four ranges, authorizations, per-wallet order, restart rules, and hard stop
+after index 98 without creating a public runner. Real initialization, artifact
+materialization, backup, live gas-based limit selection, RPC preflight,
+funding, and every lifecycle phase still require separate explicit
+authorization.

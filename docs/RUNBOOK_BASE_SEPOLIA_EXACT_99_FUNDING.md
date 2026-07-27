@@ -120,8 +120,12 @@ They perform no live chain read.
 This stage created no real plan file, wallet store, wallet, signer, funding
 transaction, or Base Sepolia connection. It does not authorize ETH transfer.
 
-After independent review and a clean Git checkpoint, the next engineering task
-is a fixture-only accumulation coordinator for the cumulative
-`5 -> 20 -> 50 -> 99` stages. Real store initialization, artifact backup, live
-gas-based limit selection, public RPC preflight, funding, and every lifecycle
-write remain separate explicit authorizations.
+The fixture-only accumulation coordinator for the cumulative
+`5 -> 20 -> 50 -> 99` stages is now prepared and documented in
+`docs/RUNBOOK_BASE_SEPOLIA_EXACT_99_ACCUMULATION_COORDINATOR.md`. It reuses this
+plan identity and the shared append-only journal; it does not add funding
+transport.
+
+After independent review and a clean Git checkpoint, real store initialization,
+artifact backup, live gas-based limit selection, public RPC preflight, funding,
+and every lifecycle write remain separate explicit authorizations.

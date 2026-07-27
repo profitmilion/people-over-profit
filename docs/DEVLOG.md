@@ -33,6 +33,60 @@ documentation.
   current overview of implementation, gaps, and risks.
 - Do not guess. Mark unclear facts as requiring later reconstruction.
 
+## 2026-07-27 - Exact-99 cumulative accumulation coordinator prepared fixture-only
+
+### At a glance
+
+A local coordinator now proves the future 99-wallet process can advance through
+four separately authorized checkpoints while preserving one ordered,
+append-only recovery history. No public RPC or transaction path was added.
+
+### Completed
+
+- Fixed the new-wallet ranges at `0-4`, `5-19`, `20-49`, and `50-98`.
+- Added exact fixture authorization phrases for cumulative checkpoints 5, 20,
+  50, and 99.
+- Enforced one-wallet-at-a-time `funding -> faucet -> approve -> join` order.
+- Bound fixture journal events to the checkpoint range, wallet-order digest,
+  funding-plan ID, operation identity, and public wallet identity.
+- Added forward-only running checkpoint stages for honest partial-range state.
+- Added stop-on-first-error behavior for failed, pending, ambiguous,
+  inconsistent-receipt, and manual-review outcomes.
+- Added restart behavior that skips confirmed work and resumes a partial wallet
+  at its first unfinished operation.
+- Enforced the hard stop after index 98 and the transition to
+  `awaiting-manual-100`.
+- Added a dedicated coordinator runbook.
+
+### Verification
+
+- Focused coordinator suite: 26 local fixture tests.
+- Full package TypeScript, compilation, and test results are recorded in the
+  pre-commit task report.
+- Source inspection confirms no provider, signer, environment-key loading,
+  transaction transport, or public runner.
+
+### Limitations
+
+- The coordinator is an in-memory fixture planner, inspector, and simulator.
+- It does not materialize real artifacts or reconcile uncertain public-chain
+  transaction evidence.
+- It does not authorize or implement funding, faucet, approval, join, manual
+  100, draw, or claim activity.
+
+### Next logical step
+
+Independently review the coordinator diff and create a Git checkpoint only
+after Piotr's separate approval. Real artifact initialization and every public
+network action remain later, separately gated tasks.
+
+### Git
+
+- Branch: `codex/pop33-recovery`
+- Commit: pending separate approval
+- Message proposal:
+  `feat(operator): add exact-99 accumulation coordinator`
+
 ## 2026-07-27 - Capped exact-99 funding subsystem prepared fixture-only
 
 ### At a glance

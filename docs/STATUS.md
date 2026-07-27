@@ -160,6 +160,20 @@ not approved operating constants; real values still require fresh gas and fee
 evidence. No provider, signer credential, transaction transport, real funding
 plan file, ETH transfer, or public runner was added.
 
+A fixture-only cumulative accumulation coordinator now binds that funding plan
+to the same manifest, checkpoint, and append-only journal. It fixes four
+disjoint ranges at `0-4`, `5-19`, `20-49`, and `50-98`, requires a separate
+exact authorization phrase for each cumulative `5 -> 20 -> 50 -> 99` gate, and
+enforces sequential `funding -> faucet -> approve -> join` progress for one
+wallet at a time. Confirmed work is skipped on restart, partial wallets resume
+at their first unfinished operation, and failed, pending, ambiguous,
+inconsistent-receipt, or manual-review outcomes stop the range immediately.
+Fixture journal events are bound to the range, ordered-address digest, and
+funding-plan ID. Completion of index 98 moves the checkpoint to
+`awaiting-manual-100`; index 99 and an automatic `manual-100` operation are
+unreachable. The module exposes only local `plan`, `inspect`, and `simulate`
+functions and contains no RPC, signer, key loading, or transaction transport.
+
 The evidence, boundary behavior, funding estimates, phase gates, and operator
 gaps for that future test are recorded in
 `docs/PLAN_BASE_SEPOLIA_FULL_LIFECYCLE_99_PLUS_1.md`. The plan is not write
@@ -288,6 +302,11 @@ runtime.
   temporary file before final rename, refuses overwrite, exposes no key or
   encrypted payload, creates no journal/checkpoint, and contains no RPC,
   signing, funding, or transaction path. The real store has not been created.
+- A fixture-only exact-99 cumulative accumulation coordinator with fixed
+  `5 -> 20 -> 50 -> 99` gates, exact per-gate fixture authorization, sequential
+  per-wallet operation ordering, shared-journal idempotency, stop-on-first-error
+  behavior, forward-only running stages, and a hard transition to
+  `awaiting-manual-100` after index 98. It is not a public-network runner.
 - A separate, guarded Base Sepolia single-wallet smoke harness with a default
   read-only preflight, dedicated runtime-only key namespace, fixed documented
   addresses, exact approval, reversible join/withdraw scope, buffered gas

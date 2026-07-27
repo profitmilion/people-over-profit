@@ -285,9 +285,15 @@ Implement and review these as separate commits and manual checkpoints:
    recipients. No provider, signer credential, funding transport, real plan
    file, or public transfer exists. Real limit selection and funding remain
    later manual stages.
-4. Add the Base Sepolia accumulation coordinator for explicitly approved
-   cumulative ranges, semantic receipt checks, and an unreachable automatic
-   100th join.
+4. **Fixture-only code prepared 2026-07-27; public runner absent.** The
+   cumulative accumulation coordinator fixes the four new-index ranges at
+   `0-4`, `5-19`, `20-49`, and `50-98`, requires a separate exact fixture
+   authorization for every cumulative gate, and advances each wallet only
+   through `funding -> faucet -> approve -> join`. It reconciles the existing
+   checkpoint and append-only journal, resumes confirmed partial progress,
+   stops on the first uncertain or failed outcome, and moves directly to
+   `awaiting-manual-100` after index 98. It contains no RPC, signer, transaction
+   transport, or automatic 100th join.
 5. Add and audit the boundary monitor plus a narrowly scoped public manual-100
    interface. Decide whether residual race risk is acceptable or a guarded
    contract redeployment is required.
@@ -298,8 +304,8 @@ Implement and review these as separate commits and manual checkpoints:
 8. Run the stages only after their own tests, documentation, dry-run, artifact
    backup, exact authorization, and post-phase read-only audit.
 
-The first safe next task is an independent review and Git checkpoint of item 3,
-followed by the fixture-only accumulation coordinator in item 4. Eventual
+The first safe next task is an independent review and Git checkpoint of item 4.
+Eventual
 manual store initialization, artifact materialization, inspector verification,
 encrypted backup, live gas-based funding limits, RPC preflight, funding, and
 every Base Sepolia write remain separately authorized stages.

@@ -42,9 +42,13 @@ export type Exact99LifecycleStage =
   | "initialized"
   | "inspected"
   | "funded"
+  | "running-checkpoint-5"
   | "checkpoint-5"
+  | "running-checkpoint-20"
   | "checkpoint-20"
+  | "running-checkpoint-50"
   | "checkpoint-50"
+  | "running-checkpoint-99"
   | "checkpoint-99"
   | "awaiting-manual-100"
   | "locked"
@@ -134,6 +138,14 @@ export interface Exact99JournalReceipt {
   gasUsed: string;
 }
 
+export interface Exact99JournalCoordinatorBinding {
+  checkpoint: "checkpoint-5" | "checkpoint-20" | "checkpoint-50" | "checkpoint-99";
+  rangeStart: number;
+  rangeEnd: number;
+  walletOrderDigest: string;
+  fundingPlanId: string;
+}
+
 export interface Exact99JournalEntry {
   sequence: number;
   operationId: string;
@@ -149,6 +161,7 @@ export interface Exact99JournalEntry {
   error: string | null;
   createdAt: string;
   updatedAt: string;
+  coordinator?: Exact99JournalCoordinatorBinding | null;
 }
 
 export interface Exact99Journal {
@@ -193,9 +206,11 @@ const SECRET_TEXT = /\b(?:private key|mnemonic|seed phrase|password|passphrase|c
 const CREDENTIAL_URL = /\b[a-z][a-z0-9+.-]*:\/\/[^/\s:@]+:[^@\s/]+@/i;
 const PRIVATE_KEY_SHAPE = /^(?:0x)?[0-9a-fA-F]{64}$/;
 const STAGES = new Set<Exact99LifecycleStage>([
-  "initialized", "inspected", "funded", "checkpoint-5", "checkpoint-20",
-  "checkpoint-50", "checkpoint-99", "awaiting-manual-100", "locked",
-  "drawing", "claiming", "finished", "manual-review",
+  "initialized", "inspected", "funded", "running-checkpoint-5", "checkpoint-5",
+  "running-checkpoint-20", "checkpoint-20", "running-checkpoint-50",
+  "checkpoint-50", "running-checkpoint-99", "checkpoint-99",
+  "awaiting-manual-100", "locked", "drawing", "claiming", "finished",
+  "manual-review",
 ]);
 const OPERATION_TYPES = new Set<Exact99OperationType>([
   "funding", "faucet", "approve", "join", "manual-100", "draw", "claim",
@@ -218,15 +233,19 @@ const STAGE_ORDER = new Map<Exact99LifecycleStage, number>([
   ["initialized", 0],
   ["inspected", 1],
   ["funded", 2],
-  ["checkpoint-5", 3],
-  ["checkpoint-20", 4],
-  ["checkpoint-50", 5],
-  ["checkpoint-99", 6],
-  ["awaiting-manual-100", 7],
-  ["locked", 8],
-  ["drawing", 9],
-  ["claiming", 10],
-  ["finished", 11],
+  ["running-checkpoint-5", 3],
+  ["checkpoint-5", 4],
+  ["running-checkpoint-20", 5],
+  ["checkpoint-20", 6],
+  ["running-checkpoint-50", 7],
+  ["checkpoint-50", 8],
+  ["running-checkpoint-99", 9],
+  ["checkpoint-99", 10],
+  ["awaiting-manual-100", 11],
+  ["locked", 12],
+  ["drawing", 13],
+  ["claiming", 14],
+  ["finished", 15],
 ]);
 
 const MANIFEST_KEYS = [
@@ -252,9 +271,13 @@ const JOURNAL_KEYS = [
 const ENTRY_KEYS = [
   "sequence", "operationId", "type", "walletIndex", "walletAddress",
   "expectedState", "transactionHash", "status", "blockNumber", "receipt",
-  "reconciliation", "error", "createdAt", "updatedAt",
+  "reconciliation", "error", "createdAt", "updatedAt", "coordinator",
 ] as const;
+const REQUIRED_ENTRY_KEYS = ENTRY_KEYS.filter((key) => key !== "coordinator");
 const RECEIPT_KEYS = ["status", "gasUsed"] as const;
+const COORDINATOR_BINDING_KEYS = [
+  "checkpoint", "rangeStart", "rangeEnd", "walletOrderDigest", "fundingPlanId",
+] as const;
 const FILE_KEYS = ["walletStore", "manifest", "checkpoint", "journal"] as const;
 
 function record(value: unknown, label: string): Record<string, unknown> {
@@ -274,6 +297,22 @@ function exactRecord(
     if (!keys.includes(key)) throw new Error(`${label}.${key} is not allowed.`);
   }
   for (const key of keys) {
+    if (!(key in candidate)) throw new Error(`${label}.${key} is required.`);
+  }
+  return candidate;
+}
+
+function exactRecordWithOptional(
+  value: unknown,
+  keys: readonly string[],
+  requiredKeys: readonly string[],
+  label: string,
+): Record<string, unknown> {
+  const candidate = record(value, label);
+  for (const key of Object.keys(candidate)) {
+    if (!keys.includes(key)) throw new Error(`${label}.${key} is not allowed.`);
+  }
+  for (const key of requiredKeys) {
     if (!(key in candidate)) throw new Error(`${label}.${key} is required.`);
   }
   return candidate;
@@ -605,7 +644,7 @@ export function buildInitialExact99Checkpoint(
 
 function validateJournalEntry(value: unknown, index: number): Exact99JournalEntry {
   const label = `exact99.journal.entries[${index}]`;
-  const entry = exactRecord(value, ENTRY_KEYS, label);
+  const entry = exactRecordWithOptional(value, ENTRY_KEYS, REQUIRED_ENTRY_KEYS, label);
   if (integer(entry.sequence, `${label}.sequence`, 1) !== index + 1) {
     throw new Error(`${label}.sequence must be append-only and contiguous.`);
   }
@@ -643,6 +682,33 @@ function validateJournalEntry(value: unknown, index: number): Exact99JournalEntr
   if (status === "manual-review" && entry.error === null) {
     throw new Error(`${label}.manual-review requires an error summary.`);
   }
+  let coordinator: Exact99JournalCoordinatorBinding | null = null;
+  if (entry.coordinator !== undefined && entry.coordinator !== null) {
+    const binding = exactRecord(
+      entry.coordinator,
+      COORDINATOR_BINDING_KEYS,
+      `${label}.coordinator`,
+    );
+    if (!["checkpoint-5", "checkpoint-20", "checkpoint-50", "checkpoint-99"].includes(
+      binding.checkpoint as string,
+    )) {
+      throw new Error(`${label}.coordinator.checkpoint is invalid.`);
+    }
+    const rangeStart = integer(binding.rangeStart, `${label}.coordinator.rangeStart`, 0, 98);
+    const rangeEnd = integer(binding.rangeEnd, `${label}.coordinator.rangeEnd`, rangeStart, 98);
+    const orderDigest = text(
+      binding.walletOrderDigest,
+      `${label}.coordinator.walletOrderDigest`,
+      100,
+    );
+    coordinator = {
+      checkpoint: binding.checkpoint as Exact99JournalCoordinatorBinding["checkpoint"],
+      rangeStart,
+      rangeEnd,
+      walletOrderDigest: orderDigest,
+      fundingPlanId: fingerprint(binding.fundingPlanId, `${label}.coordinator.fundingPlanId`),
+    };
+  }
   return {
     sequence: index + 1,
     operationId,
@@ -658,6 +724,7 @@ function validateJournalEntry(value: unknown, index: number): Exact99JournalEntr
     error: nullableText(entry.error, `${label}.error`),
     createdAt: iso(entry.createdAt, `${label}.createdAt`),
     updatedAt: iso(entry.updatedAt, `${label}.updatedAt`),
+    coordinator,
   };
 }
 
@@ -675,7 +742,8 @@ function assertAppendOnlyHistory(entries: readonly Exact99JournalEntry[]): void 
         previous.type !== entry.type ||
         previous.walletIndex !== entry.walletIndex ||
         previous.walletAddress !== entry.walletAddress ||
-        previous.expectedState !== entry.expectedState
+        previous.expectedState !== entry.expectedState ||
+        JSON.stringify(previous.coordinator ?? null) !== JSON.stringify(entry.coordinator ?? null)
       ) {
         throw new Error("Exact-99 journal operation identity changed between append-only events.");
       }

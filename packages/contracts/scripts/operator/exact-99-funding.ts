@@ -705,6 +705,7 @@ function appendEvent(
     error: update.error ?? null,
     createdAt: previous?.createdAt ?? updatedAt,
     updatedAt,
+    coordinator: previous?.coordinator ?? null,
   };
   return validateExact99Journal({
     ...journal,

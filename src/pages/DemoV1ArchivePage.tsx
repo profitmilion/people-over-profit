@@ -5,6 +5,7 @@ import {
   formatTimestamp,
   poolStatusLabels,
   shortenAddress,
+  sortPoolsByIdAscending,
 } from "../demo-v1/domain";
 import { demoV1Config, getDemoV1ConfigErrorMessage } from "../demo-v1/config";
 import { useDemoV1Data } from "../hooks/useDemoV1Data";
@@ -36,7 +37,7 @@ export default function DemoV1ArchivePage() {
           <Card><p className="text-sm text-slate-400">No deployed Demo V1 pools have been created yet.</p></Card>
         ) : null}
 
-        {[...data.pools].reverse().map((pool) => (
+        {sortPoolsByIdAscending(data.pools).map((pool) => (
           <Card key={pool.id.toString()}>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>

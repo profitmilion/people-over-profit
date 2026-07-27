@@ -115,6 +115,9 @@ export default function DemoV1Page() {
 
   const faucetReady = isFaucetAvailable(data.nextDripAt, now);
   const hasGas = data.nativeBalance > 0n;
+  const maximumActivePositionsReached =
+    data.staticData.maxActivePositions > 0n &&
+    data.activePositionsByUser >= data.staticData.maxActivePositions;
   const joinReady = canJoin({
     configured: data.runtimeIdentityVerified,
     connected: data.isConnected,
@@ -230,7 +233,14 @@ export default function DemoV1Page() {
             <p className="mt-2 text-sm text-slate-400">
               This is a two-transaction flow. When required, the first wallet request approves exactly 33 dUSDC. Only after its receipt and a fresh exact allowance read will a separate join signature be requested.
             </p>
-            {qualifyingPool && qualifyingPoolFill ? (
+            {maximumActivePositionsReached ? (
+              <div className="mt-3 rounded-xl border border-slate-700 bg-slate-900/70 p-3 text-sm text-slate-200">
+                <div className="font-semibold">Maximum active positions reached</div>
+                <p className="mt-1 text-xs leading-relaxed text-slate-400">
+                  Your wallet already has 10 active positions, which is the maximum allowed. Withdraw from an Open pool or wait until one of your pools finishes before joining again.
+                </p>
+              </div>
+            ) : qualifyingPool && qualifyingPoolFill ? (
               <div className={`mt-3 rounded-xl border p-3 text-xs ${
                 qualifyingPoolFill.nextJoinLocks
                   ? "border-amber-700 bg-amber-950/40 text-amber-100"
@@ -254,16 +264,26 @@ export default function DemoV1Page() {
                 No qualifying existing pool is currently visible. The contract will select or create the actual qualifying pool at execution, and the receipt will be verified against that result.
               </p>
             )}
-            <p className="mt-2 text-xs text-slate-500">
-              Approval required: {needsApproval(data.allowance, data.staticData.entryPrice) ? "yes" : "no"}
-            </p>
+            {!maximumActivePositionsReached ? (
+              <p className="mt-2 text-xs text-slate-500">
+                Approval required: {needsApproval(data.allowance, data.staticData.entryPrice) ? "yes" : "no"}
+              </p>
+            ) : null}
             <Button
               variant="pop"
-              className="mt-4 px-6 py-2 text-sm"
+              className={`mt-4 px-6 py-2 text-sm ${
+                maximumActivePositionsReached
+                  ? "cursor-not-allowed disabled:scale-100 disabled:bg-slate-700 disabled:[background-image:none] disabled:text-slate-400 disabled:opacity-100 disabled:shadow-none disabled:transition-none disabled:hover:scale-100 disabled:hover:bg-slate-700 disabled:hover:shadow-none disabled:active:scale-100"
+                  : ""
+              }`}
               disabled={!joinReady || !hasGas || actions.isBusy}
-              onClick={() => handle(actions.approveAndJoin())}
+              onClick={maximumActivePositionsReached
+                ? undefined
+                : () => handle(actions.approveAndJoin())}
             >
-              Approve if needed, then join
+              {maximumActivePositionsReached
+                ? "Maximum 10 active positions"
+                : "Approve if needed, then join"}
             </Button>
           </Card>
         </section>

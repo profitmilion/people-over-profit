@@ -33,6 +33,14 @@ export function getPoolFillState(input: {
   };
 }
 
+export function sortPoolsByIdAscending<T extends { id: bigint }>(
+  pools: readonly T[],
+): T[] {
+  return [...pools].sort((left, right) =>
+    left.id < right.id ? -1 : left.id > right.id ? 1 : 0,
+  );
+}
+
 export function formatDUsdc(value: bigint, decimals = DUSDC_DECIMALS): string {
   const negative = value < 0n;
   const absolute = negative ? -value : value;

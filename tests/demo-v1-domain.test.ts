@@ -10,6 +10,7 @@ import {
   isFaucetAvailable,
   needsApproval,
   shouldWaitForConfirmedAllowance,
+  sortPoolsByIdAscending,
 } from "../src/demo-v1/domain.js";
 import {
   DEMO_V1_CONTRACT_ADDRESS,
@@ -168,6 +169,15 @@ test("pool fill UI state covers 89, 90, 98, 99 and 100 Locked", () => {
     nextJoinLocks: false,
     withdrawalAvailable: false,
   });
+});
+
+test("archive pools are ordered from the oldest ID to the newest without mutating input", () => {
+  const pools = [{ id: 3n }, { id: 1n }, { id: 2n }] as const;
+  assert.deepEqual(
+    sortPoolsByIdAscending(pools).map((pool) => pool.id),
+    [1n, 2n, 3n],
+  );
+  assert.deepEqual(pools.map((pool) => pool.id), [3n, 1n, 2n]);
 });
 
 test("draw eligibility requires a due pending round in a locked or drawing pool", () => {

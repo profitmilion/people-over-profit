@@ -3,20 +3,10 @@ import { Link } from "react-router-dom";
 import Button from "../components/Button";
 import { SectionFrame } from "../components/SectionFrame";
 
-function SectionDots() {
-    return (
-        <div className="flex justify-center py-2">
-            <span className="text-slate-600 text-sm tracking-[0.5em]">
-                • • •
-            </span>
-        </div>
-    );
-}
-
 const Pop33Landing: React.FC = () => {
     return (
         <div className="min-h-screen bg-slate-950 text-slate-50 flex flex-col">
-            <main className="mx-auto flex max-w-5xl flex-col gap-20 px-4 py-16 md:px-6 md:py-20 flex-1">
+            <main className="mx-auto flex w-full min-w-0 max-w-5xl flex-col gap-20 px-4 py-16 md:px-6 md:py-20 flex-1">
                 {/* HERO – główne wejście do demo */}
                 <SectionFrame className="grid gap-12 min-[1600px]:grid-cols-2 min-[1600px]:items-center">
                     {/* Lewa kolumna */}
@@ -30,7 +20,7 @@ const Pop33Landing: React.FC = () => {
                                 One on-chain pool. Ten test rounds.
                             </h1>
 
-                            <p className="max-w-xl text-sm leading-relaxed text-slate-300">
+                            <p className="mx-auto max-w-xl text-center text-sm leading-relaxed text-slate-300">
                                 Demo V1 is the current POP33 product flow on Base Sepolia:
                                 connect a wallet, use valueless test dUSDC to join a
                                 100-position pool, follow ten scheduled rounds and inspect
@@ -114,9 +104,7 @@ const Pop33Landing: React.FC = () => {
                             Where POP33 may evolve after the testnet demo
                         </h2>
 
-                        <SectionDots />
-
-                        <p className="max-w-2xl text-sm leading-relaxed text-slate-300">
+                        <p className="mx-auto max-w-2xl text-center text-sm leading-relaxed text-slate-300">
                             POP33 is intended to become a transparent, community-oriented
                             product on Base. Mainnet economics, production randomness,
                             automation, eligibility and any broader community mechanisms
@@ -152,7 +140,7 @@ const Pop33Landing: React.FC = () => {
                     </div>
 
                     {/* DRUGIE CTA – mocniej wyeksponowane, z większym odstępem */}
-                    <div className="mt-10 mb-12 flex justify-center md:justify-start">
+                    <div className="mt-10 mb-12 flex justify-center">
                         <Link to="/demo-v1">
                             <Button variant="pop" type="button">
                                 POP IT - open Demo V1

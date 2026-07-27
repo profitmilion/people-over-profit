@@ -129,3 +129,8 @@ transport.
 After independent review and a clean Git checkpoint, real store initialization,
 artifact backup, live gas-based limit selection, public RPC preflight, funding,
 and every lifecycle write remain separate explicit authorizations.
+
+The fixture-only execution runner now consumes this deterministic plan when it
+reconciles a simulated funding result. It verifies recipient identity, exact
+planned amount, per-wallet cap, and native-balance delta. This does not add an
+ETH transfer path.

@@ -156,3 +156,8 @@ after index 98 without creating a public runner. Real initialization, artifact
 materialization, backup, live gas-based limit selection, RPC preflight,
 funding, and every lifecycle phase still require separate explicit
 authorization.
+
+The fixture-only execution runner documented in
+`docs/RUNBOOK_BASE_SEPOLIA_EXACT_99_EXECUTION_RUNNER.md` consumes only public
+manifest identity and injected fixture results. It does not open the encrypted
+store, load a signer, or create a public-network path.

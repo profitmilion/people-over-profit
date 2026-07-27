@@ -33,6 +33,63 @@ documentation.
   current overview of implementation, gaps, and risks.
 - Do not guess. Mark unclear facts as requiring later reconstruction.
 
+## 2026-07-27 - Exact-99 cumulative execution runner core prepared fixture-only
+
+### At a glance
+
+A realistic local runner core now joins the exact-99 artifacts, funding plan,
+coordinator, injected operation adapter, receipt evidence, and semantic state
+reconciliation without adding a Base Sepolia connection.
+
+### Completed
+
+- Added manifest-bound plan, inspection, single-step simulation, and cumulative
+  range simulation.
+- Added a narrow injected fixture adapter for funding, faucet, approve, and
+  join.
+- Enforced one-wallet-at-a-time operation order and checkpoint authorization.
+- Added funding, faucet, approval, and join-specific semantic reconciliation.
+- Added before/after pool snapshots for participant-count, cycle, lock, and
+  `lockedAt` race detection.
+- Preserved operation IDs, hashes, append-only history, restart behavior, and
+  stop-on-first-error through the existing coordinator and journal.
+- Added stronger removal of secret-shaped values and field names from adapter
+  errors.
+- Kept index 99 and the manual 100th join outside the runner.
+- Added a dedicated runner runbook.
+
+### Pilot audit
+
+The runner reuses the pilot's safety principles and shared sanitizer/recovery
+model. Pilot-only Ethers runtime, RPC, nonce, signer, pool #1, wallet indices
+0/1, and withdrawal behavior were not copied.
+
+### Verification
+
+- Focused execution-runner suite: 34 local fixture tests.
+- Full package verification is recorded in the pre-commit task report.
+- No public RPC, provider, signer, key loading, or transaction transport exists
+  in the new runner source.
+
+### Limitations
+
+- Only an injected fixture adapter exists.
+- Public nonce management, gas policy, receipt reads, and chain reconciliation
+  remain future adapter work.
+- The runner does not create or open real exact-99 artifacts.
+
+### Next logical step
+
+Independently review and checkpoint this fixture-only runner. Do not begin a
+public Base Sepolia adapter without a separate design, threat review, and
+authorization.
+
+### Git
+
+- Branch: `codex/pop33-recovery`
+- Commit: pending separate approval
+- Message proposal: `feat(operator): add exact-99 execution runner core`
+
 ## 2026-07-27 - Exact-99 cumulative accumulation coordinator prepared fixture-only
 
 ### At a glance

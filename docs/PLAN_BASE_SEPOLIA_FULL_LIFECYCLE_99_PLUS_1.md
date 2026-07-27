@@ -294,17 +294,25 @@ Implement and review these as separate commits and manual checkpoints:
    stops on the first uncertain or failed outcome, and moves directly to
    `awaiting-manual-100` after index 98. It contains no RPC, signer, transaction
    transport, or automatic 100th join.
-5. Add and audit the boundary monitor plus a narrowly scoped public manual-100
+5. **Fixture-only core prepared 2026-07-27; network adapter absent.** The
+   cumulative execution runner now consumes only the coordinator's next
+   manifest-bound operation, invokes a narrow injected fixture adapter, and
+   requires both successful receipt evidence and operation-specific semantic
+   reconciliation. It covers funding, faucet, approval, and join; restart after
+   each step; timeout and ambiguity; and pool count/cycle/lock races through
+   index 98. No provider, signer, RPC, public transaction transport, index 99,
+   or manual-100 action exists.
+6. Add and audit the boundary monitor plus a narrowly scoped public manual-100
    interface. Decide whether residual race risk is acceptable or a guarded
    contract redeployment is required.
-6. Add one-round-at-a-time draw planning and execution with schedule gates,
+7. Add one-round-at-a-time draw planning and execution with schedule gates,
    temporary-randomness warnings, signer funding, and conservative recovery.
-7. Add winner mapping and one-claim-at-a-time execution, including manual
+8. Add winner mapping and one-claim-at-a-time execution, including manual
    handling for Piotr's wallet and special final-claim estimation.
-8. Run the stages only after their own tests, documentation, dry-run, artifact
+9. Run the stages only after their own tests, documentation, dry-run, artifact
    backup, exact authorization, and post-phase read-only audit.
 
-The first safe next task is an independent review and Git checkpoint of item 4.
+The first safe next task is an independent review and Git checkpoint of item 5.
 Eventual
 manual store initialization, artifact materialization, inspector verification,
 encrypted backup, live gas-based funding limits, RPC preflight, funding, and

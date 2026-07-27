@@ -135,6 +135,9 @@ ETH transfer, faucet, approval, join, withdrawal, draw, claim, deployment, or
 Vercel action occurred.
 
 The next engineering task should be an independent review and Git checkpoint
-of this fixture-only coordinator. Public execution architecture, real artifact
+of the fixture-only execution runner described in
+`docs/RUNBOOK_BASE_SEPOLIA_EXACT_99_EXECUTION_RUNNER.md`. The coordinator
+chooses the next safe operation; the runner invokes an injected fixture adapter
+and reconciles its result. Public execution architecture, real artifact
 materialization, funding, and lifecycle operations remain separate future
 authorizations.

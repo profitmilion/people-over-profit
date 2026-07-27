@@ -174,6 +174,20 @@ funding-plan ID. Completion of index 98 moves the checkpoint to
 unreachable. The module exposes only local `plan`, `inspect`, and `simulate`
 functions and contains no RPC, signer, key loading, or transaction transport.
 
+A fixture-only cumulative execution runner core now connects the coordinator's
+next-operation decision to a narrow injected adapter. It accepts no arbitrary
+wallet list: checkpoint, index, public address, operation type, and operation ID
+all come from the exact-99 manifest, funding plan, and journal. It processes one
+wallet at a time in `funding -> faucet -> approve -> join` order, skips
+confirmed work on restart, and stops on the first failed, pending, ambiguous,
+manual-review, timeout, identity, receipt, or semantic-state mismatch.
+Confirmed receipts are reconciled against operation-specific snapshots:
+funding amount and cap, faucet dUSDC delta, approval token/spender/allowance,
+and join position/pool/count/cycle/lock state. The injected fixture adapter has
+no RPC, provider, signer, key loader, or transaction transport. Index `98`
+remains the last automatic wallet and completion moves to
+`awaiting-manual-100`.
+
 The evidence, boundary behavior, funding estimates, phase gates, and operator
 gaps for that future test are recorded in
 `docs/PLAN_BASE_SEPOLIA_FULL_LIFECYCLE_99_PLUS_1.md`. The plan is not write
@@ -307,6 +321,10 @@ runtime.
   per-wallet operation ordering, shared-journal idempotency, stop-on-first-error
   behavior, forward-only running stages, and a hard transition to
   `awaiting-manual-100` after index 98. It is not a public-network runner.
+- A fixture-only exact-99 cumulative execution runner core with a narrow
+  injected adapter, manifest-derived operation identities, receipt plus
+  semantic reconciliation, restart idempotency, one-wallet-at-a-time ordering,
+  and explicit 99/100 race checks. No Base Sepolia adapter exists.
 - A separate, guarded Base Sepolia single-wallet smoke harness with a default
   read-only preflight, dedicated runtime-only key namespace, fixed documented
   addresses, exact approval, reversible join/withdraw scope, buffered gas

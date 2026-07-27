@@ -33,6 +33,63 @@ documentation.
   current overview of implementation, gaps, and risks.
 - Do not guess. Mark unclear facts as requiring later reconstruction.
 
+## 2026-07-27 - Demo V1 frontend supports the locking 100th join
+
+### At a glance
+
+The public Demo V1 frontend no longer stops at the historical reversible-test
+boundary. It now supports Open pools through `99/100` and verifies the 100th
+join as the contract transition to `Locked`, including exact escrow,
+`lockedAt`, and the first draw schedule.
+
+### Completed
+
+- Removed the frontend-only 89-position preflight cap without changing the
+  smart contract, ABI, addresses, approve amount, or transaction sequence.
+- Strengthened join preflight with exact pool escrow, capacity, lock-state, and
+  per-pool membership checks in addition to the existing chain, runtime
+  identity, token balance, allowance, active-position limit, and gas checks.
+- Bound post-receipt verification to the actual `PositionJoined` event,
+  position, and pool selected by `join()`, including the case where another
+  qualifying pool is selected between preflight and mining.
+- Required joins ending at 1-99 to remain Open with zero `lockedAt`; required
+  the 100th join to end at exactly 100 positions, 3,300 dUSDC escrow, `Locked`,
+  non-zero `lockedAt`, and ten valid pending-round schedules.
+- Updated the public UI with live pool fill, a specific 99/100 locking warning,
+  locked time, first draw time, and explicit withdrawal unavailability after
+  lock.
+- Added fixture-only coverage for 89, 90, 98, 99, `100 Locked`, allocation
+  races, inconsistent receipt/state, and refresh after confirmed verification.
+
+### Verification
+
+- `npx tsc --noEmit`: passed during implementation.
+- `npm test`: passed, `25/25`; all tests use local fixtures and mocks without
+  external RPC or transactions.
+- Final build, scoped ESLint, UI fixture rendering, and Git checks are recorded
+  in the pre-commit report for this worktree.
+- No faucet, approval, join, withdrawal, draw, claim, deployment, or other
+  public transaction occurred.
+
+### Limitations and next step
+
+- The frontend capability is locally verified, but a complete public
+  `100 positions -> Locked -> ten draws -> ten claims -> Finished` lifecycle has
+  not yet been executed.
+- Draw and claim still lack the detailed semantic post-receipt reconciliation
+  now used by faucet, join, and withdrawal. That verification should be the next
+  reviewed product task before a public full-lifecycle execution.
+- Multi-pool presentation remains getter-based and intentionally bounded; it
+  was not expanded in this stage.
+
+### Git
+
+- Branch: `codex/pop33-recovery`.
+- Source baseline:
+  `96afb8faca4df51a9dae1257503fba722c4a19b6`.
+- Commit: not created; the worktree is intentionally awaiting Piotr's review.
+- Proposed message: `fix(demo-v1): support the locking 100th join`.
+
 ## 2026-07-27 - Demo V1 established as the sole public product flow
 
 ### At a glance

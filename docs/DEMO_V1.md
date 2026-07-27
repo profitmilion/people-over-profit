@@ -418,25 +418,38 @@ The approve/join control approves exactly one current entry when allowance is
 insufficient, waits for confirmation and a fresh exact allowance read, reruns
 the Open-pool and wallet-limit preflight, and only then requests the separate
 join signature. A synchronous single-flight guard spans the entire sequence.
-The reversible public UI procedure refuses a selected pool above 89 active
-positions. Faucet, join, and withdrawal then use bounded read-only retries to
-verify the semantic post-receipt state; writes themselves are never retried.
+The public UI supports all Open-pool fill levels through `99/100`. It warns that
+the next join locks a pool at `99/100`, but does not block it. Faucet, join, and
+withdrawal then use bounded read-only retries to verify the semantic
+post-receipt state; writes themselves are never retried.
 
-### Public Preview reversible write procedure and first execution
+Join verification is bound to the receipt's `PositionJoined` event rather than
+assuming that the preflight pool remained selected. The frontend reads the
+event's actual `poolId` and `positionId`, then re-reads the position, per-pool
+active-position mapping, user active-position count, pool, token balance, and
+allowance. Joins ending at 1-99 require an Open pool and zero `lockedAt`. A join
+ending at 100 requires exactly 3,300 dUSDC escrow, `Locked`, non-zero
+`lockedAt`, and all ten pending rounds scheduled at
+`lockedAt + roundNumber * drawInterval`. If allocation changed before mining,
+the UI reports the actual pool. Inconsistent receipt and final state is a
+verification failure, not an ordinary success.
 
-This procedure was used for the first controlled public UI write test on the
-Preview deployment from commit `e64c689`. The dedicated wallet completed the
-exact approval, join, and Open-pool withdrawal; the verified results are
-recorded in `STATUS.md` and `DEVLOG.md`. The faucet step was skipped because the
-wallet already held 330 dUSDC. The steps remain the reference safety checklist
-for any separately authorized follow-up.
+### Historical Public Preview reversible write procedure and first execution
+
+This historical procedure was used for the first controlled public UI write
+test on the Preview deployment from commit `e64c689`. At that time the frontend
+intentionally stopped above 89 positions so the dedicated wallet could complete
+an exact approval, join, and Open-pool withdrawal without risking a lock. The
+verified results are recorded in `STATUS.md` and `DEVLOG.md`; this section is
+evidence for that past reversible pilot, not the current public join limit.
 
 1. Use a dedicated wallet and open `/#/demo-v1` through the confirmed Preview
    alias, not Production.
 2. Connect the wallet, confirm Base Sepolia (`84532`), and verify a non-zero
    Base Sepolia ETH balance for gas.
 3. Confirm that the runtime identity check succeeds and the selected pool is
-   `Open` and within the 89-position reversible safety margin.
+   `Open`. During this historical pilot it also had to remain within the former
+   89-position reversible safety margin.
 4. If the wallet needs test tokens, request one faucet drip and wait until the
    UI verifies the exact 330 dUSDC increase and the new cooldown. The first
    public write session did not use the faucet.

@@ -397,11 +397,14 @@ runtime.
   rejected, replaced, cancelled, and manual-review outcomes.
 - The public approval/join path uses an exact 33 dUSDC allowance, waits for the
   approval receipt and a fresh exact allowance read, rechecks the selected Open
-  pool and user limit, and only then requests the separate join signature. For
-  the reversible UI test it refuses pools above 89 active positions.
+  pool, exact escrow, per-pool membership, user limit, token balance, and native
+  gas, and only then requests the separate join signature. It supports the full
+  `0 -> 100` fill range; there is no longer a reversible-test cap at 90.
 - Faucet, join, and withdrawal receipts receive bounded read-only semantic
-  verification. Join reports the actual position and pool and reconciles the
-  exact payment, allowance, membership, and escrow; withdrawal verifies the
+  verification. Join follows the actual `PositionJoined` pool and position even
+  if allocation changed after preflight. Joins 1-99 must leave that pool Open;
+  the 100th must produce exactly 100 positions, 3,300 dUSDC escrow, `Locked`,
+  non-zero `lockedAt`, and all ten scheduled rounds. Withdrawal verifies the
   inactive position, exact 33 dUSDC refund, membership, and escrow.
 - A public Vercel Preview for `codex/pop33-recovery`. Its landing page and both
   Demo V1 routes were manually verified read-only at commit `9b51afc`; at
@@ -418,7 +421,10 @@ runtime.
   approval, join, and withdrawal session;
 - manual public draw and claim verification through the Vercel Preview UI;
 - a complete public UI lifecycle with 100 positions, pool locking, ten draws,
-  and ten claims;
+  and ten claims; the frontend now supports and verifies the locking join, but
+  that complete public lifecycle has not yet been executed;
+- semantic post-receipt verification for draw and claim, at the same safety
+  level now used for faucet, join, and withdrawal;
 - confirmation, retention, and independent encrypted backup of the completed
   five-wallet pilot store, manifest, checkpoint, and journal recovery unit;
 - later separately authorized implementation review and real creation/backup

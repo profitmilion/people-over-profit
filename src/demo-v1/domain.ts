@@ -8,6 +8,31 @@ export const poolStatusLabels: Record<number, string> = {
   4: "Finished",
 };
 
+export function getPoolFillState(input: {
+  poolStatus: number;
+  activePositionCount: bigint;
+  capacity: bigint;
+}): {
+  fillLabel: string;
+  joinAvailable: boolean;
+  nextJoinLocks: boolean;
+  withdrawalAvailable: boolean;
+} {
+  const isOpen = input.poolStatus === 0;
+  const hasCapacity =
+    input.capacity > 0n && input.activePositionCount < input.capacity;
+
+  return {
+    fillLabel: `${input.activePositionCount}/${input.capacity}`,
+    joinAvailable: isOpen && hasCapacity,
+    nextJoinLocks:
+      isOpen &&
+      hasCapacity &&
+      input.activePositionCount + 1n === input.capacity,
+    withdrawalAvailable: isOpen,
+  };
+}
+
 export function formatDUsdc(value: bigint, decimals = DUSDC_DECIMALS): string {
   const negative = value < 0n;
   const absolute = negative ? -value : value;

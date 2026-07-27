@@ -13,6 +13,7 @@ import {
   formatCountdown,
   formatDUsdc,
   formatTimestamp,
+  getPoolFillState,
   isFaucetAvailable,
   needsApproval,
   poolStatusLabels,
@@ -85,6 +86,31 @@ export default function DemoV1Page() {
     ? data.rounds.find(
         (item) => item.poolId === currentPool.id && item.round === currentRoundNumber,
       )?.data
+    : undefined;
+  const firstRound = currentPool
+    ? data.rounds.find(
+        (item) => item.poolId === currentPool.id && item.round === 1n,
+      )?.data
+    : undefined;
+  const qualifyingPool = useMemo(() => {
+    const userPoolIds = new Set(data.positions.map((position) => position.poolId));
+    return data.staticData.openPoolIds
+      .map((poolId) => data.pools.find((pool) => pool.id === poolId))
+      .find((pool) => pool && !userPoolIds.has(pool.id));
+  }, [data.pools, data.positions, data.staticData.openPoolIds]);
+  const qualifyingPoolFill = qualifyingPool
+    ? getPoolFillState({
+        poolStatus: qualifyingPool.status,
+        activePositionCount: qualifyingPool.activePositionCount,
+        capacity: qualifyingPool.positionsPerPool,
+      })
+    : undefined;
+  const currentPoolFill = currentPool
+    ? getPoolFillState({
+        poolStatus: currentPool.status,
+        activePositionCount: currentPool.activePositionCount,
+        capacity: currentPool.positionsPerPool,
+      })
     : undefined;
 
   const faucetReady = isFaucetAvailable(data.nextDripAt, now);
@@ -204,9 +230,30 @@ export default function DemoV1Page() {
             <p className="mt-2 text-sm text-slate-400">
               This is a two-transaction flow. When required, the first wallet request approves exactly 33 dUSDC. Only after its receipt and a fresh exact allowance read will a separate join signature be requested.
             </p>
-            <p className="mt-2 text-xs text-amber-300">
-              For this reversible public UI test, join is blocked when the selected pool is above the reviewed 89-position safety margin.
-            </p>
+            {qualifyingPool && qualifyingPoolFill ? (
+              <div className={`mt-3 rounded-xl border p-3 text-xs ${
+                qualifyingPoolFill.nextJoinLocks
+                  ? "border-amber-700 bg-amber-950/40 text-amber-100"
+                  : "border-slate-800 text-slate-300"
+              }`}>
+                <div>
+                  Next qualifying pool: #{qualifyingPool.id.toString()} at {qualifyingPoolFill.fillLabel}.
+                </div>
+                {qualifyingPoolFill.nextJoinLocks ? (
+                  <div className="mt-1 font-semibold">
+                    This is the 100th position. A successful join will lock the pool and withdrawal will no longer be available.
+                  </div>
+                ) : (
+                  <div className="mt-1 text-slate-400">
+                    A successful join adds one position. The pool remains Open until it reaches 100/100.
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="mt-2 text-xs text-slate-500">
+                No qualifying existing pool is currently visible. The contract will select or create the actual qualifying pool at execution, and the receipt will be verified against that result.
+              </p>
+            )}
             <p className="mt-2 text-xs text-slate-500">
               Approval required: {needsApproval(data.allowance, data.staticData.entryPrice) ? "yes" : "no"}
             </p>
@@ -257,13 +304,27 @@ export default function DemoV1Page() {
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <Metric label="Pool" value={`#${currentPool.id}`} />
                 <Metric label="Status" value={poolStatusLabels[currentPool.status] ?? `Unknown (${currentPool.status})`} />
-                <Metric label="Positions" value={`${currentPool.activePositionCount} / ${currentPool.positionsPerPool}`} />
+                <Metric label="Positions" value={currentPoolFill?.fillLabel ?? `${currentPool.activePositionCount} / ${currentPool.positionsPerPool}`} />
                 <Metric label="Escrow" value={`${formatDUsdc(currentPool.escrowedAmount)} dUSDC`} />
                 <Metric label="Opened" value={formatTimestamp(currentPool.openedAt)} />
                 <Metric label="Locked" value={formatTimestamp(currentPool.lockedAt)} />
+                <Metric label="First draw" value={formatTimestamp(firstRound?.scheduledAt ?? 0n)} />
                 <Metric label="Draw progress" value={`${currentPool.completedDrawRoundCount} / ${currentPool.drawRoundCount}`} />
                 <Metric label="Claim progress" value={`${currentPool.claimedPrizeCount} / ${currentPool.drawRoundCount}`} />
               </div>
+              {currentPool.status !== 0 ? (
+                <div className="rounded-xl border border-emerald-800 bg-emerald-950/30 p-4">
+                  <div className="text-sm font-semibold">
+                    Pool #{currentPool.id.toString()} is {poolStatusLabels[currentPool.status] ?? "not Open"}.
+                  </div>
+                  <div className="mt-1 text-sm text-emerald-100/80">
+                    It locked at {formatTimestamp(currentPool.lockedAt)}. Participant withdrawal is no longer available.
+                    {firstRound?.scheduledAt
+                      ? ` The first draw is scheduled for ${formatTimestamp(firstRound.scheduledAt)}.`
+                      : " Refresh reads if the first-round schedule is not visible yet."}
+                  </div>
+                </div>
+              ) : null}
               {currentPool.status === 0 ? (
                 <div className="rounded-xl border border-slate-800 p-4">
                   <div className="text-sm font-semibold">Drawing is not available while the pool is Open.</div>

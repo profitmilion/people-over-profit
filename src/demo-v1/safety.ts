@@ -14,7 +14,6 @@ export const DEMO_V1_PRIZE_PER_ROUND = 330_000_000n;
 export const DEMO_V1_DRAW_INTERVAL = 3_600n;
 export const DEMO_V1_DRIP_AMOUNT = 330_000_000n;
 export const DEMO_V1_DRIP_COOLDOWN = 86_400n;
-export const MAX_REVERSIBLE_POOL_ACTIVE_POSITIONS = 89n;
 
 export type DemoV1ConfigError =
   | "missing-contract"
@@ -213,6 +212,17 @@ export async function runBoundedDemoV1ReadVerification<T>(
   throw lastError;
 }
 
+export async function refreshDemoV1AfterConfirmation(
+  refresh: () => Promise<unknown> | unknown,
+): Promise<boolean> {
+  try {
+    await refresh();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function errorCandidates(error: unknown): Array<Record<string, unknown>> {
   const candidates: Array<Record<string, unknown>> = [];
   let current = error;
@@ -296,9 +306,14 @@ export function assertSafeExistingAllowance(allowance: bigint, entryPrice: bigin
   }
 }
 
-export function assertReversibleJoinPool(input: {
+export function assertJoinPoolPreflight(input: {
   poolStatus: number;
   activePositionCount: bigint;
+  poolCapacity: bigint;
+  escrowedAmount: bigint;
+  entryPrice: bigint;
+  lockedAt: bigint;
+  activePositionId: bigint;
 }): void {
   if (input.poolStatus !== 0) {
     throw new DemoV1ActionError(
@@ -306,10 +321,34 @@ export function assertReversibleJoinPool(input: {
       "The selected pool is no longer Open. No join was sent.",
     );
   }
-  if (input.activePositionCount > MAX_REVERSIBLE_POOL_ACTIVE_POSITIONS) {
+  if (
+    input.poolCapacity !== DEMO_V1_POOL_CAPACITY ||
+    input.entryPrice !== DEMO_V1_ENTRY_PRICE
+  ) {
+    throw new DemoV1ActionError(
+      "identity-mismatch",
+      "The selected pool does not use the reviewed Demo V1 capacity or entry price. No join was sent.",
+    );
+  }
+  if (input.activePositionCount >= input.poolCapacity) {
     throw new DemoV1ActionError(
       "verification-failed",
-      "The selected pool is outside the reversible UI-test safety margin. No join was sent.",
+      "The selected pool no longer has room for another position. No join was sent.",
+    );
+  }
+  if (
+    input.escrowedAmount !== input.activePositionCount * input.entryPrice ||
+    input.lockedAt !== 0n
+  ) {
+    throw new DemoV1ActionError(
+      "verification-failed",
+      "The selected Open pool has inconsistent escrow or lock state. No join was sent.",
+    );
+  }
+  if (input.activePositionId !== 0n) {
+    throw new DemoV1ActionError(
+      "verification-failed",
+      "This wallet already has an active position in the selected pool. No join was sent.",
     );
   }
 }
@@ -325,27 +364,60 @@ export function assertJoinPostReceipt(input: {
   positionOwner: string;
   positionPoolId: bigint;
   positionActive: boolean;
+  activePositionIdAfter: bigint;
   poolStatus: number;
   poolActiveCount: bigint;
   poolEscrow: bigint;
+  poolLockedAt: bigint;
+  poolDrawInterval: bigint;
+  poolCapacity: bigint;
+  poolDrawRoundCount: bigint;
+  drawRounds?: readonly {
+    number: bigint;
+    scheduledAt: bigint;
+    status: number;
+  }[];
   userActiveBefore: bigint;
   userActiveAfter: bigint;
   tokenBalanceBefore: bigint;
   tokenBalanceAfter: bigint;
   allowanceAfter: bigint;
   entryPrice: bigint;
-}): void {
+}): {
+  lockingJoin: boolean;
+  poolChangedFromPreflight: boolean;
+} {
   const amount = exactDemoV1ApprovalAmount(input.entryPrice);
-  const actualPoolExpected = input.expectedPoolId === 0n || input.eventPoolId === input.expectedPoolId;
+  const lockingJoin = input.eventPoolActiveCount === input.poolCapacity;
+  const validDrawSchedule =
+    input.drawRounds?.length === Number(DEMO_V1_DRAW_ROUNDS) &&
+    input.drawRounds.every(
+      (round, index) =>
+        round.number === BigInt(index + 1) &&
+        round.status === 0 &&
+        round.scheduledAt ===
+          input.poolLockedAt + BigInt(index + 1) * input.poolDrawInterval,
+    );
+  const validLifecycle =
+    input.eventPoolActiveCount > 0n &&
+    input.eventPoolActiveCount <= input.poolCapacity &&
+    input.poolCapacity === DEMO_V1_POOL_CAPACITY &&
+    input.poolDrawRoundCount === DEMO_V1_DRAW_ROUNDS &&
+    input.poolDrawInterval === DEMO_V1_DRAW_INTERVAL &&
+    input.poolStatus === (lockingJoin ? 1 : 0) &&
+    (lockingJoin
+      ? input.poolLockedAt > 0n &&
+        validDrawSchedule
+      : input.poolLockedAt === 0n);
   const valid =
     sameAddress(input.eventUser, input.user) &&
     sameAddress(input.positionOwner, input.user) &&
-    actualPoolExpected &&
     input.eventAmount === amount &&
     input.eventPositionId > 0n &&
     input.positionPoolId === input.eventPoolId &&
     input.positionActive &&
-    input.poolStatus === 0 &&
+    input.activePositionIdAfter === input.eventPositionId &&
+    validLifecycle &&
     input.poolActiveCount === input.eventPoolActiveCount &&
     input.poolEscrow === input.poolActiveCount * amount &&
     input.userActiveAfter === input.userActiveBefore + 1n &&
@@ -358,6 +430,12 @@ export function assertJoinPostReceipt(input: {
       "The join receipt was mined, but the expected position, pool, allowance, balance, or escrow state did not match. Do not send another transaction; inspect the hash and refresh reads.",
     );
   }
+
+  return {
+    lockingJoin,
+    poolChangedFromPreflight:
+      input.expectedPoolId > 0n && input.eventPoolId !== input.expectedPoolId,
+  };
 }
 
 export function assertWithdrawalPostReceipt(input: {

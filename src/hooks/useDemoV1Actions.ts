@@ -11,6 +11,7 @@ import { demoV1Config } from "../demo-v1/config";
 import {
   DEMO_V1_CHAIN_ID,
   DEMO_V1_CONTRACT_ADDRESS,
+  DEMO_V1_DRAW_ROUNDS,
   DEMO_V1_ENTRY_PRICE,
   DEMO_V1_TOKEN_ADDRESS,
   DemoV1ActionError,
@@ -18,12 +19,13 @@ import {
   assertDemoV1WriteChain,
   assertExactApprovalObserved,
   assertFaucetPostReceipt,
+  assertJoinPoolPreflight,
   assertJoinPostReceipt,
-  assertReversibleJoinPool,
   assertSafeExistingAllowance,
   assertWithdrawalPostReceipt,
   classifyDemoV1TransactionError,
   exactDemoV1ApprovalAmount,
+  refreshDemoV1AfterConfirmation,
   runBoundedDemoV1ReadVerification,
   runDemoV1SingleFlight,
   validateDemoV1RuntimeIdentity,
@@ -245,12 +247,10 @@ export function useDemoV1Actions(onConfirmed: () => Promise<unknown> | unknown) 
 
       setTxState({ action, phase: "verifying", hash, message: "Receipt confirmed. Verifying the resulting on-chain state." });
       const verificationMessage = await verify?.(receipt);
-      let refreshMessage = "";
-      try {
-        await onConfirmed();
-      } catch {
-        refreshMessage = " Automatic refresh failed; use Refresh reads before another action.";
-      }
+      const refreshed = await refreshDemoV1AfterConfirmation(onConfirmed);
+      const refreshMessage = refreshed
+        ? ""
+        : " Automatic refresh failed; use Refresh reads before another action.";
       setTxState({
         action,
         phase: "confirmed",
@@ -328,15 +328,28 @@ export function useDemoV1Actions(onConfirmed: () => Promise<unknown> | unknown) 
     assertSafeExistingAllowance(allowance, DEMO_V1_ENTRY_PRICE);
 
     if (expectedPoolId > 0n) {
-      const pool = await ready.publicClient.readContract({
-        address: DEMO_V1_CONTRACT_ADDRESS,
-        abi: demoV1Abi,
-        functionName: "getPool",
-        args: [expectedPoolId],
-      });
-      assertReversibleJoinPool({
+      const [pool, activePositionId] = await Promise.all([
+        ready.publicClient.readContract({
+          address: DEMO_V1_CONTRACT_ADDRESS,
+          abi: demoV1Abi,
+          functionName: "getPool",
+          args: [expectedPoolId],
+        }),
+        ready.publicClient.readContract({
+          address: DEMO_V1_CONTRACT_ADDRESS,
+          abi: demoV1Abi,
+          functionName: "getActivePositionId",
+          args: [expectedPoolId, ready.address],
+        }),
+      ]);
+      assertJoinPoolPreflight({
         poolStatus: pool.status,
         activePositionCount: pool.activePositionCount,
+        poolCapacity: pool.positionsPerPool,
+        escrowedAmount: pool.escrowedAmount,
+        entryPrice: pool.entryPrice,
+        lockedAt: pool.lockedAt,
+        activePositionId,
       });
     }
 
@@ -428,14 +441,28 @@ export function useDemoV1Actions(onConfirmed: () => Promise<unknown> | unknown) 
         if (!event) {
           throw new DemoV1ActionError("verification-failed", "Join receipt has no matching PositionJoined event. Do not retry.");
         }
-        const [position, pool, tokenBalanceAfter, allowanceAfter, userActiveAfter] = await Promise.all([
+        const [position, pool, activePositionIdAfter, tokenBalanceAfter, allowanceAfter, userActiveAfter] = await Promise.all([
           ready.publicClient.readContract({ address: DEMO_V1_CONTRACT_ADDRESS, abi: demoV1Abi, functionName: "getPosition", args: [event.args.positionId] }),
           ready.publicClient.readContract({ address: DEMO_V1_CONTRACT_ADDRESS, abi: demoV1Abi, functionName: "getPool", args: [event.args.poolId] }),
+          ready.publicClient.readContract({ address: DEMO_V1_CONTRACT_ADDRESS, abi: demoV1Abi, functionName: "getActivePositionId", args: [event.args.poolId, ready.address] }),
           ready.publicClient.readContract({ address: DEMO_V1_TOKEN_ADDRESS, abi: demoV1TokenAbi, functionName: "balanceOf", args: [ready.address] }),
           ready.publicClient.readContract({ address: DEMO_V1_TOKEN_ADDRESS, abi: demoV1TokenAbi, functionName: "allowance", args: [ready.address, DEMO_V1_CONTRACT_ADDRESS] }),
           ready.publicClient.readContract({ address: DEMO_V1_CONTRACT_ADDRESS, abi: demoV1Abi, functionName: "activePositionsByUser", args: [ready.address] }),
         ]);
-        assertJoinPostReceipt({
+        const drawRounds = event.args.activePositionCount === pool.positionsPerPool
+          ? await Promise.all(
+              Array.from(
+                { length: Number(DEMO_V1_DRAW_ROUNDS) },
+                (_, index) => ready.publicClient.readContract({
+                  address: DEMO_V1_CONTRACT_ADDRESS,
+                  abi: demoV1Abi,
+                  functionName: "getDrawRound",
+                  args: [event.args.poolId, BigInt(index + 1)],
+                }),
+              ),
+            )
+          : undefined;
+        const outcome = assertJoinPostReceipt({
           user: ready.address,
           expectedPoolId: preflight.expectedPoolId,
           eventUser: event.args.user,
@@ -446,9 +473,15 @@ export function useDemoV1Actions(onConfirmed: () => Promise<unknown> | unknown) 
           positionOwner: position.owner,
           positionPoolId: position.poolId,
           positionActive: position.active,
+          activePositionIdAfter,
           poolStatus: pool.status,
           poolActiveCount: pool.activePositionCount,
           poolEscrow: pool.escrowedAmount,
+          poolLockedAt: pool.lockedAt,
+          poolDrawInterval: pool.drawInterval,
+          poolCapacity: pool.positionsPerPool,
+          poolDrawRoundCount: pool.drawRoundCount,
+          drawRounds,
           userActiveBefore: preflight.activePositions,
           userActiveAfter,
           tokenBalanceBefore: preflight.tokenBalance,
@@ -456,7 +489,13 @@ export function useDemoV1Actions(onConfirmed: () => Promise<unknown> | unknown) 
           allowanceAfter,
           entryPrice: pool.entryPrice,
         });
-        return `Join confirmed: position #${event.args.positionId} in pool #${event.args.poolId}; exact payment, active position, and escrow verified.`;
+        const changedPoolMessage = outcome.poolChangedFromPreflight
+          ? ` Pool selection changed before mining; the receipt proves that the contract joined pool #${event.args.poolId}.`
+          : "";
+        const lifecycleMessage = outcome.lockingJoin
+          ? ` Pool #${event.args.poolId} reached 100/100 and is Locked; withdrawals are unavailable and all 10 rounds are scheduled, starting ${new Date(Number(drawRounds![0].scheduledAt) * 1_000).toLocaleString()}.`
+          : ` Pool #${event.args.poolId} remains Open at ${pool.activePositionCount}/${pool.positionsPerPool}.`;
+        return `Join confirmed: position #${event.args.positionId} in pool #${event.args.poolId}; exact payment, active position, and escrow verified.${changedPoolMessage}${lifecycleMessage}`;
       }, (delayMs) => new Promise((resolve) => window.setTimeout(resolve, delayMs))),
     );
   }), [address, assertReady, publicClient, readJoinPreflight, runExclusive, runTransaction, sendWrite]);

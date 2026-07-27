@@ -6,6 +6,7 @@ import {
   canJoin,
   canWithdraw,
   formatDUsdc,
+  getPoolFillState,
   isFaucetAvailable,
   needsApproval,
   shouldWaitForConfirmedAllowance,
@@ -19,17 +20,75 @@ import {
   assertDemoV1WriteChain,
   assertExactApprovalObserved,
   assertFaucetPostReceipt,
+  assertJoinPoolPreflight,
   assertJoinPostReceipt,
-  assertReversibleJoinPool,
   assertSafeExistingAllowance,
   assertWithdrawalPostReceipt,
   classifyDemoV1TransactionError,
   exactDemoV1ApprovalAmount,
+  refreshDemoV1AfterConfirmation,
   runBoundedDemoV1ReadVerification,
   runDemoV1SingleFlight,
   validateDemoV1PublicConfig,
   validateDemoV1RuntimeIdentity,
 } from "../src/demo-v1/safety.js";
+
+const demoUser = "0xCaeb6D19d6d85349a08172e0efb9bb8541E4BeFB";
+
+function joinPreflightFixture(activePositionCount: bigint) {
+  return {
+    poolStatus: 0,
+    activePositionCount,
+    poolCapacity: 100n,
+    escrowedAmount: activePositionCount * DEMO_V1_ENTRY_PRICE,
+    entryPrice: DEMO_V1_ENTRY_PRICE,
+    lockedAt: 0n,
+    activePositionId: 0n,
+  };
+}
+
+function joinPostReceiptFixture(input: {
+  activePositionCount: bigint;
+  expectedPoolId?: bigint;
+  actualPoolId?: bigint;
+}) {
+  const actualPoolId = input.actualPoolId ?? 1n;
+  const lockingJoin = input.activePositionCount === 100n;
+  const lockedAt = lockingJoin ? 2_000n : 0n;
+  return {
+    user: demoUser,
+    expectedPoolId: input.expectedPoolId ?? actualPoolId,
+    eventUser: demoUser,
+    eventPoolId: actualPoolId,
+    eventPositionId: 4n,
+    eventAmount: DEMO_V1_ENTRY_PRICE,
+    eventPoolActiveCount: input.activePositionCount,
+    positionOwner: demoUser,
+    positionPoolId: actualPoolId,
+    positionActive: true,
+    activePositionIdAfter: 4n,
+    poolStatus: lockingJoin ? 1 : 0,
+    poolActiveCount: input.activePositionCount,
+    poolEscrow: input.activePositionCount * DEMO_V1_ENTRY_PRICE,
+    poolLockedAt: lockedAt,
+    poolDrawInterval: 3_600n,
+    poolCapacity: 100n,
+    poolDrawRoundCount: 10n,
+    drawRounds: lockingJoin
+      ? Array.from({ length: 10 }, (_, index) => ({
+          number: BigInt(index + 1),
+          scheduledAt: lockedAt + BigInt(index + 1) * 3_600n,
+          status: 0,
+        }))
+      : undefined,
+    userActiveBefore: 0n,
+    userActiveAfter: 1n,
+    tokenBalanceBefore: 330_000_000n,
+    tokenBalanceAfter: 297_000_000n,
+    allowanceAfter: 0n,
+    entryPrice: DEMO_V1_ENTRY_PRICE,
+  };
+}
 
 test("formats 6-decimal dUSDC values without losing precision", () => {
   assert.equal(formatDUsdc(33_000_000n), "33");
@@ -74,6 +133,41 @@ test("withdraw is limited to active positions in open pools", () => {
   assert.equal(canWithdraw(0, true), true);
   assert.equal(canWithdraw(1, true), false);
   assert.equal(canWithdraw(0, false), false);
+});
+
+test("pool fill UI state covers 89, 90, 98, 99 and 100 Locked", () => {
+  for (const count of [89n, 90n, 98n]) {
+    assert.deepEqual(getPoolFillState({
+      poolStatus: 0,
+      activePositionCount: count,
+      capacity: 100n,
+    }), {
+      fillLabel: `${count}/100`,
+      joinAvailable: true,
+      nextJoinLocks: false,
+      withdrawalAvailable: true,
+    });
+  }
+  assert.deepEqual(getPoolFillState({
+    poolStatus: 0,
+    activePositionCount: 99n,
+    capacity: 100n,
+  }), {
+    fillLabel: "99/100",
+    joinAvailable: true,
+    nextJoinLocks: true,
+    withdrawalAvailable: true,
+  });
+  assert.deepEqual(getPoolFillState({
+    poolStatus: 1,
+    activePositionCount: 100n,
+    capacity: 100n,
+  }), {
+    fillLabel: "100/100",
+    joinAvailable: false,
+    nextJoinLocks: false,
+    withdrawalAvailable: false,
+  });
 });
 
 test("draw eligibility requires a due pending round in a locked or drawing pool", () => {
@@ -222,6 +316,17 @@ test("post-receipt verification retries only stale reads with a strict bound", a
   assert.deepEqual(waits, [500, 1_000]);
 });
 
+test("a verified receipt triggers a fresh data refresh", async () => {
+  let refreshCalls = 0;
+  assert.equal(await refreshDemoV1AfterConfirmation(async () => {
+    refreshCalls += 1;
+  }), true);
+  assert.equal(refreshCalls, 1);
+  assert.equal(await refreshDemoV1AfterConfirmation(async () => {
+    throw new Error("refresh failed");
+  }), false);
+});
+
 test("wallet rejection and receipt timeout produce safe terminal messages", () => {
   assert.deepEqual(classifyDemoV1TransactionError({ code: 4001 }), {
     phase: "rejected",
@@ -233,38 +338,76 @@ test("wallet rejection and receipt timeout produce safe terminal messages", () =
   );
 });
 
-test("reversible join preflight refuses a non-Open or near-full pool", () => {
-  assert.doesNotThrow(() => assertReversibleJoinPool({ poolStatus: 0, activePositionCount: 89n }));
-  assert.throws(() => assertReversibleJoinPool({ poolStatus: 1, activePositionCount: 0n }));
-  assert.throws(() => assertReversibleJoinPool({ poolStatus: 0, activePositionCount: 90n }));
+test("join preflight allows 89 through 99 and rejects invalid pool state", () => {
+  for (const count of [89n, 90n, 98n, 99n]) {
+    assert.doesNotThrow(() => assertJoinPoolPreflight(joinPreflightFixture(count)));
+  }
+  assert.throws(() => assertJoinPoolPreflight({
+    ...joinPreflightFixture(99n),
+    poolStatus: 1,
+  }));
+  assert.throws(() => assertJoinPoolPreflight(joinPreflightFixture(100n)));
+  assert.throws(() => assertJoinPoolPreflight({
+    ...joinPreflightFixture(99n),
+    escrowedAmount: 0n,
+  }));
+  assert.throws(() => assertJoinPoolPreflight({
+    ...joinPreflightFixture(99n),
+    activePositionId: 7n,
+  }));
 });
 
-test("join post-receipt verification checks the actual position, exact payment and escrow", () => {
-  const user = "0xCaeb6D19d6d85349a08172e0efb9bb8541E4BeFB";
-  const valid = {
-    user,
+test("ordinary joins at 89, 90 and 98 end Open with exact count and escrow", () => {
+  for (const countAfter of [90n, 91n, 99n]) {
+    const result = assertJoinPostReceipt(joinPostReceiptFixture({
+      activePositionCount: countAfter,
+    }));
+    assert.equal(result.lockingJoin, false);
+    assert.equal(result.poolChangedFromPreflight, false);
+  }
+});
+
+test("the 100th join verifies 3267 to 3300 dUSDC, Locked and round schedule", () => {
+  assert.doesNotThrow(() => assertJoinPoolPreflight(joinPreflightFixture(99n)));
+  const result = assertJoinPostReceipt(joinPostReceiptFixture({
+    activePositionCount: 100n,
+  }));
+  assert.equal(result.lockingJoin, true);
+  assert.equal(99n * DEMO_V1_ENTRY_PRICE, 3_267_000_000n);
+  assert.equal(100n * DEMO_V1_ENTRY_PRICE, 3_300_000_000n);
+  assert.equal(canWithdraw(1, true), false);
+});
+
+test("join verification follows the PositionJoined pool instead of the preflight snapshot", () => {
+  const result = assertJoinPostReceipt(joinPostReceiptFixture({
+    activePositionCount: 1n,
     expectedPoolId: 1n,
-    eventUser: user,
-    eventPoolId: 1n,
-    eventPositionId: 4n,
-    eventAmount: 33_000_000n,
-    eventPoolActiveCount: 1n,
-    positionOwner: user,
-    positionPoolId: 1n,
-    positionActive: true,
-    poolStatus: 0,
-    poolActiveCount: 1n,
-    poolEscrow: 33_000_000n,
-    userActiveBefore: 0n,
-    userActiveAfter: 1n,
-    tokenBalanceBefore: 330_000_000n,
-    tokenBalanceAfter: 297_000_000n,
-    allowanceAfter: 0n,
-    entryPrice: 33_000_000n,
-  };
-  assert.doesNotThrow(() => assertJoinPostReceipt(valid));
+    actualPoolId: 2n,
+  }));
+  assert.equal(result.poolChangedFromPreflight, true);
+  assert.equal(result.lockingJoin, false);
+});
+
+test("join verification rejects an inconsistent receipt and final state", () => {
+  const valid = joinPostReceiptFixture({ activePositionCount: 99n });
   assert.throws(
     () => assertJoinPostReceipt({ ...valid, poolEscrow: 0n }),
+    (error) => error instanceof DemoV1ActionError && error.phase === "verification-failed",
+  );
+  assert.throws(
+    () => assertJoinPostReceipt({
+      ...joinPostReceiptFixture({ activePositionCount: 100n }),
+      poolStatus: 0,
+    }),
+    (error) => error instanceof DemoV1ActionError && error.phase === "verification-failed",
+  );
+  assert.throws(
+    () => assertJoinPostReceipt({
+      ...joinPostReceiptFixture({ activePositionCount: 100n }),
+      drawRounds: joinPostReceiptFixture({
+        activePositionCount: 100n,
+      }).drawRounds?.slice(0, 9),
+    }),
     (error) => error instanceof DemoV1ActionError && error.phase === "verification-failed",
   );
 });

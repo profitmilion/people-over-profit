@@ -188,6 +188,27 @@ no RPC, provider, signer, key loader, or transaction transport. Index `98`
 remains the last automatic wallet and completion moves to
 `awaiting-manual-100`.
 
+A separate fixture-only public execution protocol v1 and durable journal v2
+model now define the missing per-transaction persistence boundaries without
+changing the existing runner or journal v1. The protocol persists a full
+unsigned request and locally supplied signed hash before simulated broadcast,
+tracks nonce, fee caps, receipt block identity, semantic reconciliation,
+configurable finality, canonical rechecks and recovery decisions, and rejects
+backward state movement or automatic replacement. A fixture global run lock
+binds the whole preflight/signer/journal/checkpoint session, while dual-source
+evidence requires both read snapshots to describe the same exact block and
+manifest identity. The public coordination overlay ends normal accumulation at
+index 97 and reserves index 98 for a one-use, separately acknowledged
+`boundary-99` gate; index 99 remains unreachable.
+
+A fixture-only wallet-store v2 format also demonstrates 99 separately encrypted
+records with per-record salt/IV/tag/ciphertext, ordered-set and whole-envelope
+integrity, public inspection, selected-index decryption and create-only writing.
+It rejects real-key-shaped input and has no wallet generator, signer, provider,
+environment read or migration. The technical recommendation is to use a
+production-reviewed per-wallet format before creating the real exact-99 store;
+the current low-cost fixture KDF profile is not approved for real material.
+
 The evidence, boundary behavior, funding estimates, phase gates, and operator
 gaps for that future test are recorded in
 `docs/PLAN_BASE_SEPOLIA_FULL_LIFECYCLE_99_PLUS_1.md`. The plan is not write
@@ -325,6 +346,15 @@ runtime.
   injected adapter, manifest-derived operation identities, receipt plus
   semantic reconciliation, restart idempotency, one-wallet-at-a-time ordering,
   and explicit 99/100 race checks. No Base Sepolia adapter exists.
+- A fixture-only exact-99 public execution protocol v1 with a checksummed
+  append-only journal v2, forward-only attempt states, explicit nonce and fee
+  guards, dual-source block evidence, configurable finality/reorg handling,
+  deterministic recovery decisions, global-run-lock concurrency model, and a
+  separate `boundary-99` gate for index 98. It has no provider, signer,
+  endpoint, signing implementation or broadcast transport.
+- A fixture-only exact-99 wallet-store v2 prototype with 99 independently
+  encrypted records and selected-index decryption. It is a format and isolation
+  experiment only; no real wallet or store was created.
 - A separate, guarded Base Sepolia single-wallet smoke harness with a default
   read-only preflight, dedicated runtime-only key namespace, fixed documented
   addresses, exact approval, reversible join/withdraw scope, buffered gas
@@ -376,10 +406,11 @@ runtime.
   and ten claims;
 - confirmation, retention, and independent encrypted backup of the completed
   five-wallet pilot store, manifest, checkpoint, and journal recovery unit;
-- later separately authorized creation and independent backup of the prepared
-  99-wallet participant store, followed by a funding subsystem, aggregate
-  operator dry-run, and staged `5 -> 20 -> 50 -> 99` accumulation; the
-  completed five-wallet pilot store must not be reused for that stage;
+- later separately authorized implementation review and real creation/backup
+  ceremony for a production-strength per-wallet encrypted 99-wallet store,
+  followed by a public adapter, aggregate dry-run, and staged
+  `5 -> 20 -> 50 -> 98 normal -> boundary-99` accumulation; the completed
+  five-wallet pilot store must not be reused for that stage;
 - the manually confirmed 100th public join, ten scheduled draw executions, ten
   winner claims, and final `Finished` reconciliation on Base Sepolia;
 - promotion or release of the current Demo V1 through Vercel Production; the

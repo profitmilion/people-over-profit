@@ -140,6 +140,16 @@ PowerShell step with hidden `SecureString` input, independent backup
 confirmation, pre/post hashes, no printed secret, and no password in arguments,
 environment files, shell history, logs, or chat.
 
+### Encryption-format decision inside the new 99-wallet store
+
+The separate-store decision above is independent from the internal encryption
+format. The reviewed fixture comparison in
+`docs/DECISION_EXACT_99_WALLET_STORE_V1_VS_V2.md` recommends separately
+encrypted per-wallet records before real creation. The current v1 envelope
+decrypts all 99 records for one selected signer; the v2 fixture decrypts only
+one. The fixture v2 KDF parameters are deliberately not production settings,
+so this recommendation does not authorize real store creation or migration.
+
 Duplicate joins must be prevented by all of these independent checks:
 
 - one immutable participant index and address per manifest entry;
@@ -227,7 +237,8 @@ to that stage.
 | 5 automatic | New 99-wallet set initialized, backed up, funded only for indices 0-4, pool 1 Open at 0, full dry-run clean | Exactly 5 confirmed faucets, approvals, and joins; pool 1 Open at 5; escrow 165 dUSDC; all five allowances zero; journal and recovery report clean | Any identity/hash mismatch, duplicate or pending nonce, wrong pool, count or escrow delta, ambiguous receipt, unexpected event, or RPC disagreement |
 | 20 automatic | Stage 5 reconciled; explicit approval for indices 5-19; live gas/funding checks | Exactly 20 cumulative participants; pool Open at 20; escrow 660 dUSDC; journal/checkpoint consistent; one planned stop and resume proves no rebroadcast | Same stops, plus any operation outside the exact new range or any automatic withdrawal |
 | 50 automatic | Stage 20 reconciled; explicit approval for indices 20-49 | Exactly 50 cumulative participants; pool Open at 50; escrow 1,650 dUSDC; RPC pacing, elapsed time, cost, and one controlled interruption/resume are reconciled | Same stops; preserve all evidence before any resume |
-| 99 automatic | Stage 50 reconciled; Piotr's manual wallet prepared; boundary monitor active; explicit approval for indices 50-98 | Exactly 99 unique active participants; pool 1 still Open; escrow 3,267 dUSDC; operator hard-stopped with no final-join capability | Stop before 100; stop on any external join, stale read, wrong count, changed pool status, pending nonce, or missing manual handoff readiness |
+| 98-position normal path | Stage 50 reconciled; explicit approval for indices 50-97 | Exactly 98 unique active participants; pool 1 Open; escrow 3,234 dUSDC; normal public runner stopped | Stop on any external join, stale/mismatched dual-source evidence, wrong count/status/escrow, pending nonce, fee/lock conflict or ambiguous operation |
+| Boundary-99 (index 98 only) | Fresh one-use dual-source snapshot at exactly 98; pool Open; `lockedAt == 0`; Piotr's manual wallet ready; separate authorization and threat acknowledgment | Exactly 99 unique active participants; pool 1 still Open; escrow 3,267 dUSDC; stage `awaiting-manual-100` | Stop before 100; stop on reused/stale snapshot, any intervening event, RPC disagreement, pending nonce or missing manual handoff readiness |
 | Manual 100 | Pool 1 freshly confirmed Open at exactly 99; Piotr wallet has exact allowance, sufficient ETH/dUSDC, zero active position in pool 1; reviewed boundary UI/interface | Receipt proves Piotr's address joined pool 1 as position 100; pool is Locked; escrow 3,300 dUSDC; `lockedAt` and ten scheduled rounds are consistent | Do not submit on stale state. Stop on any pre-confirmation change. If receipt routes elsewhere or is ambiguous, preserve evidence and do not compensate automatically |
 | Draws 1-10 | Locked pool, exact schedule recorded, approved executor funded, temporary randomness risk accepted for testnet | One confirmed draw at or after each scheduled time, in order; ten distinct winner positions; after draw 10 pool Claimable; assigned total 3,300 dUSDC | Early/duplicate/out-of-order attempt, unexpected caller or winner mapping, missing event, status/escrow discrepancy, scheduler/RPC disagreement, or ambiguous receipt |
 | Claims 1-10 | All winner addresses mapped to controlled participant index or Piotr; each signer independently authorized and funded; live estimate including final release | Each winner receives exactly 330 dUSDC once; claimed total reaches 3,300 dUSDC; final claim makes pool Finished, escrow zero, and all 100 active positions zero | Unknown/unavailable winner key, wrong signer/round, insufficient gas, already-claimed discrepancy, unexpected token delta, failed release, or any ambiguous operation |
@@ -302,17 +313,28 @@ Implement and review these as separate commits and manual checkpoints:
    each step; timeout and ambiguity; and pool count/cycle/lock races through
    index 98. No provider, signer, RPC, public transaction transport, index 99,
    or manual-100 action exists.
-6. Add and audit the boundary monitor plus a narrowly scoped public manual-100
+6. **Fixture-only protocol prepared 2026-07-27; transport absent.** Public
+   execution protocol v1 and journal v2 now model durable prepared/nonce/
+   signed/broadcast/mined/reconciled/confirmed/checkpoint-final boundaries,
+   global locking, fee/nonce guards, two-source evidence, finality/reorg and
+   recovery decisions. The public overlay ends normal accumulation at index
+   97, with index 98 isolated in `boundary-99`. Store v2 separately demonstrates
+   per-wallet fixture encryption. No provider, signer, endpoint, real store or
+   broadcast exists.
+7. Add and audit the durable filesystem implementation and isolated signer/
+   transport adapter that conforms to the reviewed protocol. Real fee and
+   confirmation policy require separate decisions.
+8. Add and audit the boundary monitor plus a narrowly scoped public manual-100
    interface. Decide whether residual race risk is acceptable or a guarded
    contract redeployment is required.
-7. Add one-round-at-a-time draw planning and execution with schedule gates,
+9. Add one-round-at-a-time draw planning and execution with schedule gates,
    temporary-randomness warnings, signer funding, and conservative recovery.
-8. Add winner mapping and one-claim-at-a-time execution, including manual
+10. Add winner mapping and one-claim-at-a-time execution, including manual
    handling for Piotr's wallet and special final-claim estimation.
-9. Run the stages only after their own tests, documentation, dry-run, artifact
+11. Run the stages only after their own tests, documentation, dry-run, artifact
    backup, exact authorization, and post-phase read-only audit.
 
-The first safe next task is an independent review and Git checkpoint of item 5.
+The first safe next task is an independent review and Git checkpoint of item 6.
 Eventual
 manual store initialization, artifact materialization, inspector verification,
 encrypted backup, live gas-based funding limits, RPC preflight, funding, and

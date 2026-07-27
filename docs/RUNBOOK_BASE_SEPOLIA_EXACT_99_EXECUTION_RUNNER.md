@@ -122,6 +122,14 @@ The last automatic wallet is index `98`. Its successful join leaves exactly 99
 positions and moves the checkpoint to `awaiting-manual-100`. The runner has no
 automatic identity or operation for index `99` and no manual-100 implementation.
 
+This remains the behavior of the existing fixture runner for compatibility.
+It is not the future public boundary policy. Public execution protocol v1,
+documented in
+`docs/RUNBOOK_BASE_SEPOLIA_EXACT_99_PUBLIC_EXECUTION_PROTOCOL.md`, ends its
+normal path at index `97` and handles index `98` only through the separately
+authorized, fresh, one-use `boundary-99` gate. No existing fixture artifact is
+silently migrated.
+
 ## Restart and recovery
 
 Every fresh runner invocation performs the complete local artifact and
@@ -140,6 +148,6 @@ signer, manifest, checkpoint, journal, or funding-plan artifact. It did not read
 an environment secret, connect to Base Sepolia, send ETH, or perform faucet,
 approve, join, withdrawal, draw, or claim transactions.
 
-The next task should be an independent review and Git checkpoint of this
-fixture-only runner. A real Base Sepolia adapter remains a separate future
-design and authorization.
+The fixture-only public execution protocol and journal v2 are now specified in
+`docs/RUNBOOK_BASE_SEPOLIA_EXACT_99_PUBLIC_EXECUTION_PROTOCOL.md`. A real Base
+Sepolia adapter remains a separate future design and authorization.

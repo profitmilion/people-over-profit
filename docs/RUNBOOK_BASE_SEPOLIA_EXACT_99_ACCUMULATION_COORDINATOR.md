@@ -126,6 +126,14 @@ index `99`, a journal entry of type `manual-100`, and any attempt to simulate a
 one-hundredth join. The separate manual boundary operation is intentionally not
 implemented here.
 
+This is retained as the original local coordinator behavior so existing
+fixtures and the runner remain compatible. The stricter future public overlay
+does not mutate these artifacts: normal execution ends at index `97` (98
+positions), while index `98` is admitted only by the separately authorized
+`boundary-99` model with fresh dual-source evidence and a one-use snapshot.
+See
+`docs/RUNBOOK_BASE_SEPOLIA_EXACT_99_PUBLIC_EXECUTION_PROTOCOL.md`.
+
 ## Current authorization boundary
 
 All behavior in this milestone is local and fixture-only. No real wallet
@@ -134,10 +142,7 @@ was created. No environment secret was read. No Base Sepolia RPC connection,
 ETH transfer, faucet, approval, join, withdrawal, draw, claim, deployment, or
 Vercel action occurred.
 
-The next engineering task should be an independent review and Git checkpoint
-of the fixture-only execution runner described in
-`docs/RUNBOOK_BASE_SEPOLIA_EXACT_99_EXECUTION_RUNNER.md`. The coordinator
-chooses the next safe operation; the runner invokes an injected fixture adapter
-and reconciles its result. Public execution architecture, real artifact
-materialization, funding, and lifecycle operations remain separate future
-authorizations.
+The fixture-only public execution protocol now adds journal v2, global locking,
+nonce/fee guards, dual-source evidence, finality and the boundary overlay.
+Public adapter construction, real artifact materialization, funding, and
+lifecycle operations remain separate future authorizations.

@@ -161,3 +161,23 @@ The fixture-only execution runner documented in
 `docs/RUNBOOK_BASE_SEPOLIA_EXACT_99_EXECUTION_RUNNER.md` consumes only public
 manifest identity and injected fixture results. It does not open the encrypted
 store, load a signer, or create a public-network path.
+
+## Store v2 isolation decision
+
+The existing initializer still uses store format v1 and must not be run merely
+because a new prototype exists. Format v1 authenticates one envelope but
+decrypts all 99 records when a signer selects one wallet.
+
+The fixture-only v2 prototype in
+`packages/contracts/scripts/operator/exact-99-wallet-store-v2-fixture.ts`
+encrypts each of 99 records separately and can decrypt only the selected index.
+It adds per-record salt/IV/tag/ciphertext, order and record digests, whole-set
+integrity, public inspection and create-only fixture writing. It rejects
+real-key-shaped input and has no generator, signer, provider or migration.
+
+The decision record
+`docs/DECISION_EXACT_99_WALLET_STORE_V1_VS_V2.md` recommends a
+production-reviewed per-wallet v2 format before the real exact-99 store is
+created. The current fixture KDF settings are deliberately not approved for
+real secrets. V1-to-v2 migration is not implemented and would require a
+separate authorization.

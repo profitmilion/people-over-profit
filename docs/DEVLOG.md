@@ -33,6 +33,60 @@ documentation.
   current overview of implementation, gaps, and risks.
 - Do not guess. Mark unclear facts as requiring later reconstruction.
 
+## 2026-07-27 - Public execution protocol and journal v2 specified fixture-only
+
+### At a glance
+
+The exact-99 path now has an executable local specification for durable
+transaction identity, nonce/fee controls, finality, reorg recovery, a global
+run lock and the high-risk 99th-position boundary. No network execution path
+was added.
+
+### Completed
+
+- Added the ordered 23-step one-operation protocol.
+- Added a checksummed append-only journal v2 with one nonce and signed hash per
+  attempt, explicit replacement links, complete receipt identity, canonical
+  rechecks and forward-only states.
+- Added fixture nonce, fee-cap, global-lock, dual-source evidence, finality and
+  recovery models.
+- Split future public accumulation into normal indices `0-97` and the separate
+  one-use `boundary-99` mode for index `98`; index `99` remains rejected.
+- Added requested crash-window, concurrency, corruption, replacement,
+  cancellation, reorg and external-join fault tests.
+- Added a fixture-only per-wallet encrypted store v2 prototype and a decision
+  recommending this isolation model after production-strength review.
+- Preserved the existing journal v1, cumulative coordinator, runner and pilot.
+
+### Verification
+
+- Focused new suite: 65 local fixture tests.
+- Full package verification: TypeScript passed, Hardhat compile passed, and
+  all `397/397` tests passed.
+- The source contains no provider, signer, endpoint, environment-secret read or
+  transaction transport.
+
+### Limitations
+
+- The global lock and public protocol are fixture models, not durable
+  cross-process/public adapters.
+- Final confirmation depths and real fee limits remain `TO DECIDE`.
+- Store v2 uses an intentionally fixture-labelled low-cost KDF profile and must
+  not hold real wallet material.
+- No real exact-99 artifact, wallet, signer or transaction was created.
+
+### Next logical step
+
+Independently review and Git-checkpoint this fixture-only protocol. Do not
+implement a public adapter or create the real store without a separate prompt.
+
+### Git
+
+- Branch: `codex/pop33-recovery`
+- Commit: pending separate approval
+- Message proposal:
+  `feat(operator): specify exact-99 public execution protocol`
+
 ## 2026-07-27 - Exact-99 cumulative execution runner core prepared fixture-only
 
 ### At a glance

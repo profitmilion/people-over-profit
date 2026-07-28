@@ -18,6 +18,8 @@ The current public routes are:
   join, eligible Open-pool withdrawal, draw, and claim controls;
 - `/#/archive-v1` — getter-based pool and round archive.
 
+[First public tester guide](docs/FIRST_PUBLIC_TESTER_GUIDE.md)
+
 One controlled public UI session has confirmed the reversible
 `exact approval -> join -> withdrawal -> exact refund` flow. The complete
 100-position, ten-draw, ten-claim lifecycle has been completed locally, but

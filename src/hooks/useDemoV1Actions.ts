@@ -403,33 +403,39 @@ export function useDemoV1Actions(onConfirmed: () => Promise<unknown> | unknown) 
     );
   }), [assertReady, runExclusive, runTransaction, sendWrite]);
 
-  const approveAndJoin = useCallback(() => runExclusive("Approve and join", async () => {
-    let preflight = await readJoinPreflight();
+  const approveExact = useCallback(() => runExclusive("Approve exactly 33 dUSDC", async () => {
+    const preflight = await readJoinPreflight();
     const approvalAmount = exactDemoV1ApprovalAmount(DEMO_V1_ENTRY_PRICE);
-
-    if (preflight.allowance < approvalAmount) {
-      await runTransaction(
-        "Approve exactly 33 dUSDC",
-        () => sendWrite(demoV1TokenAbi, DEMO_V1_TOKEN_ADDRESS, "approve", [
-          DEMO_V1_CONTRACT_ADDRESS,
-          approvalAmount,
-        ]),
-        async () => {
-          if (!address || !publicClient) {
-            throw new DemoV1ActionError("manual-review", "Wallet or receipt client changed after approval. No join was sent.");
-          }
-          const allowance = await waitForExactApprovedAllowance({
-            client: publicClient,
-            owner: address,
-            requiredAmount: approvalAmount,
-          });
-          assertExactApprovalObserved(allowance, approvalAmount);
-          return "Approval receipt confirmed and exact 33 dUSDC allowance re-read on-chain. A separate join signature follows.";
-        },
+    if (preflight.allowance === approvalAmount) {
+      throw new DemoV1ActionError(
+        "verification-failed",
+        "The allowance is already exactly 33 dUSDC. No approval was sent; continue with Join.",
       );
     }
+    return runTransaction(
+      "Approve exactly 33 dUSDC",
+      () => sendWrite(demoV1TokenAbi, DEMO_V1_TOKEN_ADDRESS, "approve", [
+        DEMO_V1_CONTRACT_ADDRESS,
+        approvalAmount,
+      ]),
+      async () => {
+        if (!address || !publicClient) {
+          throw new DemoV1ActionError("manual-review", "Wallet or receipt client changed after approval. No join was sent.");
+        }
+        const allowance = await waitForExactApprovedAllowance({
+          client: publicClient,
+          owner: address,
+          requiredAmount: approvalAmount,
+        });
+        assertExactApprovalObserved(allowance, approvalAmount);
+        return "Approval confirmed: the allowance is exactly 33 dUSDC. Return to the readiness panel for the separate Join action.";
+      },
+    );
+  }), [address, publicClient, readJoinPreflight, runExclusive, runTransaction, sendWrite]);
 
-    preflight = await readJoinPreflight();
+  const join = useCallback(() => runExclusive("Join pool", async () => {
+    const preflight = await readJoinPreflight();
+    const approvalAmount = exactDemoV1ApprovalAmount(DEMO_V1_ENTRY_PRICE);
     assertExactApprovalObserved(preflight.allowance, approvalAmount);
     const ready = await assertReady();
 
@@ -498,7 +504,7 @@ export function useDemoV1Actions(onConfirmed: () => Promise<unknown> | unknown) 
         return `Join confirmed: position #${event.args.positionId} in pool #${event.args.poolId}; exact payment, active position, and escrow verified.${changedPoolMessage}${lifecycleMessage}`;
       }, (delayMs) => new Promise((resolve) => window.setTimeout(resolve, delayMs))),
     );
-  }), [address, assertReady, publicClient, readJoinPreflight, runExclusive, runTransaction, sendWrite]);
+  }), [assertReady, readJoinPreflight, runExclusive, runTransaction, sendWrite]);
 
   const withdraw = useCallback((positionId: bigint) => runExclusive(`Withdraw position #${positionId}`, async () => {
     const ready = await assertReady();
@@ -588,7 +594,8 @@ export function useDemoV1Actions(onConfirmed: () => Promise<unknown> | unknown) 
       if (!operationGuardRef.current.isActive()) setTxState(initialState);
     },
     drip,
-    approveAndJoin,
+    approveExact,
+    join,
     withdraw,
     executeDraw,
     claim,

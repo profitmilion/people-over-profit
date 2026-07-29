@@ -11,6 +11,7 @@
   },
   "include": [
     "src/demo-v1/domain.ts",
+    "src/demo-v1/onboarding.ts",
     "src/demo-v1/safety.ts",
     "tests/demo-v1-domain.test.ts"
   ]

@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { formatEther } from "viem";
-import { useSwitchChain } from "wagmi";
 import { Button } from "../components/Button";
 import { Card } from "../components/Card";
 import { ConnectButton } from "../components/ConnectButton";
+import { DemoV1Onboarding } from "../components/DemoV1Onboarding";
 import {
   canClaim,
   canExecuteDraw,
@@ -19,11 +19,7 @@ import {
   poolStatusLabels,
   shortenAddress,
 } from "../demo-v1/domain";
-import {
-  DEMO_V1_CHAIN_ID,
-  demoV1Config,
-  getDemoV1ConfigErrorMessage,
-} from "../demo-v1/config";
+import { demoV1Config, getDemoV1ConfigErrorMessage } from "../demo-v1/config";
 import { useDemoV1Actions } from "../hooks/useDemoV1Actions";
 import { useDemoV1Data } from "../hooks/useDemoV1Data";
 import type { DemoV1TxPhase } from "../demo-v1/safety";
@@ -64,7 +60,6 @@ function Metric({ label, value }: { label: string; value: string }) {
 export default function DemoV1Page() {
   const data = useDemoV1Data();
   const actions = useDemoV1Actions(data.refetch);
-  const { switchChain, isPending: isSwitching } = useSwitchChain();
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
@@ -142,7 +137,7 @@ export default function DemoV1Page() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 px-4 py-8 text-slate-100">
+    <div className="min-h-screen bg-slate-950 px-2 py-4 text-slate-100 sm:px-4 sm:py-8">
       <main className="mx-auto max-w-6xl space-y-6">
         <header className="flex flex-col gap-4 rounded-2xl border border-emerald-900/60 bg-slate-900/90 p-5 md:flex-row md:items-center md:justify-between">
           <div>
@@ -157,13 +152,22 @@ export default function DemoV1Page() {
           <div className="flex flex-wrap items-center gap-3">
             <Link className="text-sm text-slate-400 hover:text-slate-200" to="/">Home</Link>
             <Link className="text-sm text-emerald-400 hover:text-emerald-300" to="/archive-v1">Demo V1 archive</Link>
-            <ConnectButton />
+            {data.isConnected ? <ConnectButton /> : null}
           </div>
         </header>
 
         <div className="rounded-xl border border-amber-700/60 bg-amber-950/40 p-4 text-sm text-amber-100">
           <strong>Testnet warning:</strong> dUSDC has no monetary value. This prototype has no KYC and uses temporary, permissionless test draw randomness. Every wallet write still spends Base Sepolia ETH for gas. Do not use mainnet funds.
         </div>
+
+        <DemoV1Onboarding
+          data={data}
+          actions={actions}
+          now={now}
+          faucetAvailable={faucetReady}
+          joinEligible={joinReady}
+          positionCapacityAvailable={!maximumActivePositionsReached}
+        />
 
         {!data.configured ? (
           <div className="rounded-xl border border-red-800 bg-red-950/40 p-4 text-sm text-red-200">
@@ -185,20 +189,6 @@ export default function DemoV1Page() {
             Base Sepolia reads are unavailable. Write actions remain blocked; use Refresh reads before trying again.
           </div>
         ) : null}
-        {data.isConnected && !data.isCorrectChain ? (
-          <div className="flex items-center justify-between gap-4 rounded-xl border border-orange-700 bg-orange-950/40 p-4 text-sm text-orange-100">
-            <span>Wrong network. Demo V1 requires Base Sepolia, chain ID 84532.</span>
-            <Button disabled={isSwitching} onClick={() => switchChain({ chainId: DEMO_V1_CHAIN_ID })}>
-              {isSwitching ? "Switching…" : "Switch network"}
-            </Button>
-          </div>
-        ) : null}
-        {data.isConnected && data.isCorrectChain && !hasGas ? (
-          <div className="rounded-xl border border-red-800 bg-red-950/40 p-4 text-sm text-red-200">
-            This wallet has no Base Sepolia ETH. dUSDC cannot pay gas, so all write actions are disabled.
-          </div>
-        ) : null}
-
         <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Metric label="Wallet" value={shortenAddress(data.address)} />
           <Metric label="Base Sepolia ETH" value={`${Number(formatEther(data.nativeBalance)).toFixed(5)} ETH`} />
@@ -219,19 +209,15 @@ export default function DemoV1Page() {
             <p className="mt-1 text-sm text-slate-300">
               Next drip: {formatCountdown(data.nextDripAt, now)}
             </p>
-            <Button
-              className="mt-4"
-              disabled={!data.runtimeIdentityVerified || !data.isConnected || !data.isCorrectChain || !hasGas || !faucetReady || actions.isBusy}
-              onClick={() => handle(actions.drip())}
-            >
-              Get test dUSDC
-            </Button>
+            <p className="mt-4 text-xs leading-relaxed text-slate-500">
+              Faucet action is available in the preparation panel above when it is the next safe step.
+            </p>
           </Card>
 
           <Card>
-            <h2 className="text-lg font-semibold">2. Approve and join</h2>
+            <h2 className="text-lg font-semibold">2. Pool entry details</h2>
             <p className="mt-2 text-sm text-slate-400">
-              This is a two-transaction flow. When required, the first wallet request approves exactly 33 dUSDC. Only after its receipt and a fresh exact allowance read will a separate join signature be requested.
+              Approval and Join are separate wallet transactions. The preparation panel shows only the next one that is currently safe.
             </p>
             {maximumActivePositionsReached ? (
               <div className="mt-3 rounded-xl border border-slate-700 bg-slate-900/70 p-3 text-sm text-slate-200">
@@ -269,22 +255,6 @@ export default function DemoV1Page() {
                 Approval required: {needsApproval(data.allowance, data.staticData.entryPrice) ? "yes" : "no"}
               </p>
             ) : null}
-            <Button
-              variant="pop"
-              className={`mt-4 px-6 py-2 text-sm ${
-                maximumActivePositionsReached
-                  ? "cursor-not-allowed disabled:scale-100 disabled:bg-slate-700 disabled:[background-image:none] disabled:text-slate-400 disabled:opacity-100 disabled:shadow-none disabled:transition-none disabled:hover:scale-100 disabled:hover:bg-slate-700 disabled:hover:shadow-none disabled:active:scale-100"
-                  : ""
-              }`}
-              disabled={!joinReady || !hasGas || actions.isBusy}
-              onClick={maximumActivePositionsReached
-                ? undefined
-                : () => handle(actions.approveAndJoin())}
-            >
-              {maximumActivePositionsReached
-                ? "Maximum 10 active positions"
-                : "Approve if needed, then join"}
-            </Button>
           </Card>
         </section>
 

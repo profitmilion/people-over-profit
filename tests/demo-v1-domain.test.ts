@@ -33,8 +33,30 @@ import {
   validateDemoV1PublicConfig,
   validateDemoV1RuntimeIdentity,
 } from "../src/demo-v1/safety.js";
+import {
+  BASE_SEPOLIA_CHAIN_ID,
+  RECOMMENDED_DEMO_ETH_BALANCE,
+  getDemoOnboardingState,
+  getWalletRequestErrorMessage,
+  type DemoOnboardingInput,
+} from "../src/demo-v1/onboarding.js";
 
 const demoUser = "0xCaeb6D19d6d85349a08172e0efb9bb8541E4BeFB";
+const onboardingReadyFixture: DemoOnboardingInput = {
+  hasWalletProvider: true,
+  isConnected: true,
+  chainId: BASE_SEPOLIA_CHAIN_ID,
+  isNetworkPending: false,
+  nativeBalance: RECOMMENDED_DEMO_ETH_BALANCE,
+  tokenBalance: DEMO_V1_ENTRY_PRICE,
+  allowance: DEMO_V1_ENTRY_PRICE,
+  entryPrice: DEMO_V1_ENTRY_PRICE,
+  faucetAvailable: true,
+  runtimeReady: true,
+  positionCapacityAvailable: true,
+  joinEligible: true,
+  transactionBusy: false,
+};
 
 function joinPreflightFixture(activePositionCount: bigint) {
   return {
@@ -468,5 +490,100 @@ test("withdrawal post-receipt verification checks inactive position, exact refun
   assert.throws(
     () => assertWithdrawalPostReceipt({ ...valid, tokenBalanceAfter: 329_000_000n }),
     (error) => error instanceof DemoV1ActionError && error.phase === "verification-failed",
+  );
+});
+
+test("onboarding advances through wallet, network, ETH, dUSDC, approval and join", () => {
+  assert.equal(
+    getDemoOnboardingState({
+      ...onboardingReadyFixture,
+      hasWalletProvider: false,
+      isConnected: false,
+      chainId: undefined,
+    }).nextAction,
+    "open-wallet-browser",
+  );
+  assert.equal(
+    getDemoOnboardingState({
+      ...onboardingReadyFixture,
+      isConnected: false,
+      chainId: undefined,
+    }).nextAction,
+    "connect-wallet",
+  );
+  assert.equal(
+    getDemoOnboardingState({
+      ...onboardingReadyFixture,
+      chainId: 1,
+    }).nextAction,
+    "switch-network",
+  );
+  assert.equal(
+    getDemoOnboardingState({
+      ...onboardingReadyFixture,
+      nativeBalance: RECOMMENDED_DEMO_ETH_BALANCE - 1n,
+    }).nextAction,
+    "get-test-eth",
+  );
+  assert.equal(
+    getDemoOnboardingState({
+      ...onboardingReadyFixture,
+      tokenBalance: DEMO_V1_ENTRY_PRICE - 1n,
+      allowance: 0n,
+    }).nextAction,
+    "get-dusdc",
+  );
+  assert.equal(
+    getDemoOnboardingState({
+      ...onboardingReadyFixture,
+      allowance: 0n,
+    }).nextAction,
+    "approve",
+  );
+  assert.equal(getDemoOnboardingState(onboardingReadyFixture).nextAction, "join");
+  assert.equal(getDemoOnboardingState(onboardingReadyFixture).readyToJoin, true);
+});
+
+test("onboarding handles faucet cooldown, unsafe allowance and busy transaction state", () => {
+  assert.equal(
+    getDemoOnboardingState({
+      ...onboardingReadyFixture,
+      tokenBalance: 0n,
+      allowance: 0n,
+      faucetAvailable: false,
+    }).nextAction,
+    "wait-for-faucet",
+  );
+  assert.equal(
+    getDemoOnboardingState({
+      ...onboardingReadyFixture,
+      allowance: DEMO_V1_ENTRY_PRICE + 1n,
+    }).nextAction,
+    "review-allowance",
+  );
+  assert.equal(
+    getDemoOnboardingState({
+      ...onboardingReadyFixture,
+      transactionBusy: true,
+    }).nextAction,
+    "wait",
+  );
+});
+
+test("wallet request errors distinguish rejection, missing provider and generic failure", () => {
+  assert.match(
+    getWalletRequestErrorMessage({ code: 4001 }, "connect") ?? "",
+    /odrzucone/i,
+  );
+  assert.match(
+    getWalletRequestErrorMessage(
+      { message: "Provider not found" },
+      "connect",
+    ) ?? "",
+    /nie znaleziono dostawcy/i,
+  );
+  assert.match(
+    getWalletRequestErrorMessage(new Error("transport stopped"), "network") ?? "",
+    /chain ID 84532/i,
   );
 });

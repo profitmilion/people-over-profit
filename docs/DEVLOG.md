@@ -33,6 +33,58 @@ documentation.
   current overview of implementation, gaps, and risks.
 - Do not guess. Mark unclear facts as requiring later reconstruction.
 
+## 2026-07-29 - Mobile-first Demo V1 preparation flow
+
+### At a glance
+
+Demo V1 now leads a first-time mobile tester through wallet, Base Sepolia,
+test ETH, dUSDC, exact approval, and Join readiness with one dominant next
+action.
+
+### Completed
+
+- Added a visible readiness checklist for wallet, chain `84532`, recommended
+  test ETH, at least 33 dUSDC, exact allowance, and Join readiness.
+- Added explicit missing-provider guidance for opening the page in MetaMask or
+  another compatible wallet's built-in browser, without adding WalletConnect
+  or a dependency.
+- Made the official Base faucet list the primary test-ETH source and explained
+  that both ETH and dUSDC are valueless test assets with different purposes.
+- Split exact 33 dUSDC approval and Join into two separately confirmed user
+  actions.
+- Added concrete states for rejected wallet requests, switching or adding the
+  network, low balances, faucet cooldown, unsafe allowance, busy transactions,
+  and full readiness.
+- Reduced mobile page padding and made the primary preparation action full
+  width with a minimum 44-pixel height.
+
+### Verification
+
+- `npm test`: passed, `29/29`, using local domain fixtures only.
+- `npm run build`: passed.
+- ESLint on all changed TypeScript/TSX files: passed.
+- Full `npm run lint`: stopped only on the nine pre-existing exact-99 unused
+  variable errors; no operator files were changed.
+- No faucet, approve, join, withdrawal, draw, claim, operator run, deployment,
+  contract change, wallet creation, commit, or push occurred.
+
+### Limitations and next step
+
+- The change has not yet been deployed, so the existing public Preview does not
+  yet expose the new flow.
+- Demo and Archive tables were intentionally not redesigned. A real phone pass
+  at 320, 375, and 390 pixels remains the next Preview verification.
+- WalletConnect remains outside this stage and requires a separate dependency
+  and security review.
+
+### Git
+
+- Branch: `codex/pop33-recovery`.
+- Source baseline:
+  `e41cfd0f8230b367fe646bf39ece2b58d71ed448`.
+- Commit: not created; the worktree is intentionally awaiting Piotr's review.
+- Proposed message: `feat(demo-v1): add guided mobile onboarding`.
+
 ## 2026-07-27 - Demo V1 frontend supports the locking 100th join
 
 ### At a glance

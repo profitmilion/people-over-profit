@@ -1,6 +1,6 @@
 # POP33 Development Status
 
-Last reviewed: 2026-07-27
+Last reviewed: 2026-07-29
 
 Branch reviewed: `codex/pop33-recovery`
 
@@ -37,6 +37,23 @@ The public product surface is now intentionally limited to the landing page,
 product vision from current testnet functionality. The preserved `#/demo` and
 `#/archive` entries are labelled legacy/DEV and are not linked from the public
 Demo V1 navigation.
+
+The Demo V1 source now includes a mobile-first **Przygotowanie do Demo**
+readiness panel. It detects an available injected wallet, connection state,
+Base Sepolia chain `84532`, a conservative test-ETH threshold, dUSDC balance,
+faucet cooldown, exact 33 dUSDC allowance, active-position capacity, and Join
+eligibility. It presents one dominant next action in order: connect, switch
+network, obtain test ETH from the official Base faucet list, obtain dUSDC,
+approve exactly 33 dUSDC, and join. Approval and Join are now deliberately
+separate user actions. Missing mobile providers are directed to a compatible
+wallet's built-in browser; WalletConnect and new wallet dependencies were not
+added.
+
+This onboarding change is verified only in the local source worktree at
+`e41cfd0f8230b367fe646bf39ece2b58d71ed448` plus uncommitted changes. It has not
+been committed, pushed, or deployed to Vercel Preview, Production, or
+Farcaster. The current public Preview therefore continues to represent its
+previous deployed source until a separately approved deployment occurs.
 
 The controlled Demo V1 pair is now deployed on Base Sepolia. It
 includes the POP33-owned, six-decimal POP33 Demo USD (`dUSDC`) faucet token and

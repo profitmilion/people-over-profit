@@ -51,16 +51,17 @@ Compare the complete addresses, not only the first and last characters.
 6. Tap the browser icon or use the search/address field in Explore.
 7. Paste the full Demo V1 link:
    <https://pop33-demo-git-codex-pop33-recovery-profitmilions-projects.vercel.app/#/demo-v1>
-8. On the POP33 page, tap **Connect Wallet**.
+8. In **Przygotowanie do Demo**, tap **Connect wallet**.
 9. In MetaMask, select and connect only the separate test account.
 10. Return to POP33 and compare the shortened value under **Wallet** with the
     selected account. If in doubt, open the account in MetaMask and compare the
     full public address.
 
-After connection, the page replaces **Connect Wallet** with the shortened
-account address and a **Disconnect** button. If it shows **Connection error**,
-do not start a transaction. Confirm the selected account and reopen the page in
-the MetaMask Explore browser.
+The preparation panel now shows one next action at a time. If the phone browser
+does not expose a compatible wallet, reopen the same link inside MetaMask
+Explore or another compatible wallet's built-in browser. WalletConnect is not
+part of this Demo stage. If a request is rejected, the page says so and waits
+for the tester to retry manually; it does not submit anything automatically.
 
 The official MetaMask mobile browser is inside the **Explore** tab. Do not open
 the test in an unknown in-app browser, and do not type a seed phrase into any
@@ -83,7 +84,7 @@ on another network, the page shows:
 
 > Wrong network. Demo V1 requires Base Sepolia, chain ID 84532.
 
-First tap **Switch network** and review the MetaMask request. MetaMask may ask
+First tap **Switch to Base Sepolia** and review the MetaMask request. MetaMask may ask
 to switch to Base Sepolia or add it before switching.
 
 Only if that automatic request is unavailable:
@@ -103,20 +104,20 @@ chain ID other than `84532`.
 Base Sepolia test ETH is needed only for gas. It has no monetary value. Do not
 buy real ETH for this test.
 
-Use the Coinbase Developer Platform Faucet listed by the official Base
-documentation:
+Use the current official Base faucet list as the primary source:
 
-- Official Base faucet list:
-  <https://docs.base.org/base-chain/network-information/network-faucets>
-- Coinbase Developer Platform Faucet:
-  <https://portal.cdp.coinbase.com/products/faucet>
+- <https://docs.base.org/base-chain/network-information/network-faucets>
+
+Choose a Base Sepolia ETH provider from that list. POP33 does not require one
+specific third-party faucet.
 
 In the faucet:
 
 1. Select **Base Sepolia** and test ETH.
 2. Use only the public address of the separate test account.
 3. Request a small testnet amount.
-4. Wait until MetaMask shows a non-zero Base Sepolia ETH balance.
+4. Wait until MetaMask shows a Base Sepolia ETH balance. The preparation panel
+   recommends at least `0.00005 ETH` before enabling the next transaction.
 5. Return to POP33 and check the **Base Sepolia ETH** field.
 
 Never enter a seed phrase or private key. If the official faucet is unavailable
@@ -139,16 +140,19 @@ backup.
 - [ ] Tap **POP IT - open Demo V1**.
 - [ ] Confirm that the Demo page says **Base Sepolia · Demo V1** and
       **POP33 Basic V1**.
-- [ ] Tap **Connect Wallet** and connect only the separate test account.
+- [ ] Tap **Connect wallet** and connect only the separate test account.
 - [ ] Confirm the expected wallet account and Base Sepolia chain ID `84532`.
-- [ ] Confirm that **Base Sepolia ETH** is greater than zero.
+- [ ] Follow the single main action in **Przygotowanie do Demo**.
+- [ ] Confirm that its checklist marks wallet and Base Sepolia as ready.
+- [ ] Confirm that **Base Sepolia ETH** is at least the displayed recommended
+      minimum.
 - [ ] Confirm that the page does not show a configuration error, runtime
       identity error, or unavailable Base Sepolia reads.
 
 ### Get test dUSDC
 
-- [ ] In **1. Test token faucet**, check **Next drip**. Continue only when it
-      says `available now`.
+- [ ] In **Przygotowanie do Demo**, continue only when **Get dUSDC** is the
+      main action. If the cooldown is active, wait for its displayed end time.
 - [ ] Note the current **dUSDC balance**.
 - [ ] Tap **Get test dUSDC**.
 - [ ] In MetaMask, confirm that the transaction is on Base Sepolia and goes to
@@ -188,12 +192,11 @@ before another action can start. Do not repeatedly tap an action button.
 
 ### Exact approval and join
 
-The page uses one button, **Approve if needed, then join**, but this is a
-two-transaction flow when **Approval required** says `yes`:
+The page intentionally presents two separate steps:
 
-1. one MetaMask request for exact approval;
-2. after the receipt and a fresh allowance check, one separate MetaMask request
-   for join.
+1. **Approve 33 dUSDC** creates only the exact approval transaction;
+2. after its receipt and a fresh exact allowance read, the main action changes
+   to **Join pool**.
 
 The app never sends the join before observing the exact allowance on-chain.
 
@@ -202,23 +205,23 @@ The app never sends the join before observing the exact allowance on-chain.
 - [ ] Confirm **Approval required: yes** for a wallet with zero allowance.
       If a fresh test account unexpectedly shows `no` or a non-zero allowance,
       stop and record it before continuing.
-- [ ] Tap **Approve if needed, then join** once.
+- [ ] When it is the main action, tap **Approve 33 dUSDC** once.
 - [ ] In the first MetaMask request, verify all of the following:
   - network: Base Sepolia, chain ID `84532`;
   - token: `0xA7FA084b34c888061757d4b5FBb08a7B53fee786`;
   - spender: `0x140DA1b29F0B00b003Cabe86AE1a473d6745f56F`;
   - amount or spending cap: exactly `33 dUSDC`, not unlimited.
 - [ ] Approve only if every value is correct.
-- [ ] Watch for **Approve exactly 33 dUSDC: Confirmed and verified**. The app
-      may promptly replace this status when it opens the separate join request,
-      so use MetaMask Activity if the approval result is no longer visible.
+- [ ] Watch for **Approve exactly 33 dUSDC: Confirmed and verified**.
 - [ ] Save the approval hash from MetaMask Activity or
       **View transaction on BaseScan**.
-- [ ] When MetaMask opens the second request, confirm it is a separate Base
+- [ ] Return to the preparation panel and tap **Join pool** only after it
+      becomes the single main action.
+- [ ] When MetaMask opens the join request, confirm it is a separate Base
       Sepolia transaction to the reviewed POP33 Basic V1 contract:
       `0x140DA1b29F0B00b003Cabe86AE1a473d6745f56F`.
 - [ ] Approve the join transaction only after the approval is confirmed.
-- [ ] Do not tap **Approve if needed, then join** again while the status says
+- [ ] Do not tap the main action again while the status says
       waiting, submitted, confirming, or verifying.
 - [ ] Wait for **Join pool: Confirmed and verified**.
 - [ ] Read the success message. It should identify a position and pool and say
@@ -274,7 +277,8 @@ verified without an unresolved warning or error.
 
 - [ ] Confirm **Allowance** is `0 dUSDC`, the wallet has at least `33 dUSDC`,
       and Base Sepolia ETH is still greater than zero.
-- [ ] Tap **Approve if needed, then join** once.
+- [ ] Follow **Approve 33 dUSDC**, wait for confirmation, and then use the
+      separate **Join pool** action.
 - [ ] Repeat the exact 33 dUSDC approval checks.
 - [ ] Approve the separate join request only after the approval is confirmed.
 - [ ] Save the second approval and second join hashes.

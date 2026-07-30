@@ -151,6 +151,22 @@ Available fixtures are:
 - `locked-before-first-draw`;
 - `multi-pool`.
 
+Exact-99 readiness is a separate provider-only mode:
+
+```text
+npm run supervisor -- --exact99-readiness --pool 1
+npm run supervisor -- --exact99-readiness --pool 1 --json
+npm run supervisor -- --exact99-readiness --pool 1 --candidate-address 0x...
+npm run supervisor -- --exact99-readiness --pool 1 --manifest exact99-public-addresses.json
+npm run supervisor -- --exact99-readiness --pool 1 --create-readiness-plan exact99-readiness.json
+npm run supervisor -- --revalidate-readiness-plan exact99-readiness.json
+```
+
+It requires an explicit pool, reuses the same pinned Base Sepolia snapshot and
+supervisor result, and adds only public owner, routing, candidate, manifest,
+and dynamic-checkpoint analysis. It does not share the guarded Draw execution
+path.
+
 ## Base Sepolia public-read adapter
 
 The Base Sepolia adapter uses a viem public client. It creates no account or
@@ -455,6 +471,59 @@ short explanation. Reports avoid dumping full snapshots.
 
 Creating a plan successfully returns zero. Ordinary supervisor behavior
 without plan flags remains unchanged.
+
+## Exact-99 Base Sepolia readiness
+
+`scripts/operator/exact-99-base-sepolia-readiness.ts` turns one complete
+snapshot and its supervisor report into a separate read-only preparation
+plan. It does not reuse the old exact-99 coordinator ranges. For snapshot
+count `c`, every target `5`, `20`, `50`, `99`, and manual `100` uses
+`max(0, target - c)`, while phase sizes start at the greater of `c` and the
+previous checkpoint.
+
+The plan includes canonical chain, contract, interface, token and block
+identity; selected pool state; supervisor recommendation; dynamic checkpoint
+and testnet-resource calculations; owner, manifest, candidate and routing
+assessments; explicit risks; and one overall decision. Blockchain integers
+are decimal strings. The existing canonical JSON serializer and SHA-256
+implementation produce a key-order-independent integrity fingerprint.
+
+Owner discovery prefers pinned direct reads: `positionCount()` followed by
+bounded `getPosition()` enumeration and comparison with the selected
+`getPool()` count. Only if direct enumeration is unavailable or exceeds its
+10,000-position cap does it use `PositionJoined` logs, bounded from deployment
+block `44144873` in chunks of at most 2,000 blocks, followed by direct position
+reconciliation. Missing, duplicate, conflicting, or count-mismatched data is
+`INCOMPLETE`.
+
+An optional public candidate is checked with existing ABI methods:
+`getActivePositionId`, `activePositionsByUser`,
+`MAX_ACTIVE_POSITIONS_PER_USER`, and `findOldestQualifyingPool`. An optional
+public manifest contains addresses and public identity only. It rejects
+secret-shaped fields and values, duplicate or existing owners, a reused
+manual-100 address, wrong identity, wrong dynamic count, and a changed
+fingerprint.
+
+Readiness decisions are:
+
+- `READY_TO_PREPARE`;
+- `READY_FOR_CHECKPOINT`;
+- `READY_FOR_MANUAL_100_CHECK`;
+- `STALE`;
+- `BLOCKED`;
+- `INCOMPLETE`;
+- `INVALID_INPUT`.
+
+Every plan repeats `READ_ONLY — NOT AUTHORIZATION TO EXECUTE`.
+`READY_FOR_MANUAL_100_CHECK` means only that a consistent selected pool is
+exactly `99/100` and Open; it does not authorize Join. Revalidation compares a
+saved plan with a fresh snapshot, owner mapping, optional manifest and
+candidate result. Any count change requires recalculation, and a transition to
+Locked blocks the saved plan.
+
+The full format, fallback rules, exit codes, manifest schema, and operational
+examples are in
+`docs/RUNBOOK_BASE_SEPOLIA_EXACT_99_READINESS.md`.
 
 ## Guarded single-Draw operator
 

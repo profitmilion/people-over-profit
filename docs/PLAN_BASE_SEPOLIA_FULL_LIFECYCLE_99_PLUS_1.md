@@ -1,6 +1,9 @@
 # Base Sepolia full lifecycle plan: 99 automatic participants + 1 manual participant
 
-Status: analysis and execution plan only
+Status: historical planning document. Its fixed 99-new-wallet and empty-pool
+assumptions are superseded for readiness decisions by
+`RUNBOOK_BASE_SEPOLIA_EXACT_99_READINESS.md`. Retained for history; do not use
+it as authorization to create wallets or execute transactions.
 
 Prepared: 2026-07-18
 

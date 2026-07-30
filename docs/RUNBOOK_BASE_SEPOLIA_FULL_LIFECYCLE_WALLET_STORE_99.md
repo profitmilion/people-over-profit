@@ -1,6 +1,7 @@
 # Base Sepolia full-lifecycle 99-wallet store tools
 
-Status: store and exact-99 artifact code prepared; real store not initialized
+Status: legacy v1 store tooling retained; not approved for live exact-99;
+real store not initialized
 
 Prepared: 2026-07-19; artifact layer added 2026-07-27
 
@@ -15,6 +16,11 @@ approval, join, withdrawal, draw, claim, deployment, or a Vercel change.
 
 The real 99-wallet store has not been created. No wallet has been funded and no
 transaction was performed for this checkpoint.
+
+The read-only readiness milestone does not import or decrypt this store.
+Version 1 exposes the complete 99-key set to one decrypting process and must
+not be used for live exact-99 preparation. A production-strength, separately
+approved per-record design remains required before any wallet creation.
 
 ## Isolation and file identity
 

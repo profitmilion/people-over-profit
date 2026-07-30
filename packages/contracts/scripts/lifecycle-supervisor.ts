@@ -49,6 +49,24 @@ import {
 import {
   createBaseSepoliaGuardedDrawDependencies,
 } from "./operator/guarded-single-draw-base-sepolia.js";
+import {
+  EXACT_99_READINESS_SAFETY,
+  Exact99ReadinessInputError,
+  ViemExact99ReadinessPublicClient,
+  createLiveExact99ReadinessPlan,
+  invalidExact99ReadinessPlanResult,
+  parseExact99ReadinessPlanJson,
+  readExact99PublicManifestFile,
+  readExact99ReadinessPlanFile,
+  readinessExitCode,
+  readinessRevalidationExitCode,
+  renderExact99ReadinessJson,
+  renderExact99ReadinessRevalidationJson,
+  renderExact99ReadinessRevalidationText,
+  renderExact99ReadinessText,
+  revalidateExact99ReadinessPlan,
+  writeExact99ReadinessPlanFile,
+} from "./operator/exact-99-base-sepolia-readiness.js";
 
 function readUnsignedBigInt(name: string, value: string | undefined): bigint | undefined {
   if (value === undefined || value === "") return undefined;
@@ -125,6 +143,159 @@ async function runGuardedDraw(mode: GuardedDrawMode, planPath: string): Promise<
   process.exitCode = outcome.exitCode;
 }
 
+async function runExact99Readiness(): Promise<void> {
+  const createPath =
+    process.env.POP33_INTERNAL_EXACT99_CREATE_READINESS_PLAN?.trim() ?? "";
+  const revalidatePath =
+    process.env.POP33_INTERNAL_EXACT99_REVALIDATE_READINESS_PLAN?.trim() ?? "";
+  const manifestPath =
+    process.env.POP33_INTERNAL_EXACT99_MANIFEST?.trim() ?? "";
+  const explicitCandidate =
+    process.env.POP33_INTERNAL_EXACT99_CANDIDATE_ADDRESS?.trim() ?? "";
+  const format = process.env.POP33_INTERNAL_SUPERVISOR_FORMAT?.trim() ?? "text";
+  if (format !== "text" && format !== "json") {
+    throw new Error("Readiness output format must be text or json.");
+  }
+  if (createPath && revalidatePath) {
+    throw new Error(
+      "--create-readiness-plan and --revalidate-readiness-plan cannot be combined.",
+    );
+  }
+  if (
+    process.env.POP33_INTERNAL_SUPERVISOR_OVERWRITE_PLAN === "true" &&
+    !createPath
+  ) {
+    throw new Error("--overwrite-plan requires --create-readiness-plan.");
+  }
+  if (
+    process.env.POP33_INTERNAL_SUPERVISOR_SOURCE_EXPLICIT === "true" &&
+    process.env.POP33_INTERNAL_SUPERVISOR_SOURCE?.trim() !== "base-sepolia"
+  ) {
+    throw new Error("Exact-99 readiness supports only --source base-sepolia.");
+  }
+
+  let savedPlan;
+  if (revalidatePath) {
+    const file = await readExact99ReadinessPlanFile(revalidatePath);
+    const parsed = parseExact99ReadinessPlanJson(file.json);
+    if (!parsed.ok) {
+      const invalid = invalidExact99ReadinessPlanResult(parsed.errors);
+      console.log(
+        format === "json"
+          ? renderExact99ReadinessRevalidationJson(invalid)
+          : renderExact99ReadinessRevalidationText(invalid),
+      );
+      process.exitCode = readinessRevalidationExitCode(invalid.status);
+      return;
+    }
+    savedPlan = parsed.plan;
+    if (
+      savedPlan.manifest.status !== "MANIFEST_NOT_PROVIDED" &&
+      !manifestPath
+    ) {
+      throw new Error(
+        "A manifest-bound readiness plan requires --manifest during revalidation.",
+      );
+    }
+  }
+
+  let poolId = readUnsignedBigInt(
+    "Pool ID",
+    process.env.POP33_INTERNAL_SUPERVISOR_POOL_ID?.trim(),
+  );
+  if (savedPlan) {
+    const savedPoolId = BigInt(savedPlan.pool.poolId);
+    if (poolId !== undefined && poolId !== savedPoolId) {
+      throw new Error("--pool must match the pool ID stored in the readiness plan.");
+    }
+    poolId = savedPoolId;
+  }
+  if (poolId === undefined || poolId <= 0n) {
+    throw new Error("Exact-99 readiness requires exactly one positive --pool ID.");
+  }
+  const candidateAddress =
+    explicitCandidate || savedPlan?.candidate.address || undefined;
+  if (
+    explicitCandidate &&
+    savedPlan?.candidate.address &&
+    explicitCandidate.toLowerCase() !== savedPlan.candidate.address.toLowerCase()
+  ) {
+    throw new Error(
+      "--candidate-address must match the address stored in the readiness plan.",
+    );
+  }
+  const manifestJson = manifestPath
+    ? (await readExact99PublicManifestFile(manifestPath)).json
+    : undefined;
+  const rpcUrl = validateLifecycleSupervisorRpcUrl(
+    process.env.BASE_SEPOLIA_SUPERVISOR_RPC_URL?.trim() ??
+      LIFECYCLE_SUPERVISOR_DEFAULT_RPC_URL,
+  );
+  const rawTimeout = process.env.POP33_INTERNAL_SUPERVISOR_TIMEOUT_MS?.trim();
+  const timeoutMs = validateLifecycleSupervisorTimeout(
+    rawTimeout ? Number(rawTimeout) : LIFECYCLE_SUPERVISOR_DEFAULT_TIMEOUT_MS,
+  );
+  const blockNumber = readUnsignedBigInt(
+    "Block number",
+    process.env.POP33_INTERNAL_SUPERVISOR_BLOCK_NUMBER?.trim(),
+  );
+  if (blockNumber === 0n) throw new Error("Block number must be positive.");
+  const snapshot = await new BaseSepoliaLifecycleSnapshotAdapter({
+    client: new ViemLifecycleSupervisorPublicClient(rpcUrl, timeoutMs),
+    rpcHost: redactLifecycleSupervisorRpcUrl(rpcUrl),
+    contractAddress:
+      process.env.POP33_INTERNAL_SUPERVISOR_CONTRACT_ADDRESS?.trim() ||
+      process.env.BASE_SEPOLIA_SUPERVISOR_CONTRACT_ADDRESS?.trim() ||
+      undefined,
+    blockNumber,
+  }).readSnapshot();
+  const report = analyzeLifecycleSnapshot(snapshot);
+  const plan = await createLiveExact99ReadinessPlan({
+    snapshot,
+    report,
+    publicClient: new ViemExact99ReadinessPublicClient(rpcUrl, timeoutMs),
+    poolId,
+    sourceReference: "base-sepolia",
+    manifestJson,
+    candidateAddress,
+  });
+
+  if (savedPlan) {
+    const result = revalidateExact99ReadinessPlan(savedPlan, plan, {
+      maxAgeSeconds: readUnsignedBigInt(
+        "Maximum readiness plan age",
+        process.env.POP33_INTERNAL_SUPERVISOR_MAX_PLAN_AGE?.trim(),
+      ),
+    });
+    console.log(
+      format === "json"
+        ? renderExact99ReadinessRevalidationJson(result)
+        : renderExact99ReadinessRevalidationText(result),
+    );
+    process.exitCode = readinessRevalidationExitCode(result.status);
+    return;
+  }
+
+  if (createPath) {
+    const savedPath = await writeExact99ReadinessPlanFile(createPath, plan, {
+      overwrite:
+        process.env.POP33_INTERNAL_SUPERVISOR_OVERWRITE_PLAN === "true",
+    });
+    console.log(
+      format === "json"
+        ? renderExact99ReadinessJson(plan)
+        : `${renderExact99ReadinessText(plan)}\nSaved: ${savedPath}`,
+    );
+  } else {
+    console.log(
+      format === "json"
+        ? renderExact99ReadinessJson(plan)
+        : renderExact99ReadinessText(plan),
+    );
+  }
+  process.exitCode = readinessExitCode(plan.decision.status);
+}
+
 async function main(): Promise<void> {
   const drawModes = [
     ["inspect", process.env.POP33_INTERNAL_GUARDED_DRAW_INSPECT?.trim()],
@@ -138,6 +309,16 @@ async function main(): Promise<void> {
   }
   if (drawModes.length === 1) {
     await runGuardedDraw(drawModes[0][0], drawModes[0][1]);
+    return;
+  }
+  const readinessRequested =
+    process.env.POP33_INTERNAL_EXACT99_READINESS === "true" ||
+    Boolean(
+      process.env.POP33_INTERNAL_EXACT99_CREATE_READINESS_PLAN?.trim() ||
+      process.env.POP33_INTERNAL_EXACT99_REVALIDATE_READINESS_PLAN?.trim(),
+    );
+  if (readinessRequested) {
+    await runExact99Readiness();
     return;
   }
   const createPlanPath =
@@ -343,6 +524,35 @@ async function main(): Promise<void> {
 
 void main().catch((error: unknown) => {
   const message = error instanceof Error ? error.message : String(error);
+  const readinessMode =
+    process.env.POP33_INTERNAL_EXACT99_READINESS === "true" ||
+    Boolean(
+      process.env.POP33_INTERNAL_EXACT99_CREATE_READINESS_PLAN?.trim() ||
+      process.env.POP33_INTERNAL_EXACT99_REVALIDATE_READINESS_PLAN?.trim(),
+    );
+  if (readinessMode) {
+    const status = error instanceof Exact99ReadinessInputError ||
+        /requires|cannot be combined|must match|must be positive|supports only/i
+          .test(message)
+      ? "INVALID_INPUT"
+      : "INCOMPLETE";
+    const output = {
+      status,
+      reasonCode: status === "INVALID_INPUT"
+        ? "READINESS_INPUT_INVALID"
+        : "READINESS_PUBLIC_READ_FAILED",
+      message,
+      safety: EXACT_99_READINESS_SAFETY,
+    };
+    if (process.env.POP33_INTERNAL_SUPERVISOR_FORMAT?.trim() === "json") {
+      console.error(JSON.stringify(output, null, 2));
+    } else {
+      console.error(`Exact-99 readiness stopped: ${message}`);
+      console.error(EXACT_99_READINESS_SAFETY);
+    }
+    process.exitCode = readinessExitCode(status);
+    return;
+  }
   console.error(`Lifecycle supervisor stopped: ${message}`);
   console.error("Safety result: no key or transaction path was loaded.");
   process.exitCode =

@@ -18,6 +18,23 @@
   `INVALID_PLAN`. Add `--json` for machine output or `--max-plan-age SECONDS`
   to override the default 7,200-second age ceiling. This command has no wallet,
   signer, key, transaction, or Draw execution path.
+- `npm run supervisor -- --exact99-readiness --pool 1` creates a read-only
+  dynamic `5 -> 20 -> 50 -> 99 -> manual 100` readiness report from a complete
+  pinned Base Sepolia snapshot and the supervisor. It requires an explicit
+  pool ID and never assumes that Pool 1 remains the correct target.
+- Add `--candidate-address 0x...` to inspect one public address, or
+  `--manifest exact99-public-addresses.json` to validate a public-only,
+  fingerprinted dynamic address set. Neither option checks address control or
+  loads key material.
+- `--create-readiness-plan exact99-readiness.json` writes one canonical,
+  atomic, create-only plan. `--revalidate-readiness-plan
+  exact99-readiness.json` repeats the public reads and returns `VALID`, `STALE`,
+  `BLOCKED`, `INCOMPLETE`, or `INVALID_PLAN`. A manifest-bound plan requires
+  the same reviewed `--manifest` during revalidation.
+- Readiness owner mapping prefers direct `positionCount` plus `getPosition`
+  reads at the pinned block. Its bounded `PositionJoined` log fallback starts
+  at deployment block `44144873`, never genesis. Every output states
+  `READ_ONLY — NOT AUTHORIZATION TO EXECUTE`.
 - `npm run supervisor -- --inspect-draw lifecycle-plan.json` consumes one
   canonical actionable Base Sepolia Draw plan, reads one fresh snapshot, and
   revalidates it without creating a wallet client.

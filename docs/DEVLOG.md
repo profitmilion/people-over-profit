@@ -33,6 +33,71 @@ documentation.
   current overview of implementation, gaps, and risks.
 - Do not guess. Mark unclear facts as requiring later reconstruction.
 
+## 2026-07-30 - Read-only exact-99 Base Sepolia readiness
+
+### At a glance
+
+Exact-99 preparation now starts from one pinned public snapshot and calculates
+the number of additional addresses dynamically instead of assuming an empty
+pool and 99 new wallets.
+
+### Completed
+
+- Added a separate read-only readiness model for targets `5`, `20`, `50`,
+  `99`, and manual `100`, with decimal-string resource estimates, explicit
+  stop criteria, risk reporting, and one overall fail-closed decision.
+- Reused the lifecycle supervisor, canonical Base Sepolia identity, existing
+  frontend ABI, canonical JSON serializer, SHA-256 integrity model, bounded
+  retry, atomic file write, and create-only overwrite policy.
+- Added direct public owner mapping through pinned `positionCount` and
+  `getPosition` reads. A deployment-block-bounded `PositionJoined` scan remains
+  only as a rate-limit-aware fallback.
+- Added optional candidate qualification through current contract getters and
+  optional validation of a public-only dynamic manifest with a separately
+  reserved manual-100 address.
+- Added saved-plan freshness revalidation for count, escrow, owner mapping,
+  manifest, candidate routing, checkpoints, supervisor recommendation,
+  identity, block direction, and maximum plan age.
+- Extended the existing supervisor CLI without importing its guarded Draw
+  execution adapter into readiness.
+
+### Verification
+
+- New deterministic readiness suite: passed, `68/68`.
+- Public Base Sepolia read-only smoke at block `44829390`: Pool 1 remained
+  Open at `3/100`, escrow was `99` dUSDC, all three active owners were mapped
+  through direct reads, and the result was `READY_TO_PREPARE`.
+- The dynamic plan calculated 2, 17, 47, and 96 additional positions from the
+  snapshot to targets 5, 20, 50, and 99.
+- A temporary readiness plan created outside the repository at block
+  `44829406` revalidated `VALID` at block `44829411` and was removed.
+- Full regression, build, lint, audit, diff, and final security results are
+  recorded in the task handoff.
+- No wallet store was initialized. No wallet, key, signer, signature,
+  transaction, funding, faucet, Approve, Join, Draw, Claim, Withdraw,
+  deployment, contract change, functional ABI change, or frontend change
+  occurred.
+
+### Limitations and next step
+
+- `READY_TO_PREPARE`, `READY_FOR_CHECKPOINT`, and
+  `READY_FOR_MANUAL_100_CHECK` are planning results, never transaction
+  authorization.
+- `join()` cannot bind an expected pool or count, so routing retains an
+  unavoidable race until state is freshly revalidated around a separately
+  authorized operation.
+- Wallet store v1 is not approved for live exact-99. The old coordinator and
+  runner remain fixture-only and are not used by readiness.
+- Before creating wallets or executing transactions, review and consolidate
+  the complete operator stack into `codex/pop33-recovery`.
+
+### Git
+
+- Branch: `codex/pop33-exact-99-base-sepolia-readiness`
+- Base commit: `c2d78cb6a83e9d2f48549fbbfea0cea15b43f8c5`
+- Commit: pending Piotr's direct approval
+- Proposed message: `feat(operator): add exact-99 Base Sepolia readiness plan`
+
 ## 2026-07-30 - Guarded single-Draw operator
 
 ### At a glance

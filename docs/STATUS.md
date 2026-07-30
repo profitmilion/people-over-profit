@@ -2,7 +2,7 @@
 
 Last reviewed: 2026-07-30
 
-Branch reviewed: `codex/pop33-guarded-single-draw-operator`
+Branch reviewed: `codex/pop33-exact-99-base-sepolia-readiness`
 
 Status: active development
 
@@ -73,6 +73,26 @@ Pool 1 remained Open at 3/100; its fresh plan revalidated `VALID` but was
 `informational/WAIT`, so both guarded inspect and simulate stopped `BLOCKED`
 before calldata, operator-account loading, or transaction simulation. Network
 state was not changed to manufacture a due Draw.
+
+The supervisor CLI now also exposes a separate exact-99 Base Sepolia readiness
+mode. It requires an explicit pool, derives checkpoint and resource counts from
+the current pinned `activePositionCount`, validates escrow and supervisor
+state, maps active owners through bounded direct public reads, assesses ordered
+pool routing and an optional candidate, and validates an optional public-only
+address manifest. Readiness reuses the existing canonical serializer and
+SHA-256 integrity model and can save and revalidate an atomic JSON plan. Every
+result is explicitly `READ_ONLY — NOT AUTHORIZATION TO EXECUTE`; no wallet
+store, key, signer, faucet, approval, Join, Draw, Claim, or transaction path is
+imported.
+
+A public read-only readiness smoke at block `44829390` found Pool 1 Open at
+`3/100`, escrow `99` dUSDC, ten ordered Open pools, and 22 globally created
+positions. Direct `positionCount` plus pinned `getPosition` reads mapped all
+three active Pool 1 owners and produced `READY_TO_PREPARE`, with 96 new unique
+addresses and 3,168 test dUSDC required to reach the automatic hard stop at
+99. A temporary plan created outside the repository at block `44829406`
+revalidated `VALID` at block `44829411` and was removed. This milestone did
+not generate a manifest or any wallet.
 
 The public product surface is now intentionally limited to the landing page,
 `#/demo-v1`, and `#/archive-v1`. The landing describes the deployed 33 dUSDC,
@@ -625,6 +645,9 @@ the UI and rechecks the connector directly before sending.
   requires dedicated public configuration and was not run in this milestone)
 - `cd packages/contracts && npm run operator:base-sepolia:read-only -- preflight --wallet-count 2`
 - `cd packages/contracts && npm run operator:base-sepolia:read-only -- dry-run --start-index 0 --wallet-count 5`
+- `cd packages/contracts && npm run supervisor -- --exact99-readiness --pool 1`
+- `cd packages/contracts && npm run supervisor -- --exact99-readiness --pool 1 --create-readiness-plan <temporary-path>.json`
+- `cd packages/contracts && npm run supervisor -- --revalidate-readiness-plan <temporary-path>.json`
 - `cd packages/contracts && npx tsc --noEmit`
 - `npx tsc --noEmit`
 - `npm run lint`

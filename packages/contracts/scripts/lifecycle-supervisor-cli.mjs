@@ -28,6 +28,11 @@ let confirmContract = "";
 let confirmPool = "";
 let confirmRound = "";
 let auditLog = "";
+let exact99Readiness = false;
+let candidateAddress = "";
+let manifest = "";
+let createReadinessPlan = "";
+let revalidateReadinessPlan = "";
 
 function usage() {
   return [
@@ -40,6 +45,9 @@ function usage() {
     "  [--inspect-draw FILE.json | --simulate-draw FILE.json |",
     "   --execute-draw FILE.json --confirm-chain 84532 --confirm-contract ADDRESS",
     "   --confirm-pool ID --confirm-round NUMBER] [--audit-log FILE.guarded-draw-audit.json]",
+    "  [--exact99-readiness --pool ID [--candidate-address ADDRESS]",
+    "   [--manifest FILE.json] [--create-readiness-plan FILE.json [--overwrite-plan]]",
+    "   | --revalidate-readiness-plan FILE.json [--manifest FILE.json]]",
   ].join(" ");
 }
 
@@ -49,6 +57,7 @@ while (args.length > 0) {
   else if (flag === "--only-actionable") onlyActionable = true;
   else if (flag === "--only-warnings") onlyWarnings = true;
   else if (flag === "--overwrite-plan") overwritePlan = true;
+  else if (flag === "--exact99-readiness") exact99Readiness = true;
   else if (flag === "--help") {
     console.log(usage());
     process.exit(0);
@@ -72,7 +81,11 @@ while (args.length > 0) {
     flag === "--confirm-contract" ||
     flag === "--confirm-pool" ||
     flag === "--confirm-round" ||
-    flag === "--audit-log"
+    flag === "--audit-log" ||
+    flag === "--candidate-address" ||
+    flag === "--manifest" ||
+    flag === "--create-readiness-plan" ||
+    flag === "--revalidate-readiness-plan"
   ) {
     const value = args.shift();
     if (!value) {
@@ -101,6 +114,16 @@ while (args.length > 0) {
     else if (flag === "--confirm-pool") confirmPool = value;
     else if (flag === "--confirm-round") confirmRound = value;
     else if (flag === "--audit-log") auditLog = value;
+    else if (flag === "--candidate-address") candidateAddress = value;
+    else if (flag === "--manifest") manifest = value;
+    else if (flag === "--create-readiness-plan") {
+      createReadinessPlan = value;
+      exact99Readiness = true;
+    }
+    else if (flag === "--revalidate-readiness-plan") {
+      revalidateReadinessPlan = value;
+      exact99Readiness = true;
+    }
     else maxPlanAge = value;
   } else {
     console.error(usage());
@@ -138,6 +161,41 @@ if (
   );
   process.exit(2);
 }
+if (
+  exact99Readiness &&
+  guardedDrawModeCount > 0
+) {
+  console.error("Exact-99 readiness cannot be combined with guarded Draw modes.");
+  process.exit(2);
+}
+if (
+  exact99Readiness &&
+  (createPlan || revalidatePlan || onlyActionable || onlyWarnings ||
+    fromPoolId || toPoolId || overdueThreshold || fixture !== "multi-pool")
+) {
+  console.error(
+    "Exact-99 readiness cannot be combined with lifecycle-plan, filter, range, or fixture options.",
+  );
+  process.exit(2);
+}
+if (createReadinessPlan && revalidateReadinessPlan) {
+  console.error(
+    "--create-readiness-plan and --revalidate-readiness-plan are mutually exclusive.",
+  );
+  process.exit(2);
+}
+if (
+  !exact99Readiness &&
+  (candidateAddress || manifest || createReadinessPlan || revalidateReadinessPlan)
+) {
+  console.error("Candidate and manifest options require exact-99 readiness mode.");
+  process.exit(2);
+}
+if (exact99Readiness && sourceExplicit && source !== "base-sepolia") {
+  console.error("Exact-99 readiness supports only --source base-sepolia.");
+  process.exit(2);
+}
+if (exact99Readiness) source = "base-sepolia";
 const guardedDrawMode = inspectDraw
   ? "inspect"
   : simulateDraw
@@ -185,6 +243,11 @@ const child = spawnSync(
       POP33_INTERNAL_GUARDED_DRAW_CONFIRM_POOL: confirmPool,
       POP33_INTERNAL_GUARDED_DRAW_CONFIRM_ROUND: confirmRound,
       POP33_INTERNAL_GUARDED_DRAW_AUDIT_PATH: effectiveAuditLog,
+      POP33_INTERNAL_EXACT99_READINESS: String(exact99Readiness),
+      POP33_INTERNAL_EXACT99_CANDIDATE_ADDRESS: candidateAddress,
+      POP33_INTERNAL_EXACT99_MANIFEST: manifest,
+      POP33_INTERNAL_EXACT99_CREATE_READINESS_PLAN: createReadinessPlan,
+      POP33_INTERNAL_EXACT99_REVALIDATE_READINESS_PLAN: revalidateReadinessPlan,
       ...(executeDraw && process.env.BASE_SEPOLIA_DRAW_OPERATOR_PRIVATE_KEY
         ? {
             BASE_SEPOLIA_DRAW_OPERATOR_PRIVATE_KEY:

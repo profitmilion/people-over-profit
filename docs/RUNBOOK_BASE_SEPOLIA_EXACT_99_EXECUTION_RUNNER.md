@@ -3,6 +3,11 @@
 Status: fixture-only core and injected fixture adapter prepared; no public
 network adapter
 
+This runner must not be connected to Base Sepolia. Its empty-pool counters and
+fixture snapshot model are not the source of truth for the current public
+deployment. The separate read-only readiness plan supplies dynamic counts and
+does not add a transaction adapter.
+
 Prepared: 2026-07-27
 
 ## Simple purpose

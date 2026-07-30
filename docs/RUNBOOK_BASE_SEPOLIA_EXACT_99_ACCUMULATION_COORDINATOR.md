@@ -1,6 +1,6 @@
 # Base Sepolia exact-99 cumulative accumulation coordinator
 
-Status: fixture-only plan, inspection, and simulation prepared; no public runner
+Status: fixture-only and obsolete for a non-empty public pool; no public runner
 
 Prepared: 2026-07-27
 
@@ -21,6 +21,11 @@ These ranges are fixed, disjoint, cover every index from `0` through `98`
 exactly once, and never include index `99`. The split gives Piotr a deliberate
 stop after each larger sample so artifact consistency and accumulated results
 can be reviewed before more testnet activity is eventually authorized.
+
+These ranges assume an initially empty pool. They must not be used for the
+current Base Sepolia Pool 1 or any other non-empty pool. The read-only
+readiness plan derives every remaining and per-phase count from the current
+pinned `activePositionCount` instead.
 
 ## Artifact binding
 

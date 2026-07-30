@@ -26,6 +26,11 @@
   `--manifest exact99-public-addresses.json` to validate a public-only,
   fingerprinted dynamic address set. Neither option checks address control or
   loads key material.
+- `docs/RUNBOOK_BASE_SEPOLIA_MANUAL_CHECKPOINT_5.md` applies those existing
+  public reads to two distinct MetaMask candidate addresses, one at a time,
+  for a prepared `3 -> 4 -> 5` mobile session with a hard stop at `5/100`.
+  Preparation creates no wallet and performs no Approve, Join, or other
+  transaction.
 - `--create-readiness-plan exact99-readiness.json` writes one canonical,
   atomic, create-only plan. `--revalidate-readiness-plan
   exact99-readiness.json` repeats the public reads and returns `VALID`, `STALE`,

@@ -43,6 +43,13 @@ Optional public candidate address:
 npm run supervisor -- --exact99-readiness --pool 1 --candidate-address 0x...
 ```
 
+For the narrow, mobile-first preparation from the currently expected `3/100`
+state to a hard stop at `5/100`, use
+`docs/RUNBOOK_BASE_SEPOLIA_MANUAL_CHECKPOINT_5.md`. It checks two distinct
+public candidates sequentially and requires a new pinned snapshot after the
+first future manual Join. That runbook does not create wallets or authorize a
+transaction.
+
 Optional public-only manifest:
 
 ```powershell
@@ -88,7 +95,10 @@ For an optional candidate, pinned direct reads check
 selected pool. Because `join()` has no expected pool or expected count
 argument, an external Join can still change routing before a future
 transaction. Readiness never promises that a future Join will land in a
-particular pool.
+particular pool. A manual runbook may label a complete, fresh `ELIGIBLE` result
+as `ELIGIBLE_FOR_MANUAL_JOIN` for session recording, but:
+
+`Eligibility is not authorization to execute a transaction.`
 
 ## Owner mapping
 

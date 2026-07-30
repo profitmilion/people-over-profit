@@ -24,6 +24,8 @@ dist-ssr
 *.operator-*.backup
 *.guarded-draw-audit.json
 *.guarded-draw-audit.json.*.tmp
+*.manual-checkpoint-5-report.json
+*.manual-checkpoint-5-report.json.*.tmp
 
 # Local environment files
 .env

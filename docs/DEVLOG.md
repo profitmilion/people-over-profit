@@ -33,6 +33,64 @@ documentation.
   current overview of implementation, gaps, and risks.
 - Do not guess. Mark unclear facts as requiring later reconstruction.
 
+## 2026-07-30 - Guarded manual checkpoint 5 preparation
+
+### At a glance
+
+A mobile-first, read-only runbook now prepares two distinct public MetaMask
+candidates for a future, separately authorized `3 -> 4 -> 5` Base Sepolia
+session and imposes a hard stop at `5/100`.
+
+### Completed
+
+- Reused the exact-99 candidate, owner mapping, routing, supervisor,
+  checkpoint, and fingerprint evidence instead of adding another runtime or
+  transaction path.
+- Documented sequential Candidate A and Candidate B public checks, exact
+  expected `4/100` and `5/100` escrow, a fresh recheck after the first future
+  Join, a 60-second maximum operator freshness window, and fail-closed stop
+  conditions.
+- Defined `NOT_CHECKED`, `ELIGIBLE_FOR_MANUAL_JOIN`, and `BLOCKED` for the
+  manual session while preserving the CLI's canonical `ELIGIBLE` result.
+- Added a secret-free local JSON report template and ignored generated
+  checkpoint-5 reports.
+- Reviewed the existing mobile Demo V1 flow: public account/network/resources,
+  exact approval and Join remain separate, transaction state is single-flight,
+  receipts expose BaseScan links, and refreshed count/escrow are visible.
+
+### Verification
+
+- A public read-only snapshot observed Pool 1 Open at `3/100`, `99` dUSDC
+  escrow, complete direct owner mapping, and a `5/100` target requiring two
+  additional positions.
+- The public recovery Preview landing, `#/demo-v1`, `#/archive-v1`, and
+  mobile-sized Demo V1 route loaded without a login wall or obvious runtime
+  error.
+- Documentation, JSON validity, focused regressions, build, lint, audit,
+  diff, and security results are recorded in the task handoff.
+- Candidate A and Candidate B remain `NOT_CHECKED`. No public candidate address
+  was supplied.
+- No wallet was created, imported, funded, or configured. No key, signature,
+  faucet call, Approve, Join, Draw, Claim, deployment, or blockchain
+  transaction occurred.
+
+### Limitations and next step
+
+- Candidate eligibility is block-specific evidence and cannot authorize a
+  transaction or eliminate the routing/count race in the current `join()`
+  interface.
+- If the fresh start is not exactly `3/100`, the prepared two-Join session is
+  stale and must be recalculated.
+- The next step is for Piotr to select two separate MetaMask public addresses
+  and run the read-only candidate checks before any manual Approve or Join.
+
+### Git
+
+- Branch: `codex/pop33-manual-checkpoint-5-prep`
+- Base commit: `002164c79bb052d106de577499e7f3a6cebb6971`
+- Commit: pending Piotr's direct approval
+- Proposed message: `docs(operator): prepare guarded manual checkpoint 5`
+
 ## 2026-07-30 - Read-only exact-99 Base Sepolia readiness
 
 ### At a glance

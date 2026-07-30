@@ -2,7 +2,7 @@
 
 Last reviewed: 2026-07-30
 
-Branch reviewed: `codex/pop33-exact-99-base-sepolia-readiness`
+Branch reviewed: `codex/pop33-manual-checkpoint-5-prep`
 
 Status: active development
 
@@ -93,6 +93,26 @@ addresses and 3,168 test dUSDC required to reach the automatic hard stop at
 99. A temporary plan created outside the repository at block `44829406`
 revalidated `VALID` at block `44829411` and was removed. This milestone did
 not generate a manifest or any wallet.
+
+A separate manual checkpoint-5 preparation now documents a narrow future
+mobile session from an exact fresh `3/100` snapshot through two distinct public
+MetaMask candidates to a hard stop at `5/100`. It reuses the existing
+read-only candidate, owner-mapping, routing, checkpoint, supervisor, and
+fingerprint evidence; no second runtime or transaction runner was added. The
+session-level `ELIGIBLE_FOR_MANUAL_JOIN` label is permitted only for a complete
+fresh CLI result of `ELIGIBLE` plus exact expected state and UI resource
+checks, and is explicitly not transaction authorization. Candidate B must be
+rechecked after any future Join A. A secret-free ignored local report format
+records public snapshot and transaction evidence.
+
+Manual checkpoint 5 status: `prepared, not executed`.
+
+The preparation reviewed the public `codex/pop33-recovery` Vercel Preview on
+landing, `#/demo-v1`, `#/archive-v1`, and a mobile-sized Demo V1 route. All
+loaded without a login wall or obvious runtime error. No wallet was connected.
+No candidate address was supplied, no wallet or key was created or configured,
+and no funding, faucet, Approve, Join, Draw, Claim, deployment, signature, or
+blockchain transaction occurred. Both candidates remain `NOT_CHECKED`.
 
 The public product surface is now intentionally limited to the landing page,
 `#/demo-v1`, and `#/archive-v1`. The landing describes the deployed 33 dUSDC,

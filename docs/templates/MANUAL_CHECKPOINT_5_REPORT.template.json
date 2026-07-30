@@ -1,0 +1,126 @@
+{
+  "formatVersion": 1,
+  "purpose": "POP33 Base Sepolia manual checkpoint 5 public evidence",
+  "safety": {
+    "readOnlyPreparation": true,
+    "authorizationToExecute": false,
+    "containsSecrets": false,
+    "warning": "Eligibility is not authorization to execute a transaction."
+  },
+  "session": {
+    "sessionId": null,
+    "createdAt": null,
+    "operator": "Piotr",
+    "status": "NOT_CHECKED",
+    "hardStopCount": "5"
+  },
+  "identity": {
+    "chainId": "84532",
+    "network": "Base Sepolia",
+    "contract": "0x140DA1b29F0B00b003Cabe86AE1a473d6745f56F",
+    "token": "0xA7FA084b34c888061757d4b5FBb08a7B53fee786",
+    "poolId": "1",
+    "entryPriceBaseUnits": "33000000",
+    "tokenDecimals": 6
+  },
+  "preparedTarget": {
+    "targetCount": "5",
+    "startCountFromFreshSnapshot": null,
+    "requiredJoinsFromFreshSnapshot": null,
+    "expectedStartEscrowBaseUnits": null,
+    "expectedAfterCandidateACount": null,
+    "expectedAfterCandidateAEscrowBaseUnits": null,
+    "expectedAfterCandidateBCount": "5",
+    "expectedAfterCandidateBEscrowBaseUnits": "165000000",
+    "maximumManualJoinsForPreparedScenario": 2
+  },
+  "startSnapshot": {
+    "blockNumber": null,
+    "blockTimestamp": null,
+    "capturedAt": null,
+    "planId": null,
+    "fingerprint": null,
+    "poolStatus": null,
+    "activePositionCount": null,
+    "accountedEscrowBaseUnits": null,
+    "supervisorNextAction": null,
+    "supervisorReason": null,
+    "ownerMappingStatus": null,
+    "ownerMappingFingerprint": null,
+    "routingAssessment": null,
+    "warnings": [],
+    "decision": "NOT_CHECKED"
+  },
+  "candidates": {
+    "candidateA": {
+      "publicAddress": null,
+      "distinctFromOtherCandidate": null,
+      "checkedAt": null,
+      "checkBlockNumber": null,
+      "cliCandidateStatus": null,
+      "sessionEligibility": "NOT_CHECKED",
+      "activePoolPositionId": null,
+      "globalActivePositionCount": null,
+      "globalActivePositionLimit": null,
+      "likelyPoolId": null,
+      "uiPublicAddressMatched": null,
+      "uiDusdcBalanceBaseUnits": null,
+      "uiTestEthSufficient": null,
+      "approvalTransactionHash": null,
+      "joinTransactionHash": null,
+      "notes": []
+    },
+    "candidateB": {
+      "publicAddress": null,
+      "distinctFromOtherCandidate": null,
+      "checkedAt": null,
+      "checkBlockNumber": null,
+      "cliCandidateStatus": null,
+      "sessionEligibility": "NOT_CHECKED",
+      "activePoolPositionId": null,
+      "globalActivePositionCount": null,
+      "globalActivePositionLimit": null,
+      "likelyPoolId": null,
+      "uiPublicAddressMatched": null,
+      "uiDusdcBalanceBaseUnits": null,
+      "uiTestEthSufficient": null,
+      "approvalTransactionHash": null,
+      "joinTransactionHash": null,
+      "notes": []
+    }
+  },
+  "afterCandidateA": {
+    "blockNumber": null,
+    "blockTimestamp": null,
+    "poolStatus": null,
+    "activePositionCount": null,
+    "accountedEscrowBaseUnits": null,
+    "candidateAIsMappedActiveOwner": null,
+    "ownerMappingStatus": null,
+    "supervisorNextAction": null,
+    "decision": "NOT_CHECKED",
+    "warnings": []
+  },
+  "afterCandidateB": {
+    "blockNumber": null,
+    "blockTimestamp": null,
+    "poolStatus": null,
+    "activePositionCount": null,
+    "accountedEscrowBaseUnits": null,
+    "candidateAIsMappedActiveOwner": null,
+    "candidateBIsMappedActiveOwner": null,
+    "ownerMappingStatus": null,
+    "supervisorNextAction": null,
+    "readinessResult": null,
+    "checkpointResult": null,
+    "decision": "NOT_CHECKED",
+    "warnings": []
+  },
+  "finalDecision": {
+    "status": "NOT_CHECKED",
+    "hardStopObserved": false,
+    "reason": null,
+    "recordedAt": null
+  },
+  "errors": []
+}

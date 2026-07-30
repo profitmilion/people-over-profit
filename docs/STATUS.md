@@ -2,7 +2,7 @@
 
 Last reviewed: 2026-07-30
 
-Branch reviewed: `codex/pop33-base-sepolia-supervisor-adapter`
+Branch reviewed: `codex/pop33-lifecycle-plan-revalidation`
 
 Status: active development
 
@@ -42,6 +42,19 @@ pinned Base Sepolia block, supports bounded pool ranges and historical block
 overrides, and imports the existing frontend ABI and address source. It has no
 keys, wallet client, transaction path, contract changes, or frontend changes;
 `docs/LIFECYCLE_SUPERVISOR.md` records its scope and safety boundary.
+
+The supervisor now also supports versioned saved lifecycle action plans and
+read-only freshness revalidation. A plan binds one pool recommendation to its
+source, chain, contract, interface identifier, pinned block, round, counters,
+accounted escrow, and other minimal critical assumptions. All blockchain
+integers remain canonical decimal strings, and a key-order-independent SHA-256
+fingerprint detects accidental or inconsistent edits. Revalidation reads a
+fresh snapshot and returns `VALID`, `STALE`, `BLOCKED`, `INCOMPLETE`, or
+`INVALID_PLAN`, with compact field-level differences and distinct CLI exit
+codes. A configurable 7,200-second default age ceiling supplements rather than
+replaces full state comparison. The module remains read-only and contains no
+key, signer, wallet client, Draw execution, transaction, contract, ABI,
+frontend, or deployment change.
 
 The public product surface is now intentionally limited to the landing page,
 `#/demo-v1`, and `#/archive-v1`. The landing describes the deployed 33 dUSDC,

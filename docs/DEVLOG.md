@@ -33,6 +33,77 @@ documentation.
   current overview of implementation, gaps, and risks.
 - Do not guess. Mark unclear facts as requiring later reconstruction.
 
+## 2026-07-30 - Lifecycle plan freshness revalidation
+
+### At a glance
+
+The read-only lifecycle supervisor can now save one pool recommendation as a
+versioned action plan and later prove whether that plan still matches a fresh
+pinned snapshot.
+
+### Completed
+
+- Added a deterministic plan model bound to source, chain, contract,
+  contract-interface identifier, base block, pool, supervisor action, round,
+  critical counters, accounted escrow, and relevant round state.
+- Added canonical, key-order-independent JSON processing with exact decimal
+  strings for every blockchain integer.
+- Added a SHA-256 fingerprint and derived plan ID that reject unsupported,
+  malformed, incomplete, or accidentally changed plan files.
+- Added deterministic `VALID`, `STALE`, `BLOCKED`, `INCOMPLETE`, and
+  `INVALID_PLAN` results with compact field-level differences.
+- Added chain, contract, source, pool, block-direction, snapshot-completeness,
+  action, round, state, higher-priority alert, and maximum-age checks.
+- Extended the existing supervisor CLI with safe JSON file creation,
+  explicit-only overwrite, plan revalidation, JSON output, a configurable
+  age ceiling, and distinct exit codes including RPC failure.
+- Kept only Draw due/overdue plans actionable. Waiting, Claims monitoring, and
+  Finished remain informational; no action execution was added.
+
+### Verification
+
+- New deterministic revalidation suite: passed, `34/34`.
+- Combined revalidation, supervisor, Base Sepolia adapter, and read-only retry
+  suites: passed, `95/95`.
+- Contract TypeScript check and Hardhat compilation: passed.
+- Frontend domain regression: passed, `29/29`; frontend production build:
+  passed with existing dependency-annotation and bundle-size warnings.
+- Focused ESLint for every changed runtime and test file: passed. Full
+  repository ESLint retains only the nine pre-existing exact-99
+  unused-variable errors.
+- `git diff --check`: passed.
+- Contracts production dependency audit: zero vulnerabilities.
+- Fixture CLI create/revalidate smoke: `VALID`.
+- Credential-free Base Sepolia read-only smoke created a pool 1 plan at block
+  `44825685`, read a fresh snapshot at block `44825695`, and returned `VALID`
+  with no changed critical fields.
+- Runtime scanning found no private key, mnemonic, signer, wallet client,
+  transaction transport, deployment function, mutating contract call, secret
+  RPC URL, or API credential. The existing CLI environment filter continues
+  to remove secret-shaped variables before spawning Hardhat.
+- No wallet, signature, transaction, Draw, Claim, Join, Approve, Withdraw,
+  faucet, funding, deployment, contract change, functional ABI change,
+  frontend change, Vercel change, Production change, or Farcaster change
+  occurred.
+
+### Limitations and next step
+
+- The fingerprint detects accidental edits but is not an operator signature
+  and does not defend against a deliberate attacker who can rewrite both data
+  and digest.
+- Public RPC availability remains an external dependency. Missing or partial
+  evidence fails closed.
+- Revalidation does not authorize or execute an operation.
+- The next separately reviewed stage is a guarded single-Draw operator.
+
+### Git
+
+- Branch: `codex/pop33-lifecycle-plan-revalidation`.
+- Source baseline:
+  `964e64c87f0bc2cabf710c415cde40bb5a3a92e7`.
+- Commit and push: intentionally not created in this task.
+- Proposed message: `feat(operator): add lifecycle plan revalidation`.
+
 ## 2026-07-30 - Base Sepolia lifecycle supervisor adapter
 
 ### At a glance

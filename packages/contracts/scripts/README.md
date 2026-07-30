@@ -10,6 +10,14 @@
   block, and feeds that snapshot into the same engine. Use
   `BASE_SEPOLIA_SUPERVISOR_RPC_URL` only to override the credential-free
   default public endpoint.
+- `npm run supervisor -- --source base-sepolia --pool 2 --create-plan
+  lifecycle-plan.json` saves a versioned, fingerprinted read-only action plan
+  for one pool. Existing files require the explicit `--overwrite-plan` flag.
+- `npm run supervisor -- --revalidate-plan lifecycle-plan.json` reads a fresh
+  pinned snapshot and returns `VALID`, `STALE`, `BLOCKED`, `INCOMPLETE`, or
+  `INVALID_PLAN`. Add `--json` for machine output or `--max-plan-age SECONDS`
+  to override the default 7,200-second age ceiling. This command has no wallet,
+  signer, key, transaction, or Draw execution path.
 - `npm run deploy:dry-run` deploys `Pop33DemoUSDC` and `Pop33BasicV1` to a fresh
   simulated `hardhatOp` network and validates the initial configuration.
 - `npm run smoke:demo-v1` independently deploys the same local contracts and

@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 
 const args = process.argv.slice(2);
 let source = "fixtures";
+let sourceExplicit = false;
 let fixture = "multi-pool";
 let format = "text";
 let poolId = "";
@@ -14,6 +15,10 @@ let timeoutMs = "";
 let onlyActionable = false;
 let onlyWarnings = false;
 let overdueThreshold = "";
+let createPlan = "";
+let revalidatePlan = "";
+let overwritePlan = false;
+let maxPlanAge = "";
 
 function usage() {
   return [
@@ -21,6 +26,8 @@ function usage() {
     "  [--json] [--pool ID | --from-pool ID --to-pool ID] [--block NUMBER]",
     "  [--contract ADDRESS] [--timeout-ms MS] [--only-actionable]",
     "  [--only-warnings] [--overdue-threshold SECONDS]",
+    "  [--create-plan FILE.json [--overwrite-plan] | --revalidate-plan FILE.json]",
+    "  [--max-plan-age SECONDS]",
   ].join(" ");
 }
 
@@ -29,6 +36,7 @@ while (args.length > 0) {
   if (flag === "--json") format = "json";
   else if (flag === "--only-actionable") onlyActionable = true;
   else if (flag === "--only-warnings") onlyWarnings = true;
+  else if (flag === "--overwrite-plan") overwritePlan = true;
   else if (flag === "--help") {
     console.log(usage());
     process.exit(0);
@@ -41,14 +49,20 @@ while (args.length > 0) {
     flag === "--block" ||
     flag === "--contract" ||
     flag === "--timeout-ms" ||
-    flag === "--overdue-threshold"
+    flag === "--overdue-threshold" ||
+    flag === "--create-plan" ||
+    flag === "--revalidate-plan" ||
+    flag === "--max-plan-age"
   ) {
     const value = args.shift();
     if (!value) {
       console.error(usage());
       process.exit(2);
     }
-    if (flag === "--source") source = value;
+    if (flag === "--source") {
+      source = value;
+      sourceExplicit = true;
+    }
     else if (flag === "--fixture") fixture = value;
     else if (flag === "--pool") poolId = value;
     else if (flag === "--from-pool") fromPoolId = value;
@@ -56,7 +70,10 @@ while (args.length > 0) {
     else if (flag === "--block") blockNumber = value;
     else if (flag === "--contract") contractAddress = value;
     else if (flag === "--timeout-ms") timeoutMs = value;
-    else overdueThreshold = value;
+    else if (flag === "--overdue-threshold") overdueThreshold = value;
+    else if (flag === "--create-plan") createPlan = value;
+    else if (flag === "--revalidate-plan") revalidatePlan = value;
+    else maxPlanAge = value;
   } else {
     console.error(usage());
     process.exit(2);
@@ -79,6 +96,7 @@ const child = spawnSync(
     env: {
       ...childEnvironment,
       POP33_INTERNAL_SUPERVISOR_SOURCE: source,
+      POP33_INTERNAL_SUPERVISOR_SOURCE_EXPLICIT: String(sourceExplicit),
       POP33_INTERNAL_SUPERVISOR_FIXTURE: fixture,
       POP33_INTERNAL_SUPERVISOR_FORMAT: format,
       POP33_INTERNAL_SUPERVISOR_POOL_ID: poolId,
@@ -90,6 +108,10 @@ const child = spawnSync(
       POP33_INTERNAL_SUPERVISOR_ONLY_ACTIONABLE: String(onlyActionable),
       POP33_INTERNAL_SUPERVISOR_ONLY_WARNINGS: String(onlyWarnings),
       POP33_INTERNAL_SUPERVISOR_OVERDUE_THRESHOLD: overdueThreshold,
+      POP33_INTERNAL_SUPERVISOR_CREATE_PLAN: createPlan,
+      POP33_INTERNAL_SUPERVISOR_REVALIDATE_PLAN: revalidatePlan,
+      POP33_INTERNAL_SUPERVISOR_OVERWRITE_PLAN: String(overwritePlan),
+      POP33_INTERNAL_SUPERVISOR_MAX_PLAN_AGE: maxPlanAge,
     },
     stdio: "inherit",
   },

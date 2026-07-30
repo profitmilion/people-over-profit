@@ -269,6 +269,190 @@ executor must re-read the chain before any transaction and confirm at least:
 - the same next sequential round;
 - that another permissionless caller has not already executed it.
 
+## Saved action plans and freshness revalidation
+
+The supervisor can now save one pool's result as a versioned lifecycle action
+plan and later compare it with a newly read snapshot. The saved plan is data,
+not executable code. Revalidation is also read-only: it creates no account or
+wallet client, loads no key or signer, and never calls Draw.
+
+Only `DRAW_DUE` and `DRAW_OVERDUE` become an `actionable` plan with planned
+action `DRAW`. Waiting, outstanding Claims, and Finished are
+`informational`. Inconsistent complete state is `blocked`; incomplete source
+data is `invalid`. None of these classifications executes an operation.
+
+Create a plan for one Base Sepolia pool:
+
+```text
+npm run supervisor -- --source base-sepolia --pool 2 --create-plan lifecycle-plan.json
+```
+
+The CLI refuses to overwrite an existing file unless
+`--overwrite-plan` is supplied. Relative paths must remain under the current
+working directory, absolute paths are treated as an explicit user choice, and
+the extension must be `.json`. Files are parsed only with `JSON.parse`.
+
+Re-read the plan's source, contract, and pool and compare fresh state:
+
+```text
+npm run supervisor -- --revalidate-plan lifecycle-plan.json
+npm run supervisor -- --revalidate-plan lifecycle-plan.json --json
+npm run supervisor -- --revalidate-plan lifecycle-plan.json --max-plan-age 3600
+```
+
+For deterministic fixtures, the saved fixture name is reused automatically.
+For Base Sepolia, the adapter reads a new pinned block. An explicit read-only
+contract override remains possible, but a different address produces
+`BLOCKED`, never `VALID`.
+
+### Plan structure
+
+The plan contains:
+
+- format version, deterministic plan ID, creation timestamp, and fingerprint;
+- source type and source reference;
+- chain ID, checksummed contract address, contract-interface identifier,
+  base block number, and base block timestamp;
+- pool ID, expected pool status, supervisor action/reason, classification,
+  planned action, and round/winner identifier when relevant;
+- only the critical lifecycle assumptions needed for comparison: snapshot
+  completeness, position/capacity values, round and Claim counters, accounted
+  escrow, assigned/claimed amounts, and the relevant round state.
+
+It does not copy complete user data, RPC URLs, wallet state, credentials,
+cookies, tokens, private keys, or mnemonics. All blockchain integers are
+canonical unsigned decimal strings. No large value is converted to JavaScript
+`number`.
+
+Example:
+
+```json
+{
+  "formatVersion": 1,
+  "planId": "lifecycle-plan:5100afb4c485b5b571108ef9d3e50ef782baafa187d8675c5c1c2b7195acc480",
+  "fingerprint": "sha256:5100afb4c485b5b571108ef9d3e50ef782baafa187d8675c5c1c2b7195acc480",
+  "createdAt": "1800000000",
+  "source": {
+    "type": "fixture",
+    "reference": "multi-pool"
+  },
+  "identity": {
+    "chainId": "31337",
+    "contractAddress": "0x0000000000000000000000000000000000000033",
+    "contractInterface": "Pop33BasicV1:src/demo-v1/abi:v1",
+    "baseBlockNumber": "12345",
+    "baseBlockTimestamp": "1800000000"
+  },
+  "scope": {
+    "poolId": "2",
+    "expectedPoolStatus": "Locked",
+    "supervisorAction": "DRAW_OVERDUE",
+    "supervisorReasonCode": "NEXT_DRAW_OVERDUE",
+    "classification": "actionable",
+    "plannedAction": "DRAW",
+    "roundNumber": "1",
+    "winningPositionId": "0"
+  },
+  "assumptions": {
+    "snapshotComplete": true,
+    "activePositionCount": "100",
+    "maxPositionCount": "100",
+    "drawRoundCount": "10",
+    "completedDrawRoundCount": "0",
+    "claimedPrizeCount": "0",
+    "escrowedAmount": "3300000000",
+    "assignedPrizeAmount": "0",
+    "claimedPrizeAmount": "0",
+    "nextRoundScheduledAt": "1799996400",
+    "nextRoundStatus": "Pending",
+    "nextRoundWinningPositionId": "0",
+    "nextRoundClaimed": false
+  }
+}
+```
+
+### Canonical fingerprint
+
+The fingerprint is SHA-256 over the complete plan payload except the two
+derived integrity fields, `planId` and `fingerprint`. Object keys are sorted
+recursively, arrays preserve their order, and `bigint` values are represented
+as decimal strings. Therefore key order and pretty-printing do not change the
+digest, while changing any identity, scope, or assumption does.
+
+`planId` and `fingerprint` use the same digest with different prefixes. Both
+are checked while parsing. This detects accidental edits and inconsistent
+critical fields; it is not a signature, does not authenticate an operator, and
+does not protect a file from a deliberate attacker who can rewrite both the
+payload and hash.
+
+### Revalidation statuses
+
+| Status | Meaning |
+| --- | --- |
+| `VALID` | Format and fingerprint are valid; identity, block direction, completeness, supervisor action, round, and critical assumptions still match. |
+| `STALE` | The plan was valid, but lifecycle state changed or the plan exceeded its maximum age. Generate a new plan. |
+| `BLOCKED` | A wrong identity, older block, unsafe Draw timing, unknown/inconsistent state, escrow error, or higher-priority alert prevents safe use. |
+| `INCOMPLETE` | Missing block, partial snapshot, missing round/field, or another data gap prevents a safe decision. |
+| `INVALID_PLAN` | JSON, schema, type, address, required field, plan ID, or fingerprint validation failed. |
+
+The default maximum age is 7,200 seconds, suitable as a conservative
+two-interval ceiling for the current hourly Demo V1. `--max-plan-age SECONDS`
+can reduce or explicitly change it. Age is only one check: a young plan still
+must pass every identity and state comparison.
+
+Chain ID, contract address, contract-interface ID, source, pool ID, block
+number, and block timestamp are always checked. A fresh block must be at least
+the base block. Missing evidence fails closed.
+
+Example `VALID`:
+
+```text
+Plan status: VALID
+Pool: 2
+Base block: 12345
+Fresh block: 12345
+
+Changed:
+- none
+
+Decision:
+The saved plan still matches the fresh read-only snapshot.
+```
+
+Example `STALE`:
+
+```text
+Plan status: STALE
+Pool: 2
+Base block: 44822142
+Fresh block: 44822510
+
+Changed:
+- scope.expectedPoolStatus: Locked -> Drawing [critical] The pool lifecycle status changed.
+- assumptions.completedDrawRoundCount: 0 -> 1 [warning] A critical lifecycle assumption changed since plan creation.
+- scope.supervisorAction: DRAW_OVERDUE -> WAITING_FOR_NEXT_DRAW [critical] The supervisor now recommends a different action.
+
+Decision:
+Do not use the saved plan. Generate a new plan from the fresh snapshot.
+```
+
+Each diff entry contains a field, expected value, fresh value, severity, and a
+short explanation. Reports avoid dumping full snapshots.
+
+### CLI exit codes
+
+| Code | Result |
+| ---: | --- |
+| `0` | `VALID` |
+| `10` | `STALE` |
+| `11` | `BLOCKED` |
+| `12` | `INCOMPLETE` |
+| `13` | `INVALID_PLAN` |
+| `14` | Base Sepolia adapter or RPC failure |
+
+Creating a plan successfully returns zero. Ordinary supervisor behavior
+without plan flags remains unchanged.
+
 ## What this does not solve
 
 This stage does not complete the public exact-99 participant process, automate
@@ -278,6 +462,6 @@ a point-in-time public snapshot, not continuous monitoring.
 
 A future executor must remain a separate security boundary. The supervisor can
 provide its snapshot and plan to that component, but the executor is not part
-of this implementation. The next safe stage is a separate freshness
-revalidation command that compares a saved plan with a newly pinned public
-snapshot without signing or submitting anything.
+of this implementation. The next separately reviewed stage is a guarded
+single-Draw operator that consumes only a freshly revalidated actionable plan
+and retains an independent transaction security boundary.

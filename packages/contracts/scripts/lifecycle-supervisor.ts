@@ -10,6 +10,15 @@ import {
   assertLifecycleFixtureName,
   loadLifecycleFixture,
 } from "./operator/lifecycle-supervisor-fixtures.js";
+import {
+  BaseSepoliaLifecycleSnapshotAdapter,
+  LIFECYCLE_SUPERVISOR_DEFAULT_RPC_URL,
+  LIFECYCLE_SUPERVISOR_DEFAULT_TIMEOUT_MS,
+  ViemLifecycleSupervisorPublicClient,
+  redactLifecycleSupervisorRpcUrl,
+  validateLifecycleSupervisorRpcUrl,
+  validateLifecycleSupervisorTimeout,
+} from "./operator/lifecycle-supervisor-base-sepolia.js";
 
 function readUnsignedBigInt(name: string, value: string | undefined): bigint | undefined {
   if (value === undefined || value === "") return undefined;
@@ -18,9 +27,10 @@ function readUnsignedBigInt(name: string, value: string | undefined): bigint | u
 }
 
 async function main(): Promise<void> {
-  const fixtureName = assertLifecycleFixtureName(
-    process.env.POP33_INTERNAL_SUPERVISOR_FIXTURE?.trim() ?? "multi-pool",
-  );
+  const source = process.env.POP33_INTERNAL_SUPERVISOR_SOURCE?.trim() ?? "fixtures";
+  if (source !== "fixtures" && source !== "base-sepolia") {
+    throw new Error("Supervisor source must be fixtures or base-sepolia.");
+  }
   const format = process.env.POP33_INTERNAL_SUPERVISOR_FORMAT?.trim() ?? "text";
   if (format !== "text" && format !== "json") {
     throw new Error("Supervisor output format must be text or json.");
@@ -31,11 +41,63 @@ async function main(): Promise<void> {
     process.env.POP33_INTERNAL_SUPERVISOR_POOL_ID?.trim(),
   );
   if (poolId !== undefined && poolId === 0n) throw new Error("Pool ID must be positive.");
+  const fromPoolId = readUnsignedBigInt(
+    "From pool ID",
+    process.env.POP33_INTERNAL_SUPERVISOR_FROM_POOL_ID?.trim(),
+  );
+  const toPoolId = readUnsignedBigInt(
+    "To pool ID",
+    process.env.POP33_INTERNAL_SUPERVISOR_TO_POOL_ID?.trim(),
+  );
+  if ((fromPoolId === undefined) !== (toPoolId === undefined)) {
+    throw new Error("--from-pool and --to-pool must be supplied together.");
+  }
+  if (poolId !== undefined && fromPoolId !== undefined) {
+    throw new Error("--pool cannot be combined with --from-pool and --to-pool.");
+  }
+  const blockNumber = readUnsignedBigInt(
+    "Block number",
+    process.env.POP33_INTERNAL_SUPERVISOR_BLOCK_NUMBER?.trim(),
+  );
+  if (blockNumber === 0n) throw new Error("Block number must be positive.");
   const configuredThreshold = readUnsignedBigInt(
     "Overdue threshold",
     process.env.POP33_INTERNAL_SUPERVISOR_OVERDUE_THRESHOLD?.trim(),
   );
-  const adapter = new FixtureLifecycleSnapshotAdapter(loadLifecycleFixture(fixtureName));
+  let adapter;
+  if (source === "fixtures") {
+    if (fromPoolId !== undefined || blockNumber !== undefined) {
+      throw new Error("Pool ranges and block overrides are available only for base-sepolia.");
+    }
+    const fixtureName = assertLifecycleFixtureName(
+      process.env.POP33_INTERNAL_SUPERVISOR_FIXTURE?.trim() ?? "multi-pool",
+    );
+    adapter = new FixtureLifecycleSnapshotAdapter(loadLifecycleFixture(fixtureName));
+  } else {
+    const rpcUrl = validateLifecycleSupervisorRpcUrl(
+      process.env.BASE_SEPOLIA_SUPERVISOR_RPC_URL?.trim() ??
+        LIFECYCLE_SUPERVISOR_DEFAULT_RPC_URL,
+    );
+    const rawTimeout = process.env.POP33_INTERNAL_SUPERVISOR_TIMEOUT_MS?.trim();
+    const timeoutMs = validateLifecycleSupervisorTimeout(
+      rawTimeout ? Number(rawTimeout) : LIFECYCLE_SUPERVISOR_DEFAULT_TIMEOUT_MS,
+    );
+    const contractOverride =
+      process.env.POP33_INTERNAL_SUPERVISOR_CONTRACT_ADDRESS?.trim() ||
+      process.env.BASE_SEPOLIA_SUPERVISOR_CONTRACT_ADDRESS?.trim() ||
+      undefined;
+    adapter = new BaseSepoliaLifecycleSnapshotAdapter({
+      client: new ViemLifecycleSupervisorPublicClient(rpcUrl, timeoutMs),
+      rpcHost: redactLifecycleSupervisorRpcUrl(rpcUrl),
+      contractAddress: contractOverride,
+      blockNumber,
+      poolRange: poolId !== undefined
+        ? { fromPoolId: poolId, toPoolId: poolId }
+        : fromPoolId !== undefined && toPoolId !== undefined
+          ? { fromPoolId, toPoolId }
+          : undefined,
+    });
+  }
   const snapshot = await adapter.readSnapshot();
   const report = filterSupervisorReport(
     analyzeLifecycleSnapshot(snapshot, {

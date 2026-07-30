@@ -59,6 +59,17 @@ export interface PoolSnapshot {
   rounds: readonly DrawRoundSnapshot[];
 }
 
+export interface SnapshotReadMetadata {
+  network: string;
+  rpcHost: string;
+  requestedPoolRange: {
+    fromPoolId: bigint;
+    toPoolId: bigint;
+  } | null;
+  snapshotComplete: boolean;
+  warnings: readonly string[];
+}
+
 export interface SystemSnapshot {
   chainId: bigint;
   contractAddress: string;
@@ -67,6 +78,7 @@ export interface SystemSnapshot {
   poolCount: bigint;
   source: SnapshotSource;
   pools: readonly PoolSnapshot[];
+  metadata?: SnapshotReadMetadata;
 }
 
 export interface LifecycleSnapshotAdapter {
@@ -139,6 +151,7 @@ export interface SupervisorReport {
     observedAt: bigint;
     poolCount: bigint;
     source: SnapshotSource;
+    metadata?: SnapshotReadMetadata;
   };
   config: SupervisorConfig;
   systemDiagnostics: readonly ConsistencyIssue[];
@@ -841,11 +854,23 @@ export function analyzeLifecycleSnapshot(
   if (snapshot.blockNumber !== null && snapshot.blockNumber < 0n) {
     issue(systemDiagnostics, "INVALID_BLOCK_NUMBER", "Snapshot block number must not be negative.");
   }
-  if (snapshot.poolCount !== BigInt(snapshot.pools.length)) {
+  const expectedPoolRecords = snapshot.metadata?.requestedPoolRange
+    ? snapshot.metadata.requestedPoolRange.toPoolId -
+      snapshot.metadata.requestedPoolRange.fromPoolId +
+      1n
+    : snapshot.poolCount;
+  if (expectedPoolRecords !== BigInt(snapshot.pools.length)) {
     issue(
       systemDiagnostics,
       "POOL_COUNT_MISMATCH",
-      `Snapshot reports ${snapshot.poolCount} pools but contains ${snapshot.pools.length} pool records.`,
+      `Snapshot selection expects ${expectedPoolRecords} pool records but contains ${snapshot.pools.length}.`,
+    );
+  }
+  if (snapshot.metadata && !snapshot.metadata.snapshotComplete) {
+    issue(
+      systemDiagnostics,
+      "INCOMPLETE_SNAPSHOT",
+      "The data adapter marked this snapshot incomplete.",
     );
   }
   const poolIds = new Set<string>();
@@ -882,6 +907,7 @@ export function analyzeLifecycleSnapshot(
       observedAt: snapshot.observedAt,
       poolCount: snapshot.poolCount,
       source: snapshot.source,
+      ...(snapshot.metadata ? { metadata: snapshot.metadata } : {}),
     },
     config,
     systemDiagnostics,
@@ -955,6 +981,11 @@ export function renderSupervisorText(report: SupervisorReport): string {
   const lines = [
     "POP33 LIFECYCLE SUPERVISOR — READ ONLY",
     `Source: ${report.snapshot.source} | chain ${report.snapshot.chainId} | block ${report.snapshot.blockNumber ?? "n/a"} | observed ${formatTime(report.snapshot.observedAt)}`,
+    ...(report.snapshot.metadata
+      ? [
+          `Network: ${report.snapshot.metadata.network} | RPC host: ${report.snapshot.metadata.rpcHost} | snapshot complete: ${report.snapshot.metadata.snapshotComplete}`,
+        ]
+      : []),
     `Pools: ${report.summary.poolCount} total, ${report.summary.analyzedPoolCount} shown | Open ${counts.Open} | Locked ${counts.Locked} | Drawing ${counts.Drawing} | Claimable ${counts.Claimable} | Finished ${counts.Finished} | Unknown ${report.summary.unknownStatusCount}`,
     `Signals: ${report.summary.actionableCount} actionable | ${report.summary.warningCount} warning | ${report.summary.criticalCount} critical`,
     `Overdue threshold: ${report.config.drawOverdueThresholdSeconds} seconds`,

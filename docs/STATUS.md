@@ -2,7 +2,7 @@
 
 Last reviewed: 2026-07-30
 
-Branch reviewed: `codex/pop33-lifecycle-supervisor`
+Branch reviewed: `codex/pop33-base-sepolia-supervisor-adapter`
 
 Status: active development
 
@@ -31,15 +31,17 @@ in the repository, but the ordinary `#/demo` route no longer exposes the old
 wallet action. The browser-local simulator remains explicitly isolated at
 `#/demo?view=dev`.
 
-The contract workspace now also contains a fixture-backed, read-only
+The contract workspace now also contains a read-only
 multi-pool lifecycle supervisor. Its deterministic core accepts an explicit
 snapshot time, returns exactly one prioritized `nextAction` per pool, detects
 draw timing, outstanding claims and lifecycle/accounting inconsistencies, and
 uses exact `bigint` values plus a deterministic plan ID. The CLI supports
-human-readable and JSON output with pool/action/severity filters. This stage
-does not include a Base Sepolia adapter, keys, transactions, contract changes,
-or frontend changes; `docs/LIFECYCLE_SUPERVISOR.md` records its scope and
-safety boundary.
+human-readable and JSON output with pool/action/severity filters. A separate
+viem public-read adapter now reads the canonical Demo V1 deployment at one
+pinned Base Sepolia block, supports bounded pool ranges and historical block
+overrides, and imports the existing frontend ABI and address source. It has no
+keys, wallet client, transaction path, contract changes, or frontend changes;
+`docs/LIFECYCLE_SUPERVISOR.md` records its scope and safety boundary.
 
 The public product surface is now intentionally limited to the landing page,
 `#/demo-v1`, and `#/archive-v1`. The landing describes the deployed 33 dUSDC,

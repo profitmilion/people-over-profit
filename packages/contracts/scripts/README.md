@@ -5,6 +5,11 @@
 - `npm run supervisor -- --fixture multi-pool` analyzes a deterministic,
   read-only multi-pool lifecycle snapshot. Add `--json`, `--pool ID`,
   `--only-actionable`, or `--only-warnings` for machine output and filtering.
+- `npm run supervisor -- --source base-sepolia` reads the canonical Demo V1
+  contract through a provider-only viem client, pins every state read to one
+  block, and feeds that snapshot into the same engine. Use
+  `BASE_SEPOLIA_SUPERVISOR_RPC_URL` only to override the credential-free
+  default public endpoint.
 - `npm run deploy:dry-run` deploys `Pop33DemoUSDC` and `Pop33BasicV1` to a fresh
   simulated `hardhatOp` network and validates the initial configuration.
 - `npm run smoke:demo-v1` independently deploys the same local contracts and

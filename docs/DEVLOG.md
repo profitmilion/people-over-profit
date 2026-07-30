@@ -33,6 +33,63 @@ documentation.
   current overview of implementation, gaps, and risks.
 - Do not guess. Mark unclear facts as requiring later reconstruction.
 
+## 2026-07-30 - Base Sepolia lifecycle supervisor adapter
+
+### At a glance
+
+The lifecycle supervisor can now build the same deterministic report from a
+single pinned block of the public POP33 Demo V1 deployment.
+
+### Completed
+
+- Added a viem public-client adapter with no account, wallet client, or
+  transaction method.
+- Reused the canonical Demo V1 address and ABI instead of maintaining adapter
+  copies.
+- Pinned bytecode, pool count, every pool, and every initialized round read to
+  one selected block and used that block's timestamp as `observedAt`.
+- Added complete or bounded pool-range discovery through `poolCount()` and
+  sequential IDs; no event logs or unbounded scans are used.
+- Added explicit wrong-chain, timeout, RPC, bytecode, ABI, decode, range,
+  partial-pool, and inconsistent-block errors.
+- Extended the existing CLI with fixture/Base Sepolia source selection, JSON,
+  pool/range, block, contract, and timeout options.
+- Added optional snapshot metadata for network, redacted RPC host, requested
+  range, completeness, and adapter warnings.
+
+### Verification
+
+- Adapter, lifecycle, and read-only retry tests: passed, `61/61`, using
+  injected clients and deterministic local data only.
+- Contract TypeScript and compilation: passed; production-dependency audit
+  reported zero vulnerabilities.
+- Frontend domain regression: passed, `29/29`; frontend build: passed.
+- Focused ESLint for every changed runtime and test file: passed. Full
+  repository ESLint retains only the nine pre-existing exact-99
+  unused-variable errors.
+- A credential-free public-read smoke at Base Sepolia block `44822142`
+  confirmed chain `84532`, canonical contract bytecode, total `poolCount` 10,
+  and pool 1 Open at `3/100` with 99 dUSDC accounted escrow. The snapshot was
+  complete and used one pinned block for every state read.
+- No wallet, key, transaction, faucet, deployment, contract change, ABI
+  modification, frontend change, or event-log scan occurred.
+
+### Limitations and next step
+
+- Public RPC availability and historical-block retention remain external
+  dependencies.
+- This is a point-in-time observer, not continuous monitoring or an executor.
+- The next safe stage is a separate read-only freshness revalidation command
+  for saved plans.
+
+### Git
+
+- Branch: `codex/pop33-base-sepolia-supervisor-adapter`.
+- Source baseline:
+  `9cda4e4e6b2543cf3c31357081d9d7dc10026b42`.
+- Commit and push: intentionally not created in this task.
+- Proposed message: `feat(operator): add Base Sepolia lifecycle adapter`.
+
 ## 2026-07-30 - Read-only multi-pool lifecycle supervisor
 
 ### At a glance

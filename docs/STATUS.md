@@ -1,8 +1,8 @@
 # POP33 Development Status
 
-Last reviewed: 2026-07-29
+Last reviewed: 2026-07-30
 
-Branch reviewed: `codex/pop33-recovery`
+Branch reviewed: `codex/pop33-lifecycle-supervisor`
 
 Status: active development
 
@@ -30,6 +30,16 @@ explicit prize accounting, pull-based claims, and position release at
 in the repository, but the ordinary `#/demo` route no longer exposes the old
 wallet action. The browser-local simulator remains explicitly isolated at
 `#/demo?view=dev`.
+
+The contract workspace now also contains a fixture-backed, read-only
+multi-pool lifecycle supervisor. Its deterministic core accepts an explicit
+snapshot time, returns exactly one prioritized `nextAction` per pool, detects
+draw timing, outstanding claims and lifecycle/accounting inconsistencies, and
+uses exact `bigint` values plus a deterministic plan ID. The CLI supports
+human-readable and JSON output with pool/action/severity filters. This stage
+does not include a Base Sepolia adapter, keys, transactions, contract changes,
+or frontend changes; `docs/LIFECYCLE_SUPERVISOR.md` records its scope and
+safety boundary.
 
 The public product surface is now intentionally limited to the landing page,
 `#/demo-v1`, and `#/archive-v1`. The landing describes the deployed 33 dUSDC,

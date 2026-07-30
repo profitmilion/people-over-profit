@@ -2,6 +2,9 @@
 
 ## Local-only commands
 
+- `npm run supervisor -- --fixture multi-pool` analyzes a deterministic,
+  read-only multi-pool lifecycle snapshot. Add `--json`, `--pool ID`,
+  `--only-actionable`, or `--only-warnings` for machine output and filtering.
 - `npm run deploy:dry-run` deploys `Pop33DemoUSDC` and `Pop33BasicV1` to a fresh
   simulated `hardhatOp` network and validates the initial configuration.
 - `npm run smoke:demo-v1` independently deploys the same local contracts and

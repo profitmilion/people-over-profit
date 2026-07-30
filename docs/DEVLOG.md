@@ -33,6 +33,57 @@ documentation.
   current overview of implementation, gaps, and risks.
 - Do not guess. Mark unclear facts as requiring later reconstruction.
 
+## 2026-07-30 - Read-only multi-pool lifecycle supervisor
+
+### At a glance
+
+POP33 now has a deterministic, fixture-backed operator view that assigns one
+next lifecycle action to every observed pool without loading a key or
+submitting a transaction.
+
+### Completed
+
+- Added a pure snapshot-to-plan engine for Open, Locked, Drawing, Claimable,
+  Finished, and inconsistent states.
+- Added explicit due/overdue timing with a documented 900-second default
+  threshold and one-round-only handling when several schedules elapsed.
+- Added lifecycle, round sequence, unique-winner, Claim, exact accounting,
+  escrow, missing-data, and unknown-status diagnostics.
+- Added deterministic SHA-256 plan IDs bound to source, chain, contract,
+  block, time, pool snapshot, action, and proposed round.
+- Added a fixture-only read adapter and CLI with text, JSON, pool,
+  actionable-only, and warning-only output.
+- Added `docs/LIFECYCLE_SUPERVISOR.md`.
+
+### Verification
+
+- Focused supervisor test: passed, `30/30`, using deterministic local fixtures
+  only.
+- Combined supervisor and existing read-only retry tests: passed, `37/37`.
+- Contract TypeScript and compilation: passed.
+- Frontend domain regression: passed, `29/29`; frontend build: passed.
+- Focused ESLint for every new runtime and test file: passed. Full repository
+  ESLint retains only the nine pre-existing exact-99 unused-variable errors.
+- `git diff --check`: passed.
+- The human and JSON CLI forms were exercised against `multi-pool`.
+- No RPC, wallet, transaction, deployment, smart-contract change, ABI change,
+  route change, or public frontend change occurred.
+
+### Limitations and next step
+
+- The new adapter boundary currently has only a fixture implementation.
+- It does not complete public exact-99, execute Draw, or automate payouts.
+- The next logical task is a separately reviewed Base Sepolia public-read
+  adapter for the existing snapshot interface.
+
+### Git
+
+- Branch: `codex/pop33-lifecycle-supervisor`.
+- Source baseline:
+  `01437927f9ae40b726ec39edafe9b6d57ed7b3a6`.
+- Commit: not created at the time this entry was written.
+- Proposed message: `feat(operator): add read-only lifecycle supervisor`.
+
 ## 2026-07-29 - Mobile-first Demo V1 preparation flow
 
 ### At a glance

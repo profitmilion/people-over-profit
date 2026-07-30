@@ -16,6 +16,7 @@
     "verify:base-sepolia:pop33": "hardhat verify etherscan --build-profile default --network baseSepoliaVerify --contract contracts/Pop33BasicV1.sol:Pop33BasicV1 0x140DA1b29F0B00b003Cabe86AE1a473d6745f56F 0xA7FA084b34c888061757d4b5FBb08a7B53fee786 3600",
     "smoke:demo-v1": "hardhat run scripts/smoke-demo-v1.ts",
     "operator:local:lifecycle": "hardhat run scripts/operator-local-lifecycle.ts",
+    "supervisor": "node scripts/lifecycle-supervisor-cli.mjs",
     "smoke:base-sepolia": "node scripts/base-sepolia-smoke-cli.mjs",
     "operator:base-sepolia:read-only": "node scripts/base-sepolia-read-only-operator-cli.mjs",
     "operator:base-sepolia:init-pilot-5": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/initialize-base-sepolia-pilot-5.ps1",

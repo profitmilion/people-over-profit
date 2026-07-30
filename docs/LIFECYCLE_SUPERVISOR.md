@@ -7,9 +7,12 @@ pool in one fixed snapshot and says what should happen next: wait for
 participants, wait for the next draw time, notice a due or overdue draw, wait
 for winners to claim, or confirm that the pool is finished.
 
-It cannot move funds or change the chain. It has no key, account, transaction
-submission, deployment, Join, Withdraw, Draw, or Claim capability. A red result
-means "inspect this state", not "the program will fix it".
+The supervisor analysis cannot move funds or change the chain. Its ordinary
+commands have no key, account, transaction submission, deployment, Join,
+Withdraw, Draw, or Claim capability. A separate guarded single-Draw module now
+consumes a saved plan through explicit `inspect`, `simulate`, and `execute`
+boundaries. That module does not turn a red supervisor result into an automatic
+fix.
 
 ## Scope
 
@@ -453,6 +456,113 @@ short explanation. Reports avoid dumping full snapshots.
 Creating a plan successfully returns zero. Ordinary supervisor behavior
 without plan flags remains unchanged.
 
+## Guarded single-Draw operator
+
+The guarded operator is deliberately narrow:
+
+`saved plan -> fresh revalidation -> simulation -> exact confirmation -> one Draw -> receipt -> post-check`
+
+It accepts only one versioned, correctly fingerprinted, unexpired,
+`actionable` `DRAW` plan for chain `84532`, the canonical Demo V1 contract,
+the current interface identifier, one positive pool ID, and one positive round
+number. It never rewrites or advances a plan. `STALE` requires a new plan;
+`BLOCKED`, `INCOMPLETE`, and `INVALID_PLAN` stop before simulation and
+transaction code.
+
+The three modes are separate:
+
+- `inspect` parses the plan, reads one fresh pinned snapshot, runs the existing
+  supervisor and freshness revalidation, and creates no wallet client;
+- `simulate` adds exact `executeDraw(poolId, roundNumber)` calldata,
+  `simulateContract`, and an optional gas estimate using the configured public
+  operator address as `msg.sender`; it neither signs nor sends;
+- `execute` is a future manual path. It repeats every check, simulates, checks
+  the latest block immediately before broadcast, re-reads/revalidates and
+  re-simulates after a new block, loads the key only after all non-secret
+  gates, and submits at most one transaction.
+
+The Solidity method is permissionless:
+
+```text
+executeDraw(uint256 poolId, uint256 roundNumber)
+```
+
+The contract still enforces the real safety conditions: the pool must be
+`Locked` or `Drawing`, the round must be the next sequential Pending round,
+its schedule must be due, candidate count must match the locked pool, and a
+winning position must not already be assigned. Simulation translates a revert
+but is not presented as a guarantee; public state can change before mining.
+
+### Commands and confirmations
+
+Run from `packages/contracts`:
+
+```text
+npm run supervisor -- --inspect-draw lifecycle-plan.json
+BASE_SEPOLIA_DRAW_OPERATOR_ADDRESS=0x... npm run supervisor -- --simulate-draw lifecycle-plan.json
+```
+
+The execute form below is documentation only. It was not run in this
+milestone:
+
+```text
+npm run supervisor -- --execute-draw lifecycle-plan.json \
+  --confirm-chain 84532 \
+  --confirm-contract 0x140DA1b29F0B00b003Cabe86AE1a473d6745f56F \
+  --confirm-pool 2 \
+  --confirm-round 1
+```
+
+The execute flag and all four exact scope confirmations are independent gates.
+General confirmation such as `yes` is not accepted. The public and transaction
+clients must both report Base Sepolia, the contract must be the canonical
+address with bytecode, the public account must match the private-key-derived
+account, and the approved pool/round arguments are used unchanged.
+
+`BASE_SEPOLIA_DRAW_OPERATOR_ADDRESS` contains only the public sender and is
+required for simulation because the temporary Demo V1 entropy includes
+`msg.sender`. The future execute path reads
+`BASE_SEPOLIA_DRAW_OPERATOR_PRIVATE_KEY` only from the process environment,
+only after the safety gates. The key is never accepted as a CLI argument,
+printed, copied into a plan, or written into an audit file. This milestone did
+not generate, configure, or use a real key.
+
+### Hash, receipt, and post-check
+
+Broadcast has no retry loop. As soon as the single send returns a hash, the
+operator writes it to the audit record before waiting. A timeout preserves the
+hash, stops automatic action, and requires a manual BaseScan/read-only recovery
+review; it never interprets a timeout as permission to resend.
+
+A successful receipt must be followed by a snapshot at or after its block.
+The same supervisor then confirms that the planned round is Finalized with a
+winner, the completed-round counter increased by exactly one, the same Draw is
+not recommended again, and no critical diagnostic appeared. An ambiguous
+post-state is `POST_CHECK_FAILED` and never triggers a second transaction.
+
+Each invocation writes one ignored local
+`*.guarded-draw-audit.json` record. It contains the mode, timestamp, chain,
+contract, pool, round, plan ID, base/revalidation blocks, revalidation and
+simulation results, public calldata/gas estimate, optional transaction hash
+and receipt, and post-check. Blockchain integers are decimal strings. Private
+keys, mnemonics, credential-bearing RPC URLs, API tokens, and authentication
+data are outside the schema.
+
+The module has no loop, scheduler, daemon, multi-pool execution, automatic
+transaction retry, Claim, Join, Withdraw, Approve, deployment, contract change,
+ABI copy, or frontend integration. The `execute` implementation was exercised
+only with deterministic mocks in this milestone. The first real Base Sepolia
+Draw requires a new, direct authorization after a fresh plan, public inspect,
+simulation, operator-account readiness review, and manual runbook review.
+After a successful manual Draw, the later product stage is full UI Draw and
+Claim with equivalent receipt and semantic verification.
+
+Guarded Draw exit codes are distinct: `0` inspect/simulation success, `20`
+stale, `21` blocked, `22` incomplete, `23` invalid plan, `24` simulation
+failure, `25` missing/mismatched operator account, `26` confirmation mismatch,
+`27` submitted/pending-or-confirmed single transaction, `28` reverted receipt,
+`29` failed post-check, and `30` RPC failure.
+
 ## What this does not solve
 
 This stage does not complete the public exact-99 participant process, automate
@@ -460,8 +570,6 @@ Draw, automate claims or payouts, select production randomness, or resolve the
 `TO DECIDE` claim-expiry and stalled-pool rules. The Base Sepolia result remains
 a point-in-time public snapshot, not continuous monitoring.
 
-A future executor must remain a separate security boundary. The supervisor can
-provide its snapshot and plan to that component, but the executor is not part
-of this implementation. The next separately reviewed stage is a guarded
-single-Draw operator that consumes only a freshly revalidated actionable plan
-and retains an independent transaction security boundary.
+The guarded executor remains a separate security boundary and does not make
+Draw automatic. Production randomness, automatic triggering, Claim execution,
+and frontend lifecycle controls remain outside this implementation.

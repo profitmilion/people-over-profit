@@ -33,6 +33,66 @@ documentation.
   current overview of implementation, gaps, and risks.
 - Do not guess. Mark unclear facts as requiring later reconstruction.
 
+## 2026-07-30 - Guarded single-Draw operator
+
+### At a glance
+
+One saved actionable lifecycle plan can now be inspected and simulated
+read-only, while a separately gated future execute path is constrained to one
+Base Sepolia Draw attempt.
+
+### Completed
+
+- Added separate `inspect`, `simulate`, and `execute` boundaries around the
+  existing plan, supervisor, Base Sepolia adapter, canonical address, and ABI.
+- Bound operation scope to chain `84532`, the canonical Demo V1 contract,
+  current interface ID, one pool, one round, and exact
+  `executeDraw(poolId, roundNumber)` arguments.
+- Added mandatory fresh revalidation, public-account simulation, latest-block
+  check, conditional second snapshot/revalidation/simulation, and exact
+  chain/contract/pool/round confirmations.
+- Added a lazy execute-only private-key loader, one-send maximum, immediate
+  tx-hash audit persistence, no resend after hash, receipt handling, and a
+  supervisor-based round/counter/winner/next-action post-check.
+- Added ignored atomic local audit records with decimal-string blockchain
+  values and no credential fields.
+- Extended the existing supervisor CLI instead of adding a second command
+  system.
+
+### Verification
+
+- New deterministic guarded operator suite: passed, `45/45`; all execute cases
+  used injected mocks only.
+- Public Base Sepolia read-only smoke observed block `44827482`, ten Open pools,
+  and zero actionable Draws. A pool 1 plan created at block `44827539`
+  revalidated `VALID` at blocks `44827542` and `44827546`, but remained
+  `informational/WAIT`; inspect and simulate therefore stopped `BLOCKED`
+  before calldata, account loading, or simulation. The temporary plan was
+  removed and generated audit records remained ignored.
+- Contract TypeScript check passed during implementation.
+- Public smoke, combined regressions, compile/build/lint/audit, diff checks,
+  and final security scan are recorded in the task handoff.
+- No real private key was created or loaded. No signature, transaction, Draw,
+  Claim, Join, Approve, Withdraw, deployment, contract change, functional ABI
+  change, frontend change, Vercel action, or Farcaster action occurred.
+
+### Limitations and next step
+
+- Simulation is point-in-time evidence, not a mining guarantee. Demo V1
+  randomness remains temporary and caller/block-influenceable.
+- The execute path exists for later manual use but was not invoked against Base
+  Sepolia in this milestone.
+- The next separately authorized step is safe preparation of the first manual
+  Base Sepolia Draw; successful manual evidence would then support later full
+  UI Draw and Claim work.
+
+### Git
+
+- Branch: `codex/pop33-guarded-single-draw-operator`.
+- Source baseline: `76738b72e1afb5bb3affb06c902e5df69587af4f`.
+- Commit and push: intentionally not created in this task.
+- Proposed message: `feat(operator): add guarded single-Draw operator`.
+
 ## 2026-07-30 - Lifecycle plan freshness revalidation
 
 ### At a glance

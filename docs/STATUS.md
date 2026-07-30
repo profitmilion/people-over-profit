@@ -2,7 +2,7 @@
 
 Last reviewed: 2026-07-30
 
-Branch reviewed: `codex/pop33-lifecycle-plan-revalidation`
+Branch reviewed: `codex/pop33-guarded-single-draw-operator`
 
 Status: active development
 
@@ -55,6 +55,24 @@ codes. A configurable 7,200-second default age ceiling supplements rather than
 replaces full state comparison. The module remains read-only and contains no
 key, signer, wallet client, Draw execution, transaction, contract, ABI,
 frontend, or deployment change.
+
+A separate guarded single-Draw operator now consumes only a valid, actionable
+Base Sepolia Draw plan through three explicit modes. `inspect` remains
+provider-only; `simulate` builds the exact existing-ABI calldata and uses the
+public operator address for `msg.sender` without a signer; `execute` is a
+fail-closed future path with exact chain/contract/pool/round confirmations, a
+latest-block recheck, conditional second revalidation and simulation, one
+broadcast maximum, immediate tx-hash audit persistence, no resend after a
+hash, bounded receipt waiting, and supervisor-based semantic post-check. The
+45-case suite exercises execute only with mocks. No real key, signature,
+transaction, Draw, deployment, contract, ABI, frontend, route, Vercel, or
+Farcaster change was made in this milestone.
+
+The public read-only smoke observed ten Open pools and zero actionable Draws.
+Pool 1 remained Open at 3/100; its fresh plan revalidated `VALID` but was
+`informational/WAIT`, so both guarded inspect and simulate stopped `BLOCKED`
+before calldata, operator-account loading, or transaction simulation. Network
+state was not changed to manufacture a due Draw.
 
 The public product surface is now intentionally limited to the landing page,
 `#/demo-v1`, and `#/archive-v1`. The landing describes the deployed 33 dUSDC,
@@ -466,7 +484,8 @@ runtime.
   and ten claims; the frontend now supports and verifies the locking join, but
   that complete public lifecycle has not yet been executed;
 - semantic post-receipt verification for draw and claim, at the same safety
-  level now used for faucet, join, and withdrawal;
+  level now used for faucet, join, and withdrawal in the public UI; the guarded
+  operator has its own server-side Draw post-check but has not been run live;
 - confirmation, retention, and independent encrypted backup of the completed
   five-wallet pilot store, manifest, checkpoint, and journal recovery unit;
 - later separately authorized implementation review and real creation/backup

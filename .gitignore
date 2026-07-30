@@ -22,6 +22,8 @@ dist-ssr
 *.operator-*.tmp
 *.operator-*.bak
 *.operator-*.backup
+*.guarded-draw-audit.json
+*.guarded-draw-audit.json.*.tmp
 
 # Local environment files
 .env

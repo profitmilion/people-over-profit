@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
 
 const args = process.argv.slice(2);
 let source = "fixtures";
@@ -19,6 +20,14 @@ let createPlan = "";
 let revalidatePlan = "";
 let overwritePlan = false;
 let maxPlanAge = "";
+let inspectDraw = "";
+let simulateDraw = "";
+let executeDraw = "";
+let confirmChain = "";
+let confirmContract = "";
+let confirmPool = "";
+let confirmRound = "";
+let auditLog = "";
 
 function usage() {
   return [
@@ -28,6 +37,9 @@ function usage() {
     "  [--only-warnings] [--overdue-threshold SECONDS]",
     "  [--create-plan FILE.json [--overwrite-plan] | --revalidate-plan FILE.json]",
     "  [--max-plan-age SECONDS]",
+    "  [--inspect-draw FILE.json | --simulate-draw FILE.json |",
+    "   --execute-draw FILE.json --confirm-chain 84532 --confirm-contract ADDRESS",
+    "   --confirm-pool ID --confirm-round NUMBER] [--audit-log FILE.guarded-draw-audit.json]",
   ].join(" ");
 }
 
@@ -52,7 +64,15 @@ while (args.length > 0) {
     flag === "--overdue-threshold" ||
     flag === "--create-plan" ||
     flag === "--revalidate-plan" ||
-    flag === "--max-plan-age"
+    flag === "--max-plan-age" ||
+    flag === "--inspect-draw" ||
+    flag === "--simulate-draw" ||
+    flag === "--execute-draw" ||
+    flag === "--confirm-chain" ||
+    flag === "--confirm-contract" ||
+    flag === "--confirm-pool" ||
+    flag === "--confirm-round" ||
+    flag === "--audit-log"
   ) {
     const value = args.shift();
     if (!value) {
@@ -73,6 +93,14 @@ while (args.length > 0) {
     else if (flag === "--overdue-threshold") overdueThreshold = value;
     else if (flag === "--create-plan") createPlan = value;
     else if (flag === "--revalidate-plan") revalidatePlan = value;
+    else if (flag === "--inspect-draw") inspectDraw = value;
+    else if (flag === "--simulate-draw") simulateDraw = value;
+    else if (flag === "--execute-draw") executeDraw = value;
+    else if (flag === "--confirm-chain") confirmChain = value;
+    else if (flag === "--confirm-contract") confirmContract = value;
+    else if (flag === "--confirm-pool") confirmPool = value;
+    else if (flag === "--confirm-round") confirmRound = value;
+    else if (flag === "--audit-log") auditLog = value;
     else maxPlanAge = value;
   } else {
     console.error(usage());
@@ -88,6 +116,43 @@ const childEnvironment = Object.fromEntries(
     ([name]) => !/(?:private|secret|mnemonic|password|passphrase|deployer|confirm|api.?key)/i.test(name),
   ),
 );
+const guardedDrawModeCount = [inspectDraw, simulateDraw, executeDraw]
+  .filter(Boolean).length;
+if (guardedDrawModeCount > 1) {
+  console.error(usage());
+  process.exit(2);
+}
+if (
+  !executeDraw &&
+  (confirmChain || confirmContract || confirmPool || confirmRound)
+) {
+  console.error("Draw confirmations require --execute-draw.");
+  process.exit(2);
+}
+if (
+  executeDraw &&
+  (!confirmChain || !confirmContract || !confirmPool || !confirmRound)
+) {
+  console.error(
+    "--execute-draw requires exact chain, contract, pool, and round confirmations.",
+  );
+  process.exit(2);
+}
+const guardedDrawMode = inspectDraw
+  ? "inspect"
+  : simulateDraw
+    ? "simulate"
+    : executeDraw
+      ? "execute"
+      : "";
+const effectiveAuditLog = auditLog
+  ? resolve(auditLog)
+  : guardedDrawMode
+    ? fileURLToPath(new URL(
+        `../operator-reports/${Date.now()}-${guardedDrawMode}.guarded-draw-audit.json`,
+        import.meta.url,
+      ))
+    : "";
 const child = spawnSync(
   process.execPath,
   [hardhatCli, "run", "--no-compile", "scripts/lifecycle-supervisor.ts"],
@@ -112,6 +177,20 @@ const child = spawnSync(
       POP33_INTERNAL_SUPERVISOR_REVALIDATE_PLAN: revalidatePlan,
       POP33_INTERNAL_SUPERVISOR_OVERWRITE_PLAN: String(overwritePlan),
       POP33_INTERNAL_SUPERVISOR_MAX_PLAN_AGE: maxPlanAge,
+      POP33_INTERNAL_GUARDED_DRAW_INSPECT: inspectDraw,
+      POP33_INTERNAL_GUARDED_DRAW_SIMULATE: simulateDraw,
+      POP33_INTERNAL_GUARDED_DRAW_EXECUTE: executeDraw,
+      POP33_INTERNAL_GUARDED_DRAW_CONFIRM_CHAIN: confirmChain,
+      POP33_INTERNAL_GUARDED_DRAW_CONFIRM_CONTRACT: confirmContract,
+      POP33_INTERNAL_GUARDED_DRAW_CONFIRM_POOL: confirmPool,
+      POP33_INTERNAL_GUARDED_DRAW_CONFIRM_ROUND: confirmRound,
+      POP33_INTERNAL_GUARDED_DRAW_AUDIT_PATH: effectiveAuditLog,
+      ...(executeDraw && process.env.BASE_SEPOLIA_DRAW_OPERATOR_PRIVATE_KEY
+        ? {
+            BASE_SEPOLIA_DRAW_OPERATOR_PRIVATE_KEY:
+              process.env.BASE_SEPOLIA_DRAW_OPERATOR_PRIVATE_KEY,
+          }
+        : {}),
     },
     stdio: "inherit",
   },

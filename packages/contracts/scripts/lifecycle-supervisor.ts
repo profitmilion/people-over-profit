@@ -38,6 +38,17 @@ import {
   readLifecyclePlanFile,
   writeLifecyclePlanFile,
 } from "./operator/lifecycle-plan-file.js";
+import {
+  executeGuardedSingleDraw,
+  inspectGuardedSingleDraw,
+  renderGuardedDrawJson,
+  renderGuardedDrawText,
+  simulateGuardedSingleDraw,
+  type GuardedDrawMode,
+} from "./operator/guarded-single-draw.js";
+import {
+  createBaseSepoliaGuardedDrawDependencies,
+} from "./operator/guarded-single-draw-base-sepolia.js";
 
 function readUnsignedBigInt(name: string, value: string | undefined): bigint | undefined {
   if (value === undefined || value === "") return undefined;
@@ -45,7 +56,90 @@ function readUnsignedBigInt(name: string, value: string | undefined): bigint | u
   return BigInt(value);
 }
 
+async function runGuardedDraw(mode: GuardedDrawMode, planPath: string): Promise<void> {
+  const file = await readLifecyclePlanFile(planPath);
+  let poolId = 1n;
+  try {
+    const value = JSON.parse(file.json) as { scope?: { poolId?: unknown } };
+    if (
+      typeof value.scope?.poolId === "string" &&
+      /^\d+$/.test(value.scope.poolId) &&
+      BigInt(value.scope.poolId) > 0n
+    ) {
+      poolId = BigInt(value.scope.poolId);
+    }
+  } catch {
+    // The guarded core returns INVALID_PLAN without touching the network.
+  }
+  const rpcUrl = validateLifecycleSupervisorRpcUrl(
+    process.env.BASE_SEPOLIA_SUPERVISOR_RPC_URL?.trim() ??
+      LIFECYCLE_SUPERVISOR_DEFAULT_RPC_URL,
+  );
+  const rawTimeout = process.env.POP33_INTERNAL_SUPERVISOR_TIMEOUT_MS?.trim();
+  const timeoutMs = validateLifecycleSupervisorTimeout(
+    rawTimeout ? Number(rawTimeout) : LIFECYCLE_SUPERVISOR_DEFAULT_TIMEOUT_MS,
+  );
+  const dependencies = createBaseSepoliaGuardedDrawDependencies({
+    rpcUrl,
+    timeoutMs,
+    poolId,
+    operatorAddress:
+      process.env.BASE_SEPOLIA_DRAW_OPERATOR_ADDRESS?.trim() || undefined,
+    auditPath:
+      process.env.POP33_INTERNAL_GUARDED_DRAW_AUDIT_PATH?.trim() || undefined,
+  });
+  const common = {
+    planJson: file.json,
+    operatorAddress:
+      process.env.BASE_SEPOLIA_DRAW_OPERATOR_ADDRESS?.trim() || undefined,
+    maxPlanAgeSeconds: readUnsignedBigInt(
+      "Maximum plan age",
+      process.env.POP33_INTERNAL_SUPERVISOR_MAX_PLAN_AGE?.trim(),
+    ),
+  };
+  const outcome = mode === "inspect"
+    ? await inspectGuardedSingleDraw(common, dependencies)
+    : mode === "simulate"
+      ? await simulateGuardedSingleDraw(common, dependencies)
+      : await executeGuardedSingleDraw({
+          ...common,
+          confirmation: {
+            chainId:
+              process.env.POP33_INTERNAL_GUARDED_DRAW_CONFIRM_CHAIN?.trim() ?? "",
+            contractAddress:
+              process.env.POP33_INTERNAL_GUARDED_DRAW_CONFIRM_CONTRACT?.trim() ??
+                "",
+            poolId:
+              process.env.POP33_INTERNAL_GUARDED_DRAW_CONFIRM_POOL?.trim() ?? "",
+            roundNumber:
+              process.env.POP33_INTERNAL_GUARDED_DRAW_CONFIRM_ROUND?.trim() ??
+                "",
+          },
+        }, dependencies);
+  const format = process.env.POP33_INTERNAL_SUPERVISOR_FORMAT?.trim() ?? "text";
+  console.log(
+    format === "json"
+      ? renderGuardedDrawJson(outcome)
+      : renderGuardedDrawText(outcome),
+  );
+  process.exitCode = outcome.exitCode;
+}
+
 async function main(): Promise<void> {
+  const drawModes = [
+    ["inspect", process.env.POP33_INTERNAL_GUARDED_DRAW_INSPECT?.trim()],
+    ["simulate", process.env.POP33_INTERNAL_GUARDED_DRAW_SIMULATE?.trim()],
+    ["execute", process.env.POP33_INTERNAL_GUARDED_DRAW_EXECUTE?.trim()],
+  ].filter((entry): entry is [GuardedDrawMode, string] => Boolean(entry[1]));
+  if (drawModes.length > 1) {
+    throw new Error(
+      "--inspect-draw, --simulate-draw, and --execute-draw are mutually exclusive.",
+    );
+  }
+  if (drawModes.length === 1) {
+    await runGuardedDraw(drawModes[0][0], drawModes[0][1]);
+    return;
+  }
   const createPlanPath =
     process.env.POP33_INTERNAL_SUPERVISOR_CREATE_PLAN?.trim() ?? "";
   const revalidatePlanPath =

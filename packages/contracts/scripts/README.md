@@ -18,6 +18,23 @@
   `INVALID_PLAN`. Add `--json` for machine output or `--max-plan-age SECONDS`
   to override the default 7,200-second age ceiling. This command has no wallet,
   signer, key, transaction, or Draw execution path.
+- `npm run supervisor -- --inspect-draw lifecycle-plan.json` consumes one
+  canonical actionable Base Sepolia Draw plan, reads one fresh snapshot, and
+  revalidates it without creating a wallet client.
+- `BASE_SEPOLIA_DRAW_OPERATOR_ADDRESS=0x... npm run supervisor --
+  --simulate-draw lifecycle-plan.json` adds exact `executeDraw(poolId,
+  roundNumber)` calldata, public `msg.sender` simulation, and gas estimation.
+  It never signs or sends.
+- `--execute-draw` is a future, separately authorized one-transaction path. It
+  requires exact `--confirm-chain`, `--confirm-contract`, `--confirm-pool`, and
+  `--confirm-round` values, rechecks the latest block, never retries a
+  broadcast, persists the hash before receipt waiting, and performs a
+  supervisor post-check. It was not run against Base Sepolia in this
+  milestone. The execute-only key comes from
+  `BASE_SEPOLIA_DRAW_OPERATOR_PRIVATE_KEY`, never a CLI argument.
+- Guarded runs create ignored atomic `*.guarded-draw-audit.json` records. Use
+  `--audit-log` to select an explicit path; no key or credential-bearing RPC
+  URL is included.
 - `npm run deploy:dry-run` deploys `Pop33DemoUSDC` and `Pop33BasicV1` to a fresh
   simulated `hardhatOp` network and validates the initial configuration.
 - `npm run smoke:demo-v1` independently deploys the same local contracts and

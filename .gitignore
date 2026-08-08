@@ -22,6 +22,10 @@ dist-ssr
 *.operator-*.tmp
 *.operator-*.bak
 *.operator-*.backup
+*.wallet-store-v2.enc.json
+*.wallet-store-v2.manifest.json
+*.wallet-store-v2.backup.json
+*.checkpoint-20-wallet-store-v2-bundle/
 *.guarded-draw-audit.json
 *.guarded-draw-audit.json.*.tmp
 *.manual-checkpoint-5-report.json

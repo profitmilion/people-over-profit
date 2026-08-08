@@ -2,9 +2,10 @@
 
 Last reviewed: 2026-08-08
 
-Branch reviewed: `codex/pop33-recovery`
+Branch reviewed: `codex/pop33-wallet-store-v2`
 
-Recovery source baseline reviewed: `531051f61f4d541f9a55f47d61fb181fdf30bec3`
+Wallet Store v2 source baseline reviewed:
+`3048ee664b9e5096cfcb96e46c9160c7f6603469`
 
 Status: active development
 
@@ -134,9 +135,26 @@ fixture-only `simulate`. `--execute` is rejected before Hardhat starts; no
 wallet client, private-key loader, signer, transaction sender, or contract
 write exists in this milestone. No real candidate, wallet store, wallet,
 manifest, checkpoint journal, funding plan, or execution authorization was
-created. Full execution remains blocked pending a reviewed production-strength
-selected-record store v2, artifact creation and backup, a real dual-source
-finality policy, public execution adapter, fee/nonce policy, and separate
+created.
+
+A separate fixture/local Wallet Store v2 implementation is now prepared on
+`codex/pop33-wallet-store-v2`. It binds exactly 15 independently authenticated
+AES-256-GCM records to Base Sepolia, the current POP33 and dUSDC deployments,
+the ordered public manifest, and checkpoint `5 -> 20`. Its callback API
+decrypts and address-verifies exactly one selected record at a time, rejects
+secret serialization and callback return values, clears temporary secret
+buffers, and returns only strictly allowlisted public receipts. Store and
+manifest commit together through an atomic create-only directory rename; an
+encrypted create-only backup and fingerprint-checked restore are covered by
+local fixtures. No real-wallet generator, password CLI/environment input,
+wallet client, signer, RPC transport, or transaction primitive was added.
+
+Full execution remains blocked pending an independent review of Wallet Store
+v2, an explicitly authorized real-record creation and backup ceremony, a
+hidden/OS-backed password input, a minimal selected-record signer callback,
+complete journal-v2 integration and semantic receipt reconciliation, real
+dual-source finality, a global run lock, non-null phase evidence, promoted
+readiness blockers, aggregate fee/funding enforcement, and separate
 authorization for one batch.
 
 The complete reviewed operator stack and reconciled preparation status are
@@ -520,6 +538,12 @@ runtime.
 - A fixture-only exact-99 wallet-store v2 prototype with 99 independently
   encrypted records and selected-index decryption. It is a format and isolation
   experiment only; no real wallet or store was created.
+- A separate guarded checkpoint-20 Wallet Store v2 fixture with exactly 15
+  individually authenticated records, strict `5 -> 20` deployment and ordering
+  bindings, selected-record callback isolation, allowlisted public output,
+  atomic store/manifest commit, and encrypted backup/restore. It contains no
+  real-wallet generator or execute capability; no real wallet or store was
+  created.
 - A separate, guarded Base Sepolia single-wallet smoke harness with a default
   read-only preflight, dedicated runtime-only key namespace, fixed documented
   addresses, exact approval, reversible join/withdraw scope, buffered gas

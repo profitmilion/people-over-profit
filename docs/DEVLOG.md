@@ -33,6 +33,65 @@ documentation.
   current overview of implementation, gaps, and risks.
 - Do not guess. Mark unclear facts as requiring later reconstruction.
 
+## 2026-08-08 - Guarded checkpoint-20 Wallet Store v2 prepared
+
+### At a glance
+
+A fixture/local selected-record wallet-store implementation now provides the
+cryptographic and persistence boundary required for later checkpoint-20
+preparation, without creating real wallets or enabling public execution.
+
+### Completed
+
+- Added exactly 15 independently encrypted AES-256-GCM fixture records using
+  scrypt and unique authenticated nonces, bound to Base Sepolia, the current
+  POP33 and dUSDC deployments, ordered candidate identities, and checkpoint
+  `5 -> 20`.
+- Added a non-serializable one-record callback session that derives and checks
+  the selected public address, rejects escaping return values, clears temporary
+  buffers, and emits only a strict public-output allowlist.
+- Added a separate public manifest, create-only atomic store/manifest bundle,
+  private-file permissions where supported, encrypted backup, fingerprint-
+  checked restore, corruption detection, and interrupted-write cleanup.
+- Added binding-only integration with the guarded checkpoint-20 runner. No
+  runner execute path, signer, wallet client, provider, or transaction
+  transport was added.
+- Added the Wallet Store v2 runbook and ignored its artifact filename patterns
+  to reduce accidental staging risk.
+
+### Verification
+
+- The focused Wallet Store v2 suite passed 22 tests covering happy path,
+  selected-record isolation, address verification, non-serialization,
+  integrity/authentication failures, output leakage, interrupted writes, and
+  backup/restore.
+- The combined Wallet Store v2 and guarded-runner suites passed 88 tests; the
+  related exact-99/store/operator suites passed 122 tests.
+- All 686 contract/operator tests passed. Contract compilation, contracts
+  TypeScript checking, scoped lint for the two new source/test files, and the
+  root production build passed.
+- No real wallet, password, private key, encrypted store, manifest, or backup
+  was created. No signer was loaded and no public RPC write, Base Sepolia
+  transaction, deployment, or Vercel action occurred.
+
+### Limitations and next step
+
+- Fixture record creation requires an explicit test-only literal and accepts
+  supplied deterministic test vectors; there is intentionally no production
+  wallet generator or real secret-ingestion command.
+- Before real records, independently review the implementation and approve the
+  external locations, hidden/OS-backed password flow, real input ceremony,
+  backup/recovery process, and minimal trusted callback.
+- Before execute, implement and review the eight remaining runner controls
+  listed in `docs/RUNBOOK_WALLET_STORE_V2.md`; this milestone does not authorize
+  any checkpoint-20 transaction.
+
+### Git
+
+- Branch: `codex/pop33-wallet-store-v2`
+- Source baseline: `3048ee664b9e5096cfcb96e46c9160c7f6603469`
+- Record message: `feat(operator): add wallet store v2`
+
 ## 2026-08-08 - Guarded checkpoint-20 runner prepared
 
 ### At a glance

@@ -117,6 +117,10 @@ only 15 ordered addresses and binds:
 - selected-record-decryption capability;
 - immutable address order and manifest fingerprint.
 
+The fixture/local implementation and its remaining real-store review gates are
+documented in `docs/RUNBOOK_WALLET_STORE_V2.md`. It adds no signer, wallet
+client, execution mode, or transaction capability.
+
 The journal rejects secret-shaped field names. Private keys, mnemonics, seed
 phrases, passwords, credentials, and RPC secrets must never appear in the
 manifest, journal, report, CLI arguments, repository, or chat.

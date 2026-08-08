@@ -33,6 +33,67 @@ documentation.
   current overview of implementation, gaps, and risks.
 - Do not guess. Mark unclear facts as requiring later reconstruction.
 
+## 2026-08-08 - Guarded checkpoint-20 runner prepared
+
+### At a glance
+
+A baseline-aware runner now models the future `5 -> 20` continuation through
+15 new candidates and mandatory internal stops at `10`, `15`, and `20`, while
+keeping public execution technically unavailable.
+
+### Completed
+
+- Added a pure checkpoint core for candidate indices `0..14`; it never treats
+  the five existing Pool 1 positions as runner-owned work.
+- Added the ordered `PRECHECK -> FUND -> VERIFY_FUNDING -> FAUCET ->
+  VERIFY_DUSDC -> APPROVE_EXACTLY_33 -> VERIFY_ALLOWANCE -> JOIN ->
+  VERIFY_RECEIPT -> POSTFLIGHT -> COMMIT_JOURNAL_STATE` model.
+- Added a public-address-only 15-candidate manifest interface bound to a future
+  external selected-record store v2 and a checksummed, monotonic, secret-free
+  journal with atomic external persistence and exclusive locking.
+- Reused the existing lifecycle supervisor, Base Sepolia public adapter,
+  exact-99 readiness, funding-limit type and caps, canonical fingerprint,
+  durable-file locking, error redaction, and public receipt-read patterns.
+- Added read-only Base Sepolia inspection, fixture-only simulation, a CLI,
+  safe PowerShell launcher, package command, and operator runbook.
+- Kept `execute` absent. The CLI explicitly rejects `--execute`, and the source
+  contains no wallet client, key loader, signer, transaction sender, or
+  contract-write primitive.
+
+### Verification
+
+- The focused runner suite passed 66 tests, including three complete batches,
+  restart after every state-machine step, local Hardhat Pool 1 at `5/100`,
+  durable journal reopen/revision checks, secret rejection, and the required
+  fault/hard-stop matrix.
+- All 664 contract/operator tests passed. Contract compilation, contracts
+  TypeScript checking, scoped lint for every new source/test file, and the root
+  production build passed.
+- The full root lint still reports ten pre-existing unused-variable findings in
+  older exact-99 source/tests; the two findings introduced during this work
+  were fixed. This task did not modify those unrelated historical files.
+- Public read-only inspect at block `45218974` found canonical bytecode and
+  Pool 1 `Open 5/100`, escrow `165` dUSDC, `lockedAt=0`, 15 remaining positions,
+  and zero lifecycle actionable operations, warnings, or critical diagnostics.
+- No real wallet or store was created. No private key or signer was loaded, and
+  no funding, faucet, Approve, Join, Draw, Claim, deployment, or blockchain
+  transaction occurred.
+
+### Limitations and next step
+
+- This milestone provides `plan`, `inspect`, and fixture-only `simulate`, not a
+  public execution adapter or transaction authorization.
+- Before any real wallet creation, review the core and threat model, implement
+  and independently review the production-strength selected-record store v2,
+  then prepare only external artifacts and read-only inspection in a separate
+  authorized task.
+
+### Git
+
+- Branch: `codex/pop33-guarded-checkpoint-20`
+- Source baseline: `f5707eae7486cd88db6419d82b576e536df01d04`
+- Record message: `feat(operator): add guarded checkpoint 20 runner`
+
 ## 2026-08-08 - Manual checkpoint 5 verified
 
 ### At a glance

@@ -21,7 +21,8 @@
     "operator:base-sepolia:read-only": "node scripts/base-sepolia-read-only-operator-cli.mjs",
     "operator:base-sepolia:init-pilot-5": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/initialize-base-sepolia-pilot-5.ps1",
     "operator:base-sepolia:wallet-store-99": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/full-lifecycle-99-wallet-store.ps1",
-    "operator:base-sepolia:pilot-2-write": "node scripts/base-sepolia-pilot-2-write-cli.mjs"
+    "operator:base-sepolia:pilot-2-write": "node scripts/base-sepolia-pilot-2-write-cli.mjs",
+    "operator:base-sepolia:checkpoint-20": "node scripts/guarded-checkpoint-20-cli.mjs"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-ethers": "4.0.14",

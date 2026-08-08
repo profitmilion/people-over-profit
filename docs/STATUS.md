@@ -109,6 +109,36 @@ records public snapshot and transaction evidence.
 
 Manual checkpoint 5 status: `MANUAL_CHECKPOINT_5_VERIFIED` on 2026-08-08.
 
+A separate Guarded Checkpoint-20 Runner implementation is now prepared on
+`codex/pop33-guarded-checkpoint-20` for review. Its baseline-aware core treats
+the existing five Pool 1 positions as external state and manages only 15 new
+candidate indices `0..14`, with mandatory batch stops at `10/100`, `15/100`,
+and `20/100`. It defines the exact per-candidate state machine, a public-only
+15-address manifest bound to a future selected-record store v2, a checksummed
+and revisioned secret-free journal with atomic external writes and exclusive
+locking, the existing 0.00005 ETH per-wallet cap, and fail-closed identity,
+pool, lifecycle, nonce, fee, faucet, allowance, receipt, finality, position,
+count, and escrow guards.
+
+The new Base Sepolia adapter reuses the existing lifecycle supervisor,
+canonical public adapter, exact-99 readiness, public RPC retry boundary,
+funding limits, fingerprint primitive, durable-file mechanisms, and receipt
+inspection patterns. Its `inspect` mode constructs only public clients. A
+public read-only run at block `45218974` recognized Pool 1 `Open 5/100`,
+`165` dUSDC escrow, `lockedAt=0`, matching POP33 and dUSDC runtime bytecode,
+ten Open pools, and zero lifecycle actionable operations, warnings, or critical
+diagnostics. It calculated 15 positions remaining to checkpoint 20.
+
+The CLI and safe PowerShell launcher expose only `plan`, `inspect`, and
+fixture-only `simulate`. `--execute` is rejected before Hardhat starts; no
+wallet client, private-key loader, signer, transaction sender, or contract
+write exists in this milestone. No real candidate, wallet store, wallet,
+manifest, checkpoint journal, funding plan, or execution authorization was
+created. Full execution remains blocked pending a reviewed production-strength
+selected-record store v2, artifact creation and backup, a real dual-source
+finality policy, public execution adapter, fee/nonce policy, and separate
+authorization for one batch.
+
 The complete reviewed operator stack and reconciled preparation status are
 included in `codex/pop33-recovery` from source baseline
 `531051f61f4d541f9a55f47d61fb181fdf30bec3`.

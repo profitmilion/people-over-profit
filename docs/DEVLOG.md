@@ -33,6 +33,56 @@ documentation.
   current overview of implementation, gaps, and risks.
 - Do not guess. Mark unclear facts as requiring later reconstruction.
 
+## 2026-08-08 - Manual checkpoint 5 verified
+
+### At a glance
+
+Piotr manually completed the prepared Candidate A and Candidate B paths on
+Base Sepolia. Independent public reads verified the checkpoint at Pool 1
+`Open 5/100`, `165` dUSDC escrow, and `lockedAt=0`.
+
+### Completed
+
+- Candidate A `0x494aA24521186D9b0f1C817287aA0cecDEE0F5e9` joined Pool 1 in
+  position 23. Its Join transaction
+  `0xccdc558001e69195f7fc4c0d3690517c28a84c4ac3f1fb2a284887d3f5e25c73`
+  succeeded.
+- Candidate B `0x955058d00B995E9dfc91F4023c9a39242f9Aba03` joined Pool 1 in
+  position 24. Its Join transaction
+  `0x7cff4e7a4d0364396aec310dd0b1375abe06b5d7f1bb814be1452810b74a0210`
+  succeeded.
+- Both paths were performed manually. No further Join, Draw, Claim, deployment,
+  or checkpoint-20 automation was executed.
+
+### Verification
+
+- A pinned public snapshot at block `45217743` showed both positions active,
+  each candidate at `297` dUSDC with zero allowance, and both candidate ETH
+  balances unchanged at `0.00005` ETH.
+- Pool 1 was `Open 5/100` with exactly `165000000` dUSDC base units in escrow
+  and `lockedAt=0`.
+- The read-only lifecycle supervisor reported ten Open pools, zero Locked,
+  Drawing, Claimable, and Finished pools, and no actionable operation, warning,
+  or critical diagnostic.
+- The complete funding, faucet, Approve, and Join transaction fees were
+  `0.00000564004707653` ETH for Candidate A and
+  `0.000005638524913468` ETH for Candidate B. Delegated executor/relayer
+  accounts paid those network fees; the actual gas debit from each candidate
+  balance was zero.
+
+### Limitations and next step
+
+- This verifies only the manual `5/100` testnet checkpoint; it is not mainnet
+  readiness and does not authorize additional transactions.
+- The next planned checkpoint is `20/100`. It requires a new read-only plan and
+  fresh operator authorization before any candidate funding or wallet action.
+
+### Git
+
+- Branch: `codex/pop33-recovery`
+- Source baseline: `531051f61f4d541f9a55f47d61fb181fdf30bec3`
+- Record message: `docs(operator): record verified checkpoint 5`
+
 ## 2026-07-30 - Guarded manual checkpoint 5 preparation
 
 ### At a glance

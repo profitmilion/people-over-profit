@@ -301,7 +301,7 @@ Emergency-stop conditions also include:
 
 Do not try to repair any of these conditions by clicking Approve or Join again.
 
-## Preparation result
+## Preparation result (2026-07-30)
 
 At preparation time:
 
@@ -314,3 +314,26 @@ At preparation time:
 
 The only safe continuation is to supply two distinct public MetaMask addresses
 and run the candidate checks above.
+
+## Verified execution result (2026-08-08)
+
+Status: `MANUAL_CHECKPOINT_5_VERIFIED`.
+
+- Candidate A `0x494aA24521186D9b0f1C817287aA0cecDEE0F5e9` completed one
+  manual Join successfully:
+  `0xccdc558001e69195f7fc4c0d3690517c28a84c4ac3f1fb2a284887d3f5e25c73`.
+  Its active Pool 1 position is 23.
+- Candidate B `0x955058d00B995E9dfc91F4023c9a39242f9Aba03` completed one
+  manual Join successfully:
+  `0x7cff4e7a4d0364396aec310dd0b1375abe06b5d7f1bb814be1452810b74a0210`.
+  Its active Pool 1 position is 24.
+- A final pinned public read at block `45217743` found Pool 1 `Open` at exactly
+  `5/100`, escrow exactly `165000000` base units (`165` dUSDC), and
+  `lockedAt=0`.
+- The read-only lifecycle supervisor found no actionable operation, warning,
+  or critical diagnostic. The system remained waiting for participants.
+- The two Join operations were performed manually by Piotr and verified
+  afterward through public read-only tooling. No additional Join was
+  performed.
+- The hard stop in this runbook was respected. The next planned checkpoint is
+  `20/100` and requires a separate fresh plan and authorization.

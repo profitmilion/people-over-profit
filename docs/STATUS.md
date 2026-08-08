@@ -4,7 +4,7 @@ Last reviewed: 2026-08-08
 
 Branch reviewed: `codex/pop33-recovery`
 
-Recovery HEAD reviewed: `7f03a3741232b622831e98eacdd068f12b44fa8c`
+Recovery source baseline reviewed: `531051f61f4d541f9a55f47d61fb181fdf30bec3`
 
 Status: active development
 
@@ -107,18 +107,31 @@ checks, and is explicitly not transaction authorization. Candidate B must be
 rechecked after any future Join A. A secret-free ignored local report format
 records public snapshot and transaction evidence.
 
-Manual checkpoint 5 status: `prepared, not executed`.
+Manual checkpoint 5 status: `MANUAL_CHECKPOINT_5_VERIFIED` on 2026-08-08.
 
-The complete reviewed operator stack through this preparation is included in
-`codex/pop33-recovery` at
-`7f03a3741232b622831e98eacdd068f12b44fa8c`.
+The complete reviewed operator stack and reconciled preparation status are
+included in `codex/pop33-recovery` from source baseline
+`531051f61f4d541f9a55f47d61fb181fdf30bec3`.
 
 The preparation reviewed the public `codex/pop33-recovery` Vercel Preview on
 landing, `#/demo-v1`, `#/archive-v1`, and a mobile-sized Demo V1 route. All
 loaded without a login wall or obvious runtime error. No wallet was connected.
-No candidate address was supplied, no wallet or key was created or configured,
-and no funding, faucet, Approve, Join, Draw, Claim, deployment, signature, or
-blockchain transaction occurred. Both candidates remain `NOT_CHECKED`.
+That preparation itself did not execute transactions and initially left both
+candidates `NOT_CHECKED`.
+
+Piotr later completed the checkpoint manually on Base Sepolia with Candidate A
+`0x494aA24521186D9b0f1C817287aA0cecDEE0F5e9` and Candidate B
+`0x955058d00B995E9dfc91F4023c9a39242f9Aba03`. Their successful Join
+transactions are
+`0xccdc558001e69195f7fc4c0d3690517c28a84c4ac3f1fb2a284887d3f5e25c73`
+and `0x7cff4e7a4d0364396aec310dd0b1375abe06b5d7f1bb814be1452810b74a0210`.
+A final pinned public read at block `45217743` found Pool 1 Open at exactly
+`5/100`, escrow `165` dUSDC, `lockedAt=0`, Candidate A active in position 23,
+and Candidate B active in position 24. A full read-only supervisor snapshot
+reported ten Open pools, no Locked, Drawing, Claimable, or Finished pools, and
+no actionable operations, warnings, or critical diagnostics. No Join beyond
+the two checkpoint operations was performed. The next planned checkpoint is
+`20/100`; this record does not authorize or automate it.
 
 The public product surface is now intentionally limited to the landing page,
 `#/demo-v1`, and `#/archive-v1`. The landing describes the deployed 33 dUSDC,

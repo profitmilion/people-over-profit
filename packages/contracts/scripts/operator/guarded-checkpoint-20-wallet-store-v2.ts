@@ -5,8 +5,9 @@ import {
   randomBytes,
   randomUUID,
   scrypt,
+  timingSafeEqual,
 } from "node:crypto";
-import { chmod, lstat, mkdir, readFile, rename, rm } from "node:fs/promises";
+import { chmod, lstat, mkdir, open, readdir, rename, rm } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import { inspect } from "node:util";
 
@@ -31,6 +32,8 @@ import {
 
 export const WALLET_STORE_V2_FIXTURE_AUTHORIZATION =
   "POP33_WALLET_STORE_V2_TEST_FIXTURE_ONLY";
+export const WALLET_STORE_V2_PRODUCTION_CEREMONY_AUTHORIZATION =
+  "PREPARE_15_UNFUNDED_BASE_SEPOLIA_WALLETS_FOR_CHECKPOINT_5_TO_20";
 export const WALLET_STORE_V2_BUNDLE_DIRECTORY_SUFFIX =
   ".checkpoint-20-wallet-store-v2-bundle";
 export const WALLET_STORE_V2_STORE_FILE_NAME =
@@ -44,6 +47,7 @@ const FORMAT_VERSION = 2 as const;
 const PURPOSE = "pop33-guarded-checkpoint-20-wallet-store-v2" as const;
 const MANIFEST_PURPOSE = "pop33-guarded-checkpoint-20-wallet-store-v2-public-manifest" as const;
 const BACKUP_PURPOSE = "pop33-guarded-checkpoint-20-wallet-store-v2-backup" as const;
+const TRUSTED_IDENTITY_PURPOSE = "pop33-wallet-store-v2-trusted-identity" as const;
 const CHECKPOINT_ID = "checkpoint-5-to-20" as const;
 const CIPHER = "aes-256-gcm" as const;
 const KDF = "scrypt" as const;
@@ -54,11 +58,17 @@ const KEY_LENGTH = 32;
 const SALT_LENGTH = 16;
 const IV_LENGTH = 12;
 const AUTH_TAG_LENGTH = 16;
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const MAX_STORE_FILE_BYTES = 64 * 1024;
+const MAX_MANIFEST_FILE_BYTES = 32 * 1024;
+const MAX_BACKUP_METADATA_BYTES = 16 * 1024;
+const UUID_BODY = "[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}";
+const UUID = new RegExp(`^${UUID_BODY}$`, "i");
 const DIGEST = /^sha256:[0-9a-f]{64}$/;
 
 const consumeUnlockSecret = Symbol("consumeWalletStoreV2UnlockSecret");
 const consumeFixtureRecord = Symbol("consumeWalletStoreV2FixtureRecord");
+
+export type WalletStoreV2ArtifactClass = "fixture" | "production";
 
 export interface WalletStoreV2Candidate {
   index: number;
@@ -68,6 +78,7 @@ export interface WalletStoreV2Candidate {
 export interface WalletStoreV2PublicManifest {
   formatVersion: 2;
   purpose: typeof MANIFEST_PURPOSE;
+  artifactClass: WalletStoreV2ArtifactClass;
   createdAt: string;
   chainId: "84532";
   contractAddress: string;
@@ -97,10 +108,10 @@ export interface WalletStoreV2EncryptedRecord {
   recordFingerprint: string;
 }
 
-export interface WalletStoreV2FixtureEnvelope {
+export interface WalletStoreV2Envelope {
   formatVersion: 2;
   purpose: typeof PURPOSE;
-  fixtureOnly: true;
+  artifactClass: WalletStoreV2ArtifactClass;
   createdAt: string;
   storeId: string;
   chainId: "84532";
@@ -126,15 +137,23 @@ export interface WalletStoreV2FixtureEnvelope {
 }
 
 export interface WalletStoreV2FixtureBundle {
-  fixtureOnly: true;
+  artifactClass: "fixture";
   manifest: WalletStoreV2PublicManifest;
-  envelope: WalletStoreV2FixtureEnvelope;
+  envelope: WalletStoreV2Envelope;
 }
+
+export interface WalletStoreV2ProductionBundle {
+  artifactClass: "production";
+  manifest: WalletStoreV2PublicManifest;
+  envelope: WalletStoreV2Envelope;
+}
+
+export type WalletStoreV2Bundle = WalletStoreV2FixtureBundle | WalletStoreV2ProductionBundle;
 
 export interface WalletStoreV2PublicInspection {
   kind: "wallet-store-v2-inspection";
   readOnly: true;
-  fixtureOnly: true;
+  artifactClass: WalletStoreV2ArtifactClass;
   formatVersion: 2;
   storeId: string;
   chainId: "84532";
@@ -154,7 +173,7 @@ export interface WalletStoreV2PublicInspection {
 
 export interface WalletStoreV2SessionReceipt {
   kind: "wallet-store-v2-session-receipt";
-  fixtureOnly: true;
+  artifactClass: WalletStoreV2ArtifactClass;
   storeId: string;
   index: number;
   address: string;
@@ -165,7 +184,7 @@ export interface WalletStoreV2SessionReceipt {
 
 export interface WalletStoreV2BackupReceipt {
   kind: "wallet-store-v2-backup-receipt";
-  fixtureOnly: true;
+  artifactClass: WalletStoreV2ArtifactClass;
   storeId: string;
   bindingFingerprint: string;
   encryptedStoreFingerprint: string;
@@ -181,13 +200,32 @@ export type WalletStoreV2PublicOutput =
 export interface WalletStoreV2BackupMetadata {
   formatVersion: 1;
   purpose: typeof BACKUP_PURPOSE;
-  fixtureOnly: true;
+  artifactClass: WalletStoreV2ArtifactClass;
   storeId: string;
   bindingFingerprint: string;
   encryptedStoreFingerprint: string;
   manifestFingerprint: string;
   storeFile: typeof WALLET_STORE_V2_STORE_FILE_NAME;
   manifestFile: typeof WALLET_STORE_V2_MANIFEST_FILE_NAME;
+  fingerprint: string;
+}
+
+export interface TrustedWalletStoreIdentity {
+  formatVersion: 1;
+  purpose: typeof TRUSTED_IDENTITY_PURPOSE;
+  artifactClass: WalletStoreV2ArtifactClass;
+  storeFormatVersion: 2;
+  storeId: string;
+  chainId: "84532";
+  contractAddress: string;
+  tokenAddress: string;
+  checkpointId: typeof CHECKPOINT_ID;
+  baselineCount: "5";
+  targetCount: "20";
+  recordCount: 15;
+  bindingFingerprint: string;
+  encryptedStoreFingerprint: string;
+  manifestFingerprint: string;
   fingerprint: string;
 }
 
@@ -201,6 +239,13 @@ export interface WalletStoreV2BundlePaths {
 export interface WalletStoreV2WriteHooks {
   afterStoreWrite?(): Promise<void> | void;
   beforeDirectoryCommit?(): Promise<void> | void;
+}
+
+export interface WalletStoreV2ProductionFileSecurity {
+  readonly artifactClass: "production";
+  assertBeforeCreate(directory: string): Promise<void>;
+  assertAfterCommit(directory: string): Promise<void>;
+  assertBeforeOpen(directory: string): Promise<void>;
 }
 
 function canonicalJson(value: unknown): string {
@@ -230,7 +275,7 @@ function exactObject(value: unknown, keys: readonly string[], label: string): Re
 }
 
 function iso(value: unknown, label: string): string {
-  if (typeof value !== "string") throw new Error(`${label} is invalid.`);
+  if (typeof value !== "string" || value.length !== 24) throw new Error(`${label} is invalid.`);
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime()) || parsed.toISOString() !== value) {
     throw new Error(`${label} is invalid.`);
@@ -240,6 +285,8 @@ function iso(value: unknown, label: string): string {
 
 function base64(value: unknown, length: number | null, label: string): Buffer {
   if (typeof value !== "string" || value.length === 0) throw new Error(`${label} is invalid.`);
+  const maximumEncodedLength = length === null ? 4096 : Math.ceil(length / 3) * 4;
+  if (value.length !== maximumEncodedLength) throw new Error(`${label} has an invalid encoded length.`);
   const decoded = Buffer.from(value, "base64");
   if (decoded.toString("base64") !== value || (length !== null && decoded.length !== length)) {
     decoded.fill(0);
@@ -249,8 +296,18 @@ function base64(value: unknown, length: number | null, label: string): Buffer {
 }
 
 function requireDigest(value: unknown, label: string): string {
-  if (typeof value !== "string" || !DIGEST.test(value)) throw new Error(`${label} is invalid.`);
+  if (typeof value !== "string" || value.length !== 71 || !DIGEST.test(value)) {
+    throw new Error(`${label} is invalid.`);
+  }
   return value;
+}
+
+function isUuid(value: unknown): value is string {
+  return typeof value === "string" && value.length === 36 && UUID.test(value);
+}
+
+function isEvmAddress(value: unknown): value is string {
+  return typeof value === "string" && value.length === 42 && isAddress(value);
 }
 
 function normalizeCandidates(candidates: readonly WalletStoreV2Candidate[]): WalletStoreV2Candidate[] {
@@ -259,7 +316,7 @@ function normalizeCandidates(candidates: readonly WalletStoreV2Candidate[]): Wal
   }
   const seen = new Set<string>();
   return candidates.map((candidate, index) => {
-    if (candidate.index !== index || !isAddress(candidate.address)) {
+    if (candidate.index !== index || !isEvmAddress(candidate.address)) {
       throw new Error("Wallet Store v2 candidate order or address is invalid.");
     }
     const address = getAddress(candidate.address);
@@ -291,7 +348,14 @@ function validatePrivateKeyBytes(value: Uint8Array): Buffer {
 }
 
 function deriveAddress(privateKeyBytes: Buffer): string {
-  return getAddress(computeAddress(`0x${privateKeyBytes.toString("hex")}`));
+  // ethers v6 computeAddress accepts a string or SigningKey. This short-lived
+  // immutable copy cannot be zeroized by JavaScript/V8; never retain or log it.
+  let privateKeyHex: string | null = `0x${privateKeyBytes.toString("hex")}`;
+  try {
+    return getAddress(computeAddress(privateKeyHex));
+  } finally {
+    privateKeyHex = null;
+  }
 }
 
 export class WalletStoreV2FixtureUnlockSecret {
@@ -441,7 +505,223 @@ export class WalletStoreV2DecryptedSession {
   }
 }
 
+const consumeProductionPassword = Symbol("consumeWalletStoreV2ProductionPassword");
+const consumeProductionRecord = Symbol("consumeWalletStoreV2ProductionRecord");
+const createProductionRecord = Symbol("createWalletStoreV2ProductionRecord");
+
+export interface ProductionPasswordProvider {
+  readonly providerClass: "production-tty" | "injected-test";
+  withPassword<T>(operation: (secret: WalletStoreV2ProductionUnlockSecret) => Promise<T>): Promise<T>;
+}
+
+export class WalletStoreV2ProductionUnlockSecret {
+  #bytes: Buffer | null;
+
+  private constructor(bytes: Buffer) {
+    this.#bytes = bytes;
+    Object.freeze(this);
+  }
+
+  static fromProviderBytes(bytes: Uint8Array): WalletStoreV2ProductionUnlockSecret {
+    if (!(bytes instanceof Uint8Array) || bytes.byteLength < 16 || bytes.byteLength > 1024) {
+      throw new Error("Production Wallet Store v2 unlock input is invalid.");
+    }
+    return new WalletStoreV2ProductionUnlockSecret(Buffer.from(bytes));
+  }
+
+  async [consumeProductionPassword]<T>(operation: (bytes: Buffer) => Promise<T>): Promise<T> {
+    const bytes = this.#bytes;
+    if (!bytes) throw new Error("Production Wallet Store v2 unlock secret is already closed.");
+    this.#bytes = null;
+    try {
+      return await operation(bytes);
+    } finally {
+      bytes.fill(0);
+    }
+  }
+
+  destroy(): void {
+    this.#bytes?.fill(0);
+    this.#bytes = null;
+  }
+
+  toJSON(): never { throw new Error("Production Wallet Store v2 unlock secret cannot be serialized."); }
+  [inspect.custom](): string { return "[WalletStoreV2ProductionUnlockSecret REDACTED]"; }
+  [Symbol.toPrimitive](): never {
+    throw new Error("Production Wallet Store v2 unlock secret cannot be converted to text.");
+  }
+}
+
+async function readHiddenTtyBytes(prompt: string): Promise<Buffer> {
+  const input = process.stdin;
+  const output = process.stdout;
+  if (!input.isTTY || !output.isTTY || typeof input.setRawMode !== "function") {
+    throw new Error("Production password input requires an interactive TTY.");
+  }
+  output.write(prompt);
+  const bytes: number[] = [];
+  const wasRaw = input.isRaw;
+  input.setRawMode(true);
+  input.resume();
+  try {
+    return await new Promise<Buffer>((resolvePromise, rejectPromise) => {
+      const onData = (chunk: Buffer | string): void => {
+        const data = typeof chunk === "string" ? Buffer.from(chunk, "utf8") : chunk;
+        for (const byte of data) {
+          if (byte === 3) {
+            input.off("data", onData);
+            rejectPromise(new Error("Production password input was cancelled."));
+            return;
+          }
+          if (byte === 13 || byte === 10) {
+            input.off("data", onData);
+            resolvePromise(Buffer.from(bytes));
+            return;
+          }
+          if (byte === 8 || byte === 127) {
+            bytes.pop();
+          } else if (byte >= 32 && bytes.length < 1024) {
+            bytes.push(byte);
+          }
+        }
+      };
+      input.on("data", onData);
+    });
+  } finally {
+    input.setRawMode(Boolean(wasRaw));
+    input.pause();
+    output.write("\n");
+  }
+}
+
+export class ProductionTtyPasswordProvider implements ProductionPasswordProvider {
+  readonly providerClass = "production-tty" as const;
+
+  private constructor() { Object.freeze(this); }
+
+  static create(authorization: string): ProductionTtyPasswordProvider {
+    if (authorization !== WALLET_STORE_V2_PRODUCTION_CEREMONY_AUTHORIZATION) {
+      throw new Error("Production Wallet Store v2 ceremony authorization is required.");
+    }
+    return new ProductionTtyPasswordProvider();
+  }
+
+  async withPassword<T>(operation: (secret: WalletStoreV2ProductionUnlockSecret) => Promise<T>): Promise<T> {
+    let first: Buffer | null = null;
+    let second: Buffer | null = null;
+    let secret: WalletStoreV2ProductionUnlockSecret | null = null;
+    try {
+      first = await readHiddenTtyBytes("Wallet Store v2 password: ");
+      second = await readHiddenTtyBytes("Repeat Wallet Store v2 password: ");
+      if (first.length < 16 || first.length !== second.length || !timingSafeEqual(first, second)) {
+        throw new Error("Production Wallet Store v2 password confirmation failed.");
+      }
+      secret = WalletStoreV2ProductionUnlockSecret.fromProviderBytes(first);
+      return await operation(secret);
+    } finally {
+      secret?.destroy();
+      first?.fill(0);
+      second?.fill(0);
+    }
+  }
+}
+
+export class InjectedTestPasswordProvider implements ProductionPasswordProvider {
+  readonly providerClass = "injected-test" as const;
+  #bytes: Buffer;
+
+  constructor(bytes: Uint8Array, authorization: string) {
+    assertFixtureAuthorization(authorization);
+    this.#bytes = Buffer.from(bytes);
+  }
+
+  async withPassword<T>(operation: (secret: WalletStoreV2ProductionUnlockSecret) => Promise<T>): Promise<T> {
+    const bytes = Buffer.from(this.#bytes);
+    const secret = WalletStoreV2ProductionUnlockSecret.fromProviderBytes(bytes);
+    try {
+      return await operation(secret);
+    } finally {
+      secret.destroy();
+      bytes.fill(0);
+    }
+  }
+
+  destroy(): void { this.#bytes.fill(0); }
+}
+
+export class WalletStoreV2ProductionSecretRecord {
+  #bytes: Buffer | null;
+  readonly index: number;
+  readonly address: string;
+
+  private constructor(index: number, bytes: Buffer) {
+    this.index = index;
+    this.address = deriveAddress(bytes);
+    this.#bytes = bytes;
+    Object.freeze(this);
+  }
+
+  static [createProductionRecord](index: number, bytes: Buffer): WalletStoreV2ProductionSecretRecord {
+    return new WalletStoreV2ProductionSecretRecord(index, bytes);
+  }
+
+  async [consumeProductionRecord]<T>(operation: (bytes: Buffer) => Promise<T>): Promise<T> {
+    const bytes = this.#bytes;
+    if (!bytes) throw new Error("Production Wallet Store v2 record is already closed.");
+    this.#bytes = null;
+    try {
+      return await operation(bytes);
+    } finally {
+      bytes.fill(0);
+    }
+  }
+
+  destroy(): void { this.#bytes?.fill(0); this.#bytes = null; }
+  toJSON(): never { throw new Error("Production Wallet Store v2 record cannot be serialized."); }
+  [inspect.custom](): string { return `[WalletStoreV2ProductionSecretRecord index=${this.index} REDACTED]`; }
+  [Symbol.toPrimitive](): never {
+    throw new Error("Production Wallet Store v2 record cannot be converted to text.");
+  }
+}
+
+export class NodeCSPRNGProductionWalletGenerator {
+  readonly generatorClass = "node-csprng-production" as const;
+
+  private constructor() { Object.freeze(this); }
+
+  static create(authorization: string): NodeCSPRNGProductionWalletGenerator {
+    if (authorization !== WALLET_STORE_V2_PRODUCTION_CEREMONY_AUTHORIZATION) {
+      throw new Error("Production wallet generation requires ceremony authorization.");
+    }
+    return new NodeCSPRNGProductionWalletGenerator();
+  }
+
+  generateIndependentSet(): WalletStoreV2ProductionSecretRecord[] {
+    const records: WalletStoreV2ProductionSecretRecord[] = [];
+    try {
+      for (let index = 0; index < 15; index += 1) {
+        let bytes: Buffer | null = null;
+        while (!bytes) {
+          const candidate = randomBytes(KEY_LENGTH);
+          try {
+            deriveAddress(candidate);
+            bytes = candidate;
+          } catch {
+            candidate.fill(0);
+          }
+        }
+        records.push(WalletStoreV2ProductionSecretRecord[createProductionRecord](index, bytes));
+      }
+      return records;
+    } catch {
+      for (const record of records) record.destroy();
+      throw new Error("Production wallet generation failed without exposing secret material.");
+    }
+  }
+}
+
 function bindingBase(input: {
+  artifactClass: WalletStoreV2ArtifactClass;
   createdAt: string;
   storeId: string;
   candidates: readonly WalletStoreV2Candidate[];
@@ -449,6 +729,7 @@ function bindingBase(input: {
   return {
     formatVersion: FORMAT_VERSION,
     purpose: PURPOSE,
+    artifactClass: input.artifactClass,
     createdAt: input.createdAt,
     storeId: input.storeId,
     chainId: GUARDED_CHECKPOINT_20_CHAIN_ID.toString(),
@@ -460,6 +741,25 @@ function bindingBase(input: {
     recordCount: GUARDED_CHECKPOINT_20_CANDIDATE_COUNT,
     candidates: input.candidates,
   };
+}
+
+export function calculateWalletStoreV2BindingFingerprint(input: {
+  artifactClass: WalletStoreV2ArtifactClass;
+  createdAt: string;
+  storeId: string;
+  candidates: readonly WalletStoreV2Candidate[];
+}): string {
+  if (input.artifactClass !== "fixture" && input.artifactClass !== "production") {
+    throw new Error("Wallet Store v2 artifact class is invalid.");
+  }
+  const createdAt = iso(input.createdAt, "Wallet Store v2 binding creation time");
+  if (!isUuid(input.storeId)) throw new Error("Wallet Store v2 binding store ID is invalid.");
+  return digest(bindingBase({
+    artifactClass: input.artifactClass,
+    createdAt,
+    storeId: input.storeId,
+    candidates: normalizeCandidates(input.candidates),
+  }));
 }
 
 function aad(input: {
@@ -498,7 +798,7 @@ function recordWithoutFingerprint(record: WalletStoreV2EncryptedRecord): Omit<Wa
   };
 }
 
-function envelopeFingerprintBase(envelope: Omit<WalletStoreV2FixtureEnvelope, "encryptedStoreFingerprint" | "manifestFingerprint">): unknown {
+function envelopeFingerprintBase(envelope: Omit<WalletStoreV2Envelope, "encryptedStoreFingerprint" | "manifestFingerprint">): unknown {
   return envelope;
 }
 
@@ -506,6 +806,7 @@ function manifestWithoutFingerprint(manifest: WalletStoreV2PublicManifest): Omit
   return {
     formatVersion: manifest.formatVersion,
     purpose: manifest.purpose,
+    artifactClass: manifest.artifactClass,
     createdAt: manifest.createdAt,
     chainId: manifest.chainId,
     contractAddress: manifest.contractAddress,
@@ -553,8 +854,8 @@ export async function buildWalletStoreV2FixtureBundle(input: {
   const candidates = normalizeCandidates(input.candidates);
   const createdAt = iso(input.createdAt, "Wallet Store v2 creation time");
   const storeId = input.storeId ?? randomUUID();
-  if (!UUID.test(storeId)) throw new Error("Wallet Store v2 store ID is invalid.");
-  const bindingFingerprint = digest(bindingBase({ createdAt, storeId, candidates }));
+  if (!isUuid(storeId)) throw new Error("Wallet Store v2 store ID is invalid.");
+  const bindingFingerprint = digest(bindingBase({ artifactClass: "fixture", createdAt, storeId, candidates }));
   const salt = randomBytes(SALT_LENGTH);
   const saltBase64 = salt.toString("base64");
   let key: Buffer | null = null;
@@ -594,10 +895,10 @@ export async function buildWalletStoreV2FixtureBundle(input: {
   }
 
   const recordsFingerprint = digest(records.map((record) => record.recordFingerprint));
-  const envelopeBase: Omit<WalletStoreV2FixtureEnvelope, "encryptedStoreFingerprint" | "manifestFingerprint"> = {
+  const envelopeBase: Omit<WalletStoreV2Envelope, "encryptedStoreFingerprint" | "manifestFingerprint"> = {
     formatVersion: FORMAT_VERSION,
     purpose: PURPOSE,
-    fixtureOnly: true,
+    artifactClass: "fixture",
     createdAt,
     storeId,
     chainId: "84532",
@@ -618,6 +919,7 @@ export async function buildWalletStoreV2FixtureBundle(input: {
   const manifestBase: Omit<WalletStoreV2PublicManifest, "fingerprint"> = {
     formatVersion: FORMAT_VERSION,
     purpose: MANIFEST_PURPOSE,
+    artifactClass: "fixture",
     createdAt,
     chainId: "84532",
     contractAddress: getAddress(GUARDED_CHECKPOINT_20_CONTRACT),
@@ -640,30 +942,135 @@ export async function buildWalletStoreV2FixtureBundle(input: {
     ...manifestBase,
     fingerprint: digest(manifestBase),
   };
-  const envelope: WalletStoreV2FixtureEnvelope = {
+  const envelope: WalletStoreV2Envelope = {
     ...envelopeBase,
     encryptedStoreFingerprint,
     manifestFingerprint: manifest.fingerprint,
   };
-  return validateWalletStoreV2FixtureBundle({ fixtureOnly: true, manifest, envelope });
+  return validateWalletStoreV2FixtureBundle({ artifactClass: "fixture", manifest, envelope });
+}
+
+export async function buildWalletStoreV2ProductionBundle(input: {
+  passwordProvider: ProductionTtyPasswordProvider;
+  walletGenerator: NodeCSPRNGProductionWalletGenerator;
+  createdAt: string;
+  storeId?: string;
+  authorization: string;
+}): Promise<WalletStoreV2ProductionBundle> {
+  if (input.authorization !== WALLET_STORE_V2_PRODUCTION_CEREMONY_AUTHORIZATION) {
+    throw new Error("Production Wallet Store v2 ceremony authorization is required.");
+  }
+  if (!(input.passwordProvider instanceof ProductionTtyPasswordProvider)) {
+    throw new Error("Production Wallet Store v2 rejects injected or fixture password providers.");
+  }
+  if (!(input.walletGenerator instanceof NodeCSPRNGProductionWalletGenerator)) {
+    throw new Error("Production Wallet Store v2 rejects fixture or injected wallet generators.");
+  }
+  const createdAt = iso(input.createdAt, "Production Wallet Store v2 creation time");
+  const storeId = input.storeId ?? randomUUID();
+  if (!isUuid(storeId)) throw new Error("Production Wallet Store v2 store ID is invalid.");
+  const secretRecords = input.walletGenerator.generateIndependentSet();
+  const candidates = normalizeCandidates(secretRecords.map((record) => ({
+    index: record.index,
+    address: record.address,
+  })));
+  const bindingFingerprint = digest(bindingBase({ artifactClass: "production", createdAt, storeId, candidates }));
+  const salt = randomBytes(SALT_LENGTH);
+  const saltBase64 = salt.toString("base64");
+  const records: WalletStoreV2EncryptedRecord[] = [];
+  const usedIvs = new Set<string>();
+  try {
+    await input.passwordProvider.withPassword(async (unlockSecret) =>
+      unlockSecret[consumeProductionPassword](async (unlockBytes) => {
+        const key = await deriveKey(unlockBytes, salt);
+        try {
+          for (const secretRecord of secretRecords) {
+            let iv = randomBytes(IV_LENGTH);
+            while (usedIvs.has(iv.toString("base64"))) iv = randomBytes(IV_LENGTH);
+            usedIvs.add(iv.toString("base64"));
+            try {
+              records.push(await secretRecord[consumeProductionRecord](async (privateKeyBytes) =>
+                encryptRecord({
+                  key,
+                  bindingFingerprint,
+                  index: secretRecord.index,
+                  address: secretRecord.address,
+                  privateKeyBytes,
+                  iv,
+                })));
+            } finally {
+              iv.fill(0);
+              secretRecord.destroy();
+            }
+          }
+        } finally {
+          key.fill(0);
+        }
+      }));
+  } catch {
+    throw new Error("Production Wallet Store v2 creation failed without exposing secret material.");
+  } finally {
+    salt.fill(0);
+    for (const record of secretRecords) record.destroy();
+  }
+  const recordsFingerprint = digest(records.map((record) => record.recordFingerprint));
+  const envelopeBase: Omit<WalletStoreV2Envelope, "encryptedStoreFingerprint" | "manifestFingerprint"> = {
+    formatVersion: FORMAT_VERSION,
+    purpose: PURPOSE,
+    artifactClass: "production",
+    createdAt,
+    storeId,
+    chainId: "84532",
+    contractAddress: getAddress(GUARDED_CHECKPOINT_20_CONTRACT),
+    tokenAddress: getAddress(GUARDED_CHECKPOINT_20_TOKEN),
+    checkpointId: CHECKPOINT_ID,
+    baselineCount: "5",
+    targetCount: "20",
+    recordCount: 15,
+    cipher: CIPHER,
+    kdf: KDF,
+    kdfParameters: { n: SCRYPT_N, r: SCRYPT_R, p: SCRYPT_P, salt: saltBase64 },
+    bindingFingerprint,
+    recordsFingerprint,
+    records,
+  };
+  const encryptedStoreFingerprint = digest(envelopeFingerprintBase(envelopeBase));
+  const manifestBase: Omit<WalletStoreV2PublicManifest, "fingerprint"> = {
+    formatVersion: FORMAT_VERSION,
+    purpose: MANIFEST_PURPOSE,
+    artifactClass: "production",
+    createdAt,
+    chainId: "84532",
+    contractAddress: getAddress(GUARDED_CHECKPOINT_20_CONTRACT),
+    tokenAddress: getAddress(GUARDED_CHECKPOINT_20_TOKEN),
+    checkpoint: { id: CHECKPOINT_ID, baselineCount: "5", targetCount: "20", recordCount: 15 },
+    store: { formatVersion: FORMAT_VERSION, storeId, bindingFingerprint, encryptedStoreFingerprint },
+    candidates,
+  };
+  const manifest = { ...manifestBase, fingerprint: digest(manifestBase) };
+  const envelope = { ...envelopeBase, encryptedStoreFingerprint, manifestFingerprint: manifest.fingerprint };
+  return validateWalletStoreV2ProductionBundle({ artifactClass: "production", manifest, envelope });
 }
 
 export function validateWalletStoreV2PublicManifest(value: unknown): WalletStoreV2PublicManifest {
   const manifest = exactObject(value, [
-    "formatVersion", "purpose", "createdAt", "chainId", "contractAddress", "tokenAddress",
+    "formatVersion", "purpose", "artifactClass", "createdAt", "chainId", "contractAddress", "tokenAddress",
     "checkpoint", "store", "candidates", "fingerprint",
   ], "Wallet Store v2 public manifest");
   if (manifest.formatVersion !== FORMAT_VERSION || manifest.purpose !== MANIFEST_PURPOSE) {
     throw new Error("Wallet Store v2 public manifest version or purpose is invalid.");
   }
+  if (manifest.artifactClass !== "fixture" && manifest.artifactClass !== "production") {
+    throw new Error("Wallet Store v2 public manifest artifact class is invalid.");
+  }
   const createdAt = iso(manifest.createdAt, "Wallet Store v2 manifest creation time");
   if (manifest.chainId !== "84532") throw new Error("Wallet Store v2 manifest chain ID mismatch.");
   if (
-    typeof manifest.contractAddress !== "string" || !isAddress(manifest.contractAddress) ||
+    !isEvmAddress(manifest.contractAddress) ||
     getAddress(manifest.contractAddress) !== getAddress(GUARDED_CHECKPOINT_20_CONTRACT)
   ) throw new Error("Wallet Store v2 manifest contract mismatch.");
   if (
-    typeof manifest.tokenAddress !== "string" || !isAddress(manifest.tokenAddress) ||
+    !isEvmAddress(manifest.tokenAddress) ||
     getAddress(manifest.tokenAddress) !== getAddress(GUARDED_CHECKPOINT_20_TOKEN)
   ) throw new Error("Wallet Store v2 manifest token mismatch.");
   const checkpoint = exactObject(
@@ -680,7 +1087,7 @@ export function validateWalletStoreV2PublicManifest(value: unknown): WalletStore
     ["formatVersion", "storeId", "bindingFingerprint", "encryptedStoreFingerprint"],
     "Wallet Store v2 manifest store binding",
   );
-  if (store.formatVersion !== FORMAT_VERSION || typeof store.storeId !== "string" || !UUID.test(store.storeId)) {
+  if (store.formatVersion !== FORMAT_VERSION || !isUuid(store.storeId)) {
     throw new Error("Wallet Store v2 manifest store identity mismatch.");
   }
   const bindingFingerprint = requireDigest(store.bindingFingerprint, "Wallet Store v2 binding fingerprint");
@@ -690,11 +1097,17 @@ export function validateWalletStoreV2PublicManifest(value: unknown): WalletStore
   );
   if (!Array.isArray(manifest.candidates)) throw new Error("Wallet Store v2 manifest candidates are invalid.");
   const candidates = normalizeCandidates(manifest.candidates as WalletStoreV2Candidate[]);
-  const expectedBinding = digest(bindingBase({ createdAt, storeId: store.storeId, candidates }));
+  const expectedBinding = digest(bindingBase({
+    artifactClass: manifest.artifactClass,
+    createdAt,
+    storeId: store.storeId,
+    candidates,
+  }));
   if (bindingFingerprint !== expectedBinding) throw new Error("Wallet Store v2 manifest binding fingerprint mismatch.");
   const normalized: WalletStoreV2PublicManifest = {
     formatVersion: FORMAT_VERSION,
     purpose: MANIFEST_PURPOSE,
+    artifactClass: manifest.artifactClass,
     createdAt,
     chainId: "84532",
     contractAddress: getAddress(GUARDED_CHECKPOINT_20_CONTRACT),
@@ -745,20 +1158,20 @@ function validateEncryptedRecord(value: unknown, index: number, address: string)
   return normalized;
 }
 
-export function validateWalletStoreV2FixtureEnvelope(input: {
+export function validateWalletStoreV2Envelope(input: {
   value: unknown;
   manifest: WalletStoreV2PublicManifest;
-}): WalletStoreV2FixtureEnvelope {
+}): WalletStoreV2Envelope {
   const manifest = validateWalletStoreV2PublicManifest(input.manifest);
   const envelope = exactObject(input.value, [
-    "formatVersion", "purpose", "fixtureOnly", "createdAt", "storeId", "chainId",
+    "formatVersion", "purpose", "artifactClass", "createdAt", "storeId", "chainId",
     "contractAddress", "tokenAddress", "checkpointId", "baselineCount", "targetCount",
     "recordCount", "cipher", "kdf", "kdfParameters", "bindingFingerprint",
     "recordsFingerprint", "encryptedStoreFingerprint", "manifestFingerprint", "records",
   ], "Wallet Store v2 envelope");
   if (
     envelope.formatVersion !== FORMAT_VERSION || envelope.purpose !== PURPOSE ||
-    envelope.fixtureOnly !== true || envelope.chainId !== "84532" ||
+    envelope.artifactClass !== manifest.artifactClass || envelope.chainId !== "84532" ||
     envelope.checkpointId !== CHECKPOINT_ID || envelope.baselineCount !== "5" ||
     envelope.targetCount !== "20" || envelope.recordCount !== 15 ||
     envelope.cipher !== CIPHER || envelope.kdf !== KDF
@@ -768,10 +1181,10 @@ export function validateWalletStoreV2FixtureEnvelope(input: {
     throw new Error("Wallet Store v2 envelope and manifest identity mismatch.");
   }
   if (
-    typeof envelope.storeId !== "string" || !UUID.test(envelope.storeId) ||
-    typeof envelope.contractAddress !== "string" || !isAddress(envelope.contractAddress) ||
+    !isUuid(envelope.storeId) ||
+    !isEvmAddress(envelope.contractAddress) ||
     getAddress(envelope.contractAddress) !== getAddress(GUARDED_CHECKPOINT_20_CONTRACT) ||
-    typeof envelope.tokenAddress !== "string" || !isAddress(envelope.tokenAddress) ||
+    !isEvmAddress(envelope.tokenAddress) ||
     getAddress(envelope.tokenAddress) !== getAddress(GUARDED_CHECKPOINT_20_TOKEN)
   ) throw new Error("Wallet Store v2 envelope deployment identity mismatch.");
   const kdfParameters = exactObject(
@@ -807,10 +1220,10 @@ export function validateWalletStoreV2FixtureEnvelope(input: {
   if (digest(records.map((record) => record.recordFingerprint)) !== recordsFingerprint) {
     throw new Error("Wallet Store v2 records fingerprint mismatch.");
   }
-  const normalizedBase: Omit<WalletStoreV2FixtureEnvelope, "encryptedStoreFingerprint" | "manifestFingerprint"> = {
+  const normalizedBase: Omit<WalletStoreV2Envelope, "encryptedStoreFingerprint" | "manifestFingerprint"> = {
     formatVersion: FORMAT_VERSION,
     purpose: PURPOSE,
-    fixtureOnly: true,
+    artifactClass: manifest.artifactClass,
     createdAt,
     storeId: envelope.storeId,
     chainId: "84532",
@@ -839,18 +1252,35 @@ export function validateWalletStoreV2FixtureEnvelope(input: {
 }
 
 export function validateWalletStoreV2FixtureBundle(value: WalletStoreV2FixtureBundle): WalletStoreV2FixtureBundle {
-  if (!value || value.fixtureOnly !== true) throw new Error("Wallet Store v2 fixture bundle marker is missing.");
+  if (!value || value.artifactClass !== "fixture") throw new Error("Wallet Store v2 fixture bundle marker is missing.");
   const manifest = validateWalletStoreV2PublicManifest(value.manifest);
-  const envelope = validateWalletStoreV2FixtureEnvelope({ value: value.envelope, manifest });
-  return { fixtureOnly: true, manifest, envelope };
+  if (manifest.artifactClass !== "fixture") throw new Error("Production store is rejected by the fixture-only API.");
+  const envelope = validateWalletStoreV2Envelope({ value: value.envelope, manifest });
+  return { artifactClass: "fixture", manifest, envelope };
 }
 
-export function inspectWalletStoreV2FixtureBundle(value: WalletStoreV2FixtureBundle): WalletStoreV2PublicInspection {
-  const bundle = validateWalletStoreV2FixtureBundle(value);
+export function validateWalletStoreV2ProductionBundle(
+  value: WalletStoreV2ProductionBundle,
+): WalletStoreV2ProductionBundle {
+  if (!value || value.artifactClass !== "production") {
+    throw new Error("Fixture store is rejected by the production API.");
+  }
+  const manifest = validateWalletStoreV2PublicManifest(value.manifest);
+  if (manifest.artifactClass !== "production") {
+    throw new Error("Fixture store is rejected by the production API.");
+  }
+  const envelope = validateWalletStoreV2Envelope({ value: value.envelope, manifest });
+  return { artifactClass: "production", manifest, envelope };
+}
+
+function inspectWalletStoreV2Bundle(value: WalletStoreV2Bundle): WalletStoreV2PublicInspection {
+  const bundle = value.artifactClass === "fixture"
+    ? validateWalletStoreV2FixtureBundle(value)
+    : validateWalletStoreV2ProductionBundle(value);
   return assertWalletStoreV2PublicOutput({
     kind: "wallet-store-v2-inspection",
     readOnly: true,
-    fixtureOnly: true,
+    artifactClass: bundle.artifactClass,
     formatVersion: FORMAT_VERSION,
     storeId: bundle.envelope.storeId,
     chainId: "84532",
@@ -869,6 +1299,16 @@ export function inspectWalletStoreV2FixtureBundle(value: WalletStoreV2FixtureBun
   }) as WalletStoreV2PublicInspection;
 }
 
+export function inspectWalletStoreV2FixtureBundle(value: WalletStoreV2FixtureBundle): WalletStoreV2PublicInspection {
+  return inspectWalletStoreV2Bundle(validateWalletStoreV2FixtureBundle(value));
+}
+
+export function inspectWalletStoreV2ProductionBundle(
+  value: WalletStoreV2ProductionBundle,
+): WalletStoreV2PublicInspection {
+  return inspectWalletStoreV2Bundle(validateWalletStoreV2ProductionBundle(value));
+}
+
 export function assertWalletStoreV2PublicOutput(value: unknown): WalletStoreV2PublicOutput {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("Wallet Store v2 public output must use an allowlisted shape.");
@@ -876,17 +1316,17 @@ export function assertWalletStoreV2PublicOutput(value: unknown): WalletStoreV2Pu
   const kind = (value as { kind?: unknown }).kind;
   const keysByKind: Record<string, readonly string[]> = {
     "wallet-store-v2-inspection": [
-      "kind", "readOnly", "fixtureOnly", "formatVersion", "storeId", "chainId",
+      "kind", "readOnly", "artifactClass", "formatVersion", "storeId", "chainId",
       "contractAddress", "tokenAddress", "checkpointId", "baselineCount", "targetCount",
       "recordCount", "addresses", "bindingFingerprint", "encryptedStoreFingerprint",
       "manifestFingerprint", "cipher", "kdf",
     ],
     "wallet-store-v2-session-receipt": [
-      "kind", "fixtureOnly", "storeId", "index", "address", "manifestFingerprint",
+      "kind", "artifactClass", "storeId", "index", "address", "manifestFingerprint",
       "addressVerified", "sessionClosed",
     ],
     "wallet-store-v2-backup-receipt": [
-      "kind", "fixtureOnly", "storeId", "bindingFingerprint", "encryptedStoreFingerprint",
+      "kind", "artifactClass", "storeId", "bindingFingerprint", "encryptedStoreFingerprint",
       "manifestFingerprint", "backupVerified",
     ],
   };
@@ -894,7 +1334,10 @@ export function assertWalletStoreV2PublicOutput(value: unknown): WalletStoreV2Pu
     throw new Error("Wallet Store v2 public output kind is not allowlisted.");
   }
   const output = exactObject(value, keysByKind[kind], "Wallet Store v2 public output");
-  if (output.fixtureOnly !== true || typeof output.storeId !== "string" || !UUID.test(output.storeId)) {
+  if (
+    (output.artifactClass !== "fixture" && output.artifactClass !== "production") ||
+    !isUuid(output.storeId)
+  ) {
     throw new Error("Wallet Store v2 public output identity is invalid.");
   }
   requireDigest(output.manifestFingerprint, "Wallet Store v2 public manifest fingerprint");
@@ -904,9 +1347,9 @@ export function assertWalletStoreV2PublicOutput(value: unknown): WalletStoreV2Pu
       output.checkpointId !== CHECKPOINT_ID || output.baselineCount !== "5" ||
       output.targetCount !== "20" || output.recordCount !== 15 ||
       output.cipher !== CIPHER || output.kdf !== KDF ||
-      typeof output.contractAddress !== "string" || !isAddress(output.contractAddress) ||
+      !isEvmAddress(output.contractAddress) ||
       getAddress(output.contractAddress) !== getAddress(GUARDED_CHECKPOINT_20_CONTRACT) ||
-      typeof output.tokenAddress !== "string" || !isAddress(output.tokenAddress) ||
+      !isEvmAddress(output.tokenAddress) ||
       getAddress(output.tokenAddress) !== getAddress(GUARDED_CHECKPOINT_20_TOKEN) ||
       !Array.isArray(output.addresses)
     ) throw new Error("Wallet Store v2 public inspection output is invalid.");
@@ -919,7 +1362,7 @@ export function assertWalletStoreV2PublicOutput(value: unknown): WalletStoreV2Pu
   } else if (kind === "wallet-store-v2-session-receipt") {
     if (
       !Number.isSafeInteger(output.index) || (output.index as number) < 0 || (output.index as number) >= 15 ||
-      typeof output.address !== "string" || !isAddress(output.address) ||
+      !isEvmAddress(output.address) ||
       output.addressVerified !== true || output.sessionClosed !== true
     ) throw new Error("Wallet Store v2 public session receipt is invalid.");
   } else if (
@@ -959,6 +1402,26 @@ async function pathExists(path: string): Promise<boolean> {
   }
 }
 
+async function readBoundedUtf8(path: string, maximumBytes: number, label: string): Promise<string> {
+  const handle = await open(path, "r");
+  const buffer = Buffer.alloc(maximumBytes + 1);
+  try {
+    const stats = await handle.stat();
+    if (!stats.isFile() || stats.size > maximumBytes) throw new Error(`${label} exceeds its size limit.`);
+    let offset = 0;
+    while (offset < buffer.length) {
+      const { bytesRead } = await handle.read(buffer, offset, buffer.length - offset, offset);
+      if (bytesRead === 0) break;
+      offset += bytesRead;
+    }
+    if (offset > maximumBytes) throw new Error(`${label} exceeds its size limit.`);
+    return buffer.subarray(0, offset).toString("utf8");
+  } finally {
+    buffer.fill(0);
+    await handle.close();
+  }
+}
+
 async function assertBundlePaths(paths: WalletStoreV2BundlePaths): Promise<void> {
   await assertSafeExternalFilePath(paths.storeFile, ".wallet-store-v2.enc.json");
   await assertSafeExternalFilePath(paths.manifestFile, ".wallet-store-v2.manifest.json");
@@ -971,13 +1434,21 @@ function serialize(value: unknown): string {
 
 async function writeSerializedBundleDirectory(input: {
   directory: string;
+  artifactClass: WalletStoreV2ArtifactClass;
   storeSerialized: string;
   manifestSerialized: string;
   backupMetadataSerialized?: string;
   hooks?: WalletStoreV2WriteHooks;
+  productionSecurity?: WalletStoreV2ProductionFileSecurity;
 }): Promise<void> {
   const finalPaths = walletStoreV2BundlePaths(input.directory);
   await assertBundlePaths(finalPaths);
+  if (input.artifactClass === "production") {
+    if (!input.productionSecurity) throw new Error("Production Wallet Store v2 requires file security.");
+    await input.productionSecurity.assertBeforeCreate(finalPaths.directory);
+  } else if (input.productionSecurity) {
+    throw new Error("Fixture Wallet Store v2 cannot use production file security.");
+  }
   if (await pathExists(finalPaths.directory)) {
     throw new Error("Wallet Store v2 bundle directory already exists; overwrite is forbidden.");
   }
@@ -987,6 +1458,7 @@ async function writeSerializedBundleDirectory(input: {
     `.${basename(finalPaths.directory)}.${randomUUID()}.tmp`,
   );
   let committed = false;
+  let renamed = false;
   try {
     await mkdir(temporaryDirectory, { recursive: false, mode: 0o700 });
     const temporaryPaths = {
@@ -1006,13 +1478,74 @@ async function writeSerializedBundleDirectory(input: {
       throw new Error("Wallet Store v2 target appeared during creation; overwrite is forbidden.");
     }
     await rename(temporaryDirectory, finalPaths.directory);
-    committed = true;
+    renamed = true;
     await chmod(finalPaths.directory, 0o700).catch((error: NodeJS.ErrnoException) => {
       if (process.platform !== "win32") throw error;
     });
+    if (input.artifactClass === "production") {
+      await input.productionSecurity!.assertAfterCommit(finalPaths.directory);
+    }
+    committed = true;
   } finally {
-    if (!committed) await rm(temporaryDirectory, { recursive: true, force: true });
+    if (!committed) {
+      await rm(renamed ? finalPaths.directory : temporaryDirectory, { recursive: true, force: true });
+    }
   }
+}
+
+function orphanDirectoryPattern(targetDirectory: string): RegExp {
+  const escaped = basename(targetDirectory).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`^\\.${escaped}\\.${UUID_BODY}\\.tmp$`, "i");
+}
+
+export async function listWalletStoreV2OrphanDirectories(targetDirectoryInput: string): Promise<string[]> {
+  const targetPaths = walletStoreV2BundlePaths(targetDirectoryInput);
+  await assertBundlePaths(targetPaths);
+  const parent = dirname(targetPaths.directory);
+  const pattern = orphanDirectoryPattern(targetPaths.directory);
+  let names: string[];
+  try {
+    names = await readdir(parent);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+    throw error;
+  }
+  const matches: string[] = [];
+  for (const name of names) {
+    if (!pattern.test(name)) continue;
+    const candidate = join(parent, name);
+    const stats = await lstat(candidate);
+    if (stats.isSymbolicLink() || !stats.isDirectory()) continue;
+    matches.push(candidate);
+  }
+  return matches.sort();
+}
+
+export async function cleanupWalletStoreV2OrphanDirectory(input: {
+  targetDirectory: string;
+  orphanDirectory: string;
+}): Promise<void> {
+  const targetPaths = walletStoreV2BundlePaths(input.targetDirectory);
+  const orphan = resolve(input.orphanDirectory);
+  const recognized = await listWalletStoreV2OrphanDirectories(targetPaths.directory);
+  if (!recognized.includes(orphan) || orphan === targetPaths.directory) {
+    throw new Error("Wallet Store v2 orphan cleanup target is not recognized.");
+  }
+  const entries = await readdir(orphan);
+  const allowed = new Set([
+    WALLET_STORE_V2_STORE_FILE_NAME,
+    WALLET_STORE_V2_MANIFEST_FILE_NAME,
+    WALLET_STORE_V2_BACKUP_METADATA_FILE_NAME,
+  ]);
+  for (const entry of entries) {
+    const entryPath = join(orphan, entry);
+    const stats = await lstat(entryPath);
+    const isAtomicTemporary = /^\.[0-9a-f-]{36}\.operator-state\.tmp$/i.test(entry);
+    if (stats.isSymbolicLink() || !stats.isFile() || (!allowed.has(entry) && !isAtomicTemporary)) {
+      throw new Error("Wallet Store v2 orphan contains an unrecognized entry; cleanup refused.");
+    }
+  }
+  await rm(orphan, { recursive: true, force: false });
 }
 
 export async function createWalletStoreV2FixtureBundleDirectory(input: {
@@ -1023,6 +1556,7 @@ export async function createWalletStoreV2FixtureBundleDirectory(input: {
   const bundle = validateWalletStoreV2FixtureBundle(input.bundle);
   await writeSerializedBundleDirectory({
     directory: input.directory,
+    artifactClass: "fixture",
     storeSerialized: serialize(bundle.envelope),
     manifestSerialized: serialize(bundle.manifest),
     hooks: input.hooks,
@@ -1030,52 +1564,187 @@ export async function createWalletStoreV2FixtureBundleDirectory(input: {
   return readAndInspectWalletStoreV2FixtureBundleDirectory(input.directory);
 }
 
-async function readBundleFiles(directory: string): Promise<{
+export async function createWalletStoreV2ProductionBundleDirectory(input: {
+  directory: string;
+  bundle: WalletStoreV2ProductionBundle;
+  productionSecurity: WalletStoreV2ProductionFileSecurity;
+  hooks?: WalletStoreV2WriteHooks;
+}): Promise<WalletStoreV2PublicInspection> {
+  const bundle = validateWalletStoreV2ProductionBundle(input.bundle);
+  await writeSerializedBundleDirectory({
+    directory: input.directory,
+    artifactClass: "production",
+    storeSerialized: serialize(bundle.envelope),
+    manifestSerialized: serialize(bundle.manifest),
+    productionSecurity: input.productionSecurity,
+    hooks: input.hooks,
+  });
+  return readAndInspectWalletStoreV2ProductionBundleDirectory({
+    directory: input.directory,
+    productionSecurity: input.productionSecurity,
+  });
+}
+
+async function readBundleFiles(
+  directory: string,
+  expectedArtifactClass: WalletStoreV2ArtifactClass,
+  productionSecurity?: WalletStoreV2ProductionFileSecurity,
+): Promise<{
   paths: WalletStoreV2BundlePaths;
   storeSerialized: string;
   manifestSerialized: string;
-  bundle: WalletStoreV2FixtureBundle;
+  bundle: WalletStoreV2Bundle;
 }> {
   const paths = walletStoreV2BundlePaths(directory);
   await assertBundlePaths(paths);
+  if (expectedArtifactClass === "production") {
+    if (!productionSecurity) throw new Error("Production Wallet Store v2 requires file security.");
+    await productionSecurity.assertBeforeOpen(paths.directory);
+  } else if (productionSecurity) {
+    throw new Error("Fixture Wallet Store v2 cannot use production file security.");
+  }
   if (!(await pathIsRegularFile(paths.storeFile)) || !(await pathIsRegularFile(paths.manifestFile))) {
     throw new Error("Wallet Store v2 bundle is missing or incomplete.");
   }
-  let storeSerialized: string;
-  let manifestSerialized: string;
+  const [storeSerialized, manifestSerialized] = await Promise.all([
+    readBoundedUtf8(paths.storeFile, MAX_STORE_FILE_BYTES, "Wallet Store v2 encrypted store"),
+    readBoundedUtf8(paths.manifestFile, MAX_MANIFEST_FILE_BYTES, "Wallet Store v2 public manifest"),
+  ]);
   let envelope: unknown;
   let manifest: unknown;
   try {
-    [storeSerialized, manifestSerialized] = await Promise.all([
-      readFile(paths.storeFile, "utf8"),
-      readFile(paths.manifestFile, "utf8"),
-    ]);
     envelope = JSON.parse(storeSerialized);
     manifest = JSON.parse(manifestSerialized);
   } catch {
     throw new Error("Wallet Store v2 bundle is truncated, corrupt, or invalid JSON.");
   }
   const checkedManifest = validateWalletStoreV2PublicManifest(manifest);
-  const checkedEnvelope = validateWalletStoreV2FixtureEnvelope({ value: envelope, manifest: checkedManifest });
+  if (checkedManifest.artifactClass !== expectedArtifactClass) {
+    throw new Error("Wallet Store v2 artifact class does not match the selected API.");
+  }
+  const checkedEnvelope = validateWalletStoreV2Envelope({ value: envelope, manifest: checkedManifest });
   return {
     paths,
     storeSerialized,
     manifestSerialized,
-    bundle: { fixtureOnly: true, envelope: checkedEnvelope, manifest: checkedManifest },
+    bundle: expectedArtifactClass === "fixture"
+      ? { artifactClass: "fixture", envelope: checkedEnvelope, manifest: checkedManifest }
+      : { artifactClass: "production", envelope: checkedEnvelope, manifest: checkedManifest },
   };
 }
 
 export async function readAndInspectWalletStoreV2FixtureBundleDirectory(
   directory: string,
 ): Promise<WalletStoreV2PublicInspection> {
-  return inspectWalletStoreV2FixtureBundle((await readBundleFiles(directory)).bundle);
+  const { bundle } = await readBundleFiles(directory, "fixture");
+  return inspectWalletStoreV2FixtureBundle(bundle as WalletStoreV2FixtureBundle);
+}
+
+export async function readAndInspectWalletStoreV2ProductionBundleDirectory(input: {
+  directory: string;
+  productionSecurity: WalletStoreV2ProductionFileSecurity;
+}): Promise<WalletStoreV2PublicInspection> {
+  const { bundle } = await readBundleFiles(input.directory, "production", input.productionSecurity);
+  return inspectWalletStoreV2ProductionBundle(bundle as WalletStoreV2ProductionBundle);
+}
+
+function trustedIdentityWithoutFingerprint(
+  identity: TrustedWalletStoreIdentity,
+): Omit<TrustedWalletStoreIdentity, "fingerprint"> {
+  return Object.fromEntries(
+    Object.entries(identity).filter(([key]) => key !== "fingerprint"),
+  ) as unknown as Omit<TrustedWalletStoreIdentity, "fingerprint">;
+}
+
+export function buildTrustedWalletStoreIdentity(
+  manifestInput: WalletStoreV2PublicManifest,
+): TrustedWalletStoreIdentity {
+  const manifest = validateWalletStoreV2PublicManifest(manifestInput);
+  const base: Omit<TrustedWalletStoreIdentity, "fingerprint"> = {
+    formatVersion: 1,
+    purpose: TRUSTED_IDENTITY_PURPOSE,
+    artifactClass: manifest.artifactClass,
+    storeFormatVersion: 2,
+    storeId: manifest.store.storeId,
+    chainId: "84532",
+    contractAddress: manifest.contractAddress,
+    tokenAddress: manifest.tokenAddress,
+    checkpointId: CHECKPOINT_ID,
+    baselineCount: "5",
+    targetCount: "20",
+    recordCount: 15,
+    bindingFingerprint: manifest.store.bindingFingerprint,
+    encryptedStoreFingerprint: manifest.store.encryptedStoreFingerprint,
+    manifestFingerprint: manifest.fingerprint,
+  };
+  return { ...base, fingerprint: digest(base) };
+}
+
+export function validateTrustedWalletStoreIdentity(value: unknown): TrustedWalletStoreIdentity {
+  const identity = exactObject(value, [
+    "formatVersion", "purpose", "artifactClass", "storeFormatVersion", "storeId", "chainId",
+    "contractAddress", "tokenAddress", "checkpointId", "baselineCount", "targetCount",
+    "recordCount", "bindingFingerprint", "encryptedStoreFingerprint", "manifestFingerprint",
+    "fingerprint",
+  ], "Trusted Wallet Store v2 identity");
+  if (
+    identity.formatVersion !== 1 || identity.purpose !== TRUSTED_IDENTITY_PURPOSE ||
+    (identity.artifactClass !== "fixture" && identity.artifactClass !== "production") ||
+    identity.storeFormatVersion !== 2 || !isUuid(identity.storeId) || identity.chainId !== "84532" ||
+    identity.checkpointId !== CHECKPOINT_ID || identity.baselineCount !== "5" ||
+    identity.targetCount !== "20" || identity.recordCount !== 15 ||
+    !isEvmAddress(identity.contractAddress) ||
+    getAddress(identity.contractAddress) !== getAddress(GUARDED_CHECKPOINT_20_CONTRACT) ||
+    !isEvmAddress(identity.tokenAddress) ||
+    getAddress(identity.tokenAddress) !== getAddress(GUARDED_CHECKPOINT_20_TOKEN)
+  ) throw new Error("Trusted Wallet Store v2 identity is invalid.");
+  const normalized: TrustedWalletStoreIdentity = {
+    formatVersion: 1,
+    purpose: TRUSTED_IDENTITY_PURPOSE,
+    artifactClass: identity.artifactClass,
+    storeFormatVersion: 2,
+    storeId: identity.storeId,
+    chainId: "84532",
+    contractAddress: getAddress(GUARDED_CHECKPOINT_20_CONTRACT),
+    tokenAddress: getAddress(GUARDED_CHECKPOINT_20_TOKEN),
+    checkpointId: CHECKPOINT_ID,
+    baselineCount: "5",
+    targetCount: "20",
+    recordCount: 15,
+    bindingFingerprint: requireDigest(identity.bindingFingerprint, "Trusted binding fingerprint"),
+    encryptedStoreFingerprint: requireDigest(identity.encryptedStoreFingerprint, "Trusted store fingerprint"),
+    manifestFingerprint: requireDigest(identity.manifestFingerprint, "Trusted manifest fingerprint"),
+    fingerprint: requireDigest(identity.fingerprint, "Trusted identity fingerprint"),
+  };
+  if (digest(trustedIdentityWithoutFingerprint(normalized)) !== normalized.fingerprint) {
+    throw new Error("Trusted Wallet Store v2 identity fingerprint mismatch.");
+  }
+  return normalized;
+}
+
+function assertInspectionMatchesTrustedIdentity(
+  inspection: WalletStoreV2PublicInspection,
+  expectedInput: TrustedWalletStoreIdentity,
+): TrustedWalletStoreIdentity {
+  const expected = validateTrustedWalletStoreIdentity(expectedInput);
+  if (
+    inspection.artifactClass !== expected.artifactClass || inspection.storeId !== expected.storeId ||
+    inspection.chainId !== expected.chainId || inspection.contractAddress !== expected.contractAddress ||
+    inspection.tokenAddress !== expected.tokenAddress || inspection.checkpointId !== expected.checkpointId ||
+    inspection.baselineCount !== expected.baselineCount || inspection.targetCount !== expected.targetCount ||
+    inspection.recordCount !== expected.recordCount ||
+    inspection.bindingFingerprint !== expected.bindingFingerprint ||
+    inspection.encryptedStoreFingerprint !== expected.encryptedStoreFingerprint ||
+    inspection.manifestFingerprint !== expected.manifestFingerprint
+  ) throw new Error("Wallet Store v2 does not match the independently trusted identity.");
+  return expected;
 }
 
 function buildBackupMetadata(inspection: WalletStoreV2PublicInspection): WalletStoreV2BackupMetadata {
   const base: Omit<WalletStoreV2BackupMetadata, "fingerprint"> = {
     formatVersion: 1,
     purpose: BACKUP_PURPOSE,
-    fixtureOnly: true,
+    artifactClass: inspection.artifactClass,
     storeId: inspection.storeId,
     bindingFingerprint: inspection.bindingFingerprint,
     encryptedStoreFingerprint: inspection.encryptedStoreFingerprint,
@@ -1088,7 +1757,7 @@ function buildBackupMetadata(inspection: WalletStoreV2PublicInspection): WalletS
 
 function validateBackupMetadata(value: unknown, inspection: WalletStoreV2PublicInspection): WalletStoreV2BackupMetadata {
   const metadata = exactObject(value, [
-    "formatVersion", "purpose", "fixtureOnly", "storeId", "bindingFingerprint",
+    "formatVersion", "purpose", "artifactClass", "storeId", "bindingFingerprint",
     "encryptedStoreFingerprint", "manifestFingerprint", "storeFile", "manifestFile", "fingerprint",
   ], "Wallet Store v2 backup metadata");
   const expected = buildBackupMetadata(inspection);
@@ -1101,7 +1770,7 @@ function validateBackupMetadata(value: unknown, inspection: WalletStoreV2PublicI
 function backupReceipt(inspection: WalletStoreV2PublicInspection): WalletStoreV2BackupReceipt {
   return assertWalletStoreV2PublicOutput({
     kind: "wallet-store-v2-backup-receipt",
-    fixtureOnly: true,
+    artifactClass: inspection.artifactClass,
     storeId: inspection.storeId,
     bindingFingerprint: inspection.bindingFingerprint,
     encryptedStoreFingerprint: inspection.encryptedStoreFingerprint,
@@ -1114,18 +1783,23 @@ export async function createWalletStoreV2FixtureBackup(input: {
   sourceDirectory: string;
   backupDirectory: string;
 }): Promise<WalletStoreV2BackupReceipt> {
-  const source = await readBundleFiles(input.sourceDirectory);
-  const inspection = inspectWalletStoreV2FixtureBundle(source.bundle);
+  const source = await readBundleFiles(input.sourceDirectory, "fixture");
+  const inspection = inspectWalletStoreV2FixtureBundle(source.bundle as WalletStoreV2FixtureBundle);
   const metadata = buildBackupMetadata(inspection);
   await writeSerializedBundleDirectory({
     directory: input.backupDirectory,
+    artifactClass: "fixture",
     storeSerialized: source.storeSerialized,
     manifestSerialized: source.manifestSerialized,
     backupMetadataSerialized: serialize(metadata),
   });
-  const backup = await readBundleFiles(input.backupDirectory);
-  const backupInspection = inspectWalletStoreV2FixtureBundle(backup.bundle);
-  const metadataText = await readFile(backup.paths.backupMetadataFile, "utf8");
+  const backup = await readBundleFiles(input.backupDirectory, "fixture");
+  const backupInspection = inspectWalletStoreV2FixtureBundle(backup.bundle as WalletStoreV2FixtureBundle);
+  const metadataText = await readBoundedUtf8(
+    backup.paths.backupMetadataFile,
+    MAX_BACKUP_METADATA_BYTES,
+    "Wallet Store v2 backup metadata",
+  );
   let parsedMetadata: unknown;
   try {
     parsedMetadata = JSON.parse(metadataText);
@@ -1139,18 +1813,25 @@ export async function createWalletStoreV2FixtureBackup(input: {
 export async function restoreWalletStoreV2FixtureBackup(input: {
   backupDirectory: string;
   restoreDirectory: string;
+  expectedIdentity: TrustedWalletStoreIdentity;
 }): Promise<WalletStoreV2BackupReceipt> {
-  const backup = await readBundleFiles(input.backupDirectory);
-  const inspection = inspectWalletStoreV2FixtureBundle(backup.bundle);
+  const backup = await readBundleFiles(input.backupDirectory, "fixture");
+  const inspection = inspectWalletStoreV2FixtureBundle(backup.bundle as WalletStoreV2FixtureBundle);
+  assertInspectionMatchesTrustedIdentity(inspection, input.expectedIdentity);
   let parsedMetadata: unknown;
   try {
-    parsedMetadata = JSON.parse(await readFile(backup.paths.backupMetadataFile, "utf8"));
+    parsedMetadata = JSON.parse(await readBoundedUtf8(
+      backup.paths.backupMetadataFile,
+      MAX_BACKUP_METADATA_BYTES,
+      "Wallet Store v2 backup metadata",
+    ));
   } catch {
     throw new Error("Wallet Store v2 backup metadata is missing or corrupt.");
   }
   validateBackupMetadata(parsedMetadata, inspection);
   await writeSerializedBundleDirectory({
     directory: input.restoreDirectory,
+    artifactClass: "fixture",
     storeSerialized: backup.storeSerialized,
     manifestSerialized: backup.manifestSerialized,
   });
@@ -1159,6 +1840,69 @@ export async function restoreWalletStoreV2FixtureBackup(input: {
     restored.encryptedStoreFingerprint !== inspection.encryptedStoreFingerprint ||
     restored.manifestFingerprint !== inspection.manifestFingerprint
   ) throw new Error("Wallet Store v2 restored bundle fingerprint mismatch.");
+  assertInspectionMatchesTrustedIdentity(restored, input.expectedIdentity);
+  return backupReceipt(restored);
+}
+
+export async function createWalletStoreV2ProductionBackup(input: {
+  sourceDirectory: string;
+  backupDirectory: string;
+  expectedIdentity: TrustedWalletStoreIdentity;
+  sourceSecurity: WalletStoreV2ProductionFileSecurity;
+  backupSecurity: WalletStoreV2ProductionFileSecurity;
+}): Promise<WalletStoreV2BackupReceipt> {
+  const source = await readBundleFiles(input.sourceDirectory, "production", input.sourceSecurity);
+  const inspection = inspectWalletStoreV2ProductionBundle(source.bundle as WalletStoreV2ProductionBundle);
+  assertInspectionMatchesTrustedIdentity(inspection, input.expectedIdentity);
+  const metadata = buildBackupMetadata(inspection);
+  await writeSerializedBundleDirectory({
+    directory: input.backupDirectory,
+    artifactClass: "production",
+    storeSerialized: source.storeSerialized,
+    manifestSerialized: source.manifestSerialized,
+    backupMetadataSerialized: serialize(metadata),
+    productionSecurity: input.backupSecurity,
+  });
+  const backup = await readBundleFiles(input.backupDirectory, "production", input.backupSecurity);
+  const backupInspection = inspectWalletStoreV2ProductionBundle(backup.bundle as WalletStoreV2ProductionBundle);
+  assertInspectionMatchesTrustedIdentity(backupInspection, input.expectedIdentity);
+  const metadataText = await readBoundedUtf8(
+    backup.paths.backupMetadataFile,
+    MAX_BACKUP_METADATA_BYTES,
+    "Wallet Store v2 backup metadata",
+  );
+  validateBackupMetadata(JSON.parse(metadataText), backupInspection);
+  return backupReceipt(backupInspection);
+}
+
+export async function restoreWalletStoreV2ProductionBackup(input: {
+  backupDirectory: string;
+  restoreDirectory: string;
+  expectedIdentity: TrustedWalletStoreIdentity;
+  backupSecurity: WalletStoreV2ProductionFileSecurity;
+  restoreSecurity: WalletStoreV2ProductionFileSecurity;
+}): Promise<WalletStoreV2BackupReceipt> {
+  const backup = await readBundleFiles(input.backupDirectory, "production", input.backupSecurity);
+  const inspection = inspectWalletStoreV2ProductionBundle(backup.bundle as WalletStoreV2ProductionBundle);
+  assertInspectionMatchesTrustedIdentity(inspection, input.expectedIdentity);
+  const metadataText = await readBoundedUtf8(
+    backup.paths.backupMetadataFile,
+    MAX_BACKUP_METADATA_BYTES,
+    "Wallet Store v2 backup metadata",
+  );
+  validateBackupMetadata(JSON.parse(metadataText), inspection);
+  await writeSerializedBundleDirectory({
+    directory: input.restoreDirectory,
+    artifactClass: "production",
+    storeSerialized: backup.storeSerialized,
+    manifestSerialized: backup.manifestSerialized,
+    productionSecurity: input.restoreSecurity,
+  });
+  const restored = await readAndInspectWalletStoreV2ProductionBundleDirectory({
+    directory: input.restoreDirectory,
+    productionSecurity: input.restoreSecurity,
+  });
+  assertInspectionMatchesTrustedIdentity(restored, input.expectedIdentity);
   return backupReceipt(restored);
 }
 
@@ -1173,7 +1917,7 @@ export async function withDecryptedWalletStoreV2FixtureRecord(input: {
   let plaintext: Buffer | null = null;
   let session: WalletStoreV2DecryptedSession | null = null;
   try {
-    const { bundle } = await readBundleFiles(input.directory);
+    const { bundle } = await readBundleFiles(input.directory, "fixture");
     if (!Number.isSafeInteger(input.index) || input.index < 0 || input.index >= 15) {
       throw new Error("Wallet Store v2 selected index is invalid.");
     }
@@ -1187,6 +1931,8 @@ export async function withDecryptedWalletStoreV2FixtureRecord(input: {
     const iv = base64(record.iv, IV_LENGTH, "Wallet Store v2 selected IV");
     const tag = base64(record.authenticationTag, AUTH_TAG_LENGTH, "Wallet Store v2 selected authentication tag");
     const ciphertext = base64(record.ciphertext, KEY_LENGTH, "Wallet Store v2 selected ciphertext");
+    let updatePlaintext: Buffer | null = null;
+    let finalPlaintext: Buffer | null = null;
     try {
       const decipher = createDecipheriv(CIPHER, key, iv, { authTagLength: AUTH_TAG_LENGTH });
       decipher.setAAD(aad({
@@ -1195,9 +1941,13 @@ export async function withDecryptedWalletStoreV2FixtureRecord(input: {
         address: record.address,
       }));
       decipher.setAuthTag(tag);
-      plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+      updatePlaintext = decipher.update(ciphertext);
+      finalPlaintext = decipher.final();
+      plaintext = Buffer.concat([updatePlaintext, finalPlaintext]);
       input.onRecordDecrypted?.(input.index);
     } finally {
+      updatePlaintext?.fill(0);
+      finalPlaintext?.fill(0);
       iv.fill(0);
       tag.fill(0);
       ciphertext.fill(0);
@@ -1214,7 +1964,7 @@ export async function withDecryptedWalletStoreV2FixtureRecord(input: {
     session.destroy();
     return assertWalletStoreV2PublicOutput({
       kind: "wallet-store-v2-session-receipt",
-      fixtureOnly: true,
+      artifactClass: "fixture",
       storeId: bundle.envelope.storeId,
       index: input.index,
       address: derivedAddress,
@@ -1232,12 +1982,93 @@ export async function withDecryptedWalletStoreV2FixtureRecord(input: {
   }
 }
 
-export function buildGuardedCheckpoint20ManifestFromWalletStoreV2(
+export async function verifyDecryptedWalletStoreV2ProductionRecord(input: {
+  directory: string;
+  index: number;
+  passwordProvider: ProductionTtyPasswordProvider;
+  productionSecurity: WalletStoreV2ProductionFileSecurity;
+  expectedIdentity: TrustedWalletStoreIdentity;
+}): Promise<WalletStoreV2SessionReceipt> {
+  if (!(input.passwordProvider instanceof ProductionTtyPasswordProvider)) {
+    throw new Error("Production Wallet Store v2 rejects injected or fixture password providers.");
+  }
+  let key: Buffer | null = null;
+  let plaintext: Buffer | null = null;
+  let updatePlaintext: Buffer | null = null;
+  let finalPlaintext: Buffer | null = null;
+  try {
+    const { bundle } = await readBundleFiles(input.directory, "production", input.productionSecurity);
+    const productionBundle = bundle as WalletStoreV2ProductionBundle;
+    const inspection = inspectWalletStoreV2ProductionBundle(productionBundle);
+    assertInspectionMatchesTrustedIdentity(inspection, input.expectedIdentity);
+    if (!Number.isSafeInteger(input.index) || input.index < 0 || input.index >= 15) {
+      throw new Error("Production Wallet Store v2 selected index is invalid.");
+    }
+    const record = productionBundle.envelope.records[input.index];
+    const salt = base64(productionBundle.envelope.kdfParameters.salt, SALT_LENGTH, "Wallet Store v2 salt");
+    try {
+      key = await input.passwordProvider.withPassword(async (unlockSecret) =>
+        unlockSecret[consumeProductionPassword]((unlockBytes) => deriveKey(unlockBytes, salt)));
+    } finally {
+      salt.fill(0);
+    }
+    const iv = base64(record.iv, IV_LENGTH, "Wallet Store v2 selected IV");
+    const tag = base64(record.authenticationTag, AUTH_TAG_LENGTH, "Wallet Store v2 selected authentication tag");
+    const ciphertext = base64(record.ciphertext, KEY_LENGTH, "Wallet Store v2 selected ciphertext");
+    try {
+      const decipher = createDecipheriv(CIPHER, key, iv, { authTagLength: AUTH_TAG_LENGTH });
+      decipher.setAAD(aad({
+        bindingFingerprint: productionBundle.envelope.bindingFingerprint,
+        index: input.index,
+        address: record.address,
+      }));
+      decipher.setAuthTag(tag);
+      updatePlaintext = decipher.update(ciphertext);
+      finalPlaintext = decipher.final();
+      plaintext = Buffer.concat([updatePlaintext, finalPlaintext]);
+    } finally {
+      updatePlaintext?.fill(0);
+      finalPlaintext?.fill(0);
+      iv.fill(0);
+      tag.fill(0);
+      ciphertext.fill(0);
+    }
+    const derivedAddress = deriveAddress(plaintext);
+    if (
+      derivedAddress !== record.address ||
+      derivedAddress !== productionBundle.manifest.candidates[input.index].address
+    ) throw new Error("Production Wallet Store v2 selected address verification failed.");
+    return assertWalletStoreV2PublicOutput({
+      kind: "wallet-store-v2-session-receipt",
+      artifactClass: "production",
+      storeId: productionBundle.envelope.storeId,
+      index: input.index,
+      address: derivedAddress,
+      manifestFingerprint: productionBundle.manifest.fingerprint,
+      addressVerified: true,
+      sessionClosed: true,
+    }) as WalletStoreV2SessionReceipt;
+  } catch {
+    throw new Error("Production Wallet Store v2 verification failed without exposing secret material.");
+  } finally {
+    updatePlaintext?.fill(0);
+    finalPlaintext?.fill(0);
+    plaintext?.fill(0);
+    key?.fill(0);
+  }
+}
+
+function buildGuardedCheckpoint20ManifestForArtifactClass(
   manifestInput: WalletStoreV2PublicManifest,
+  expectedArtifactClass: WalletStoreV2ArtifactClass,
 ): GuardedCheckpoint20Manifest {
   const manifest = validateWalletStoreV2PublicManifest(manifestInput);
+  if (manifest.artifactClass !== expectedArtifactClass) {
+    throw new Error(`Wallet Store v2 ${manifest.artifactClass} artifact is rejected by the ${expectedArtifactClass} binding.`);
+  }
   const storeBinding: GuardedCheckpoint20StoreBinding = {
     formatVersion: 2,
+    artifactClass: manifest.artifactClass,
     storeId: manifest.store.storeId,
     publicFingerprint: manifest.fingerprint,
     selectedRecordDecryption: true,
@@ -1247,6 +2078,18 @@ export function buildGuardedCheckpoint20ManifestFromWalletStoreV2(
     addresses: manifest.candidates.map((candidate) => candidate.address),
     storeBinding,
   });
+}
+
+export function buildFixtureGuardedCheckpoint20ManifestFromWalletStoreV2(
+  manifestInput: WalletStoreV2PublicManifest,
+): GuardedCheckpoint20Manifest {
+  return buildGuardedCheckpoint20ManifestForArtifactClass(manifestInput, "fixture");
+}
+
+export function buildProductionGuardedCheckpoint20ManifestFromWalletStoreV2(
+  manifestInput: WalletStoreV2PublicManifest,
+): GuardedCheckpoint20Manifest {
+  return buildGuardedCheckpoint20ManifestForArtifactClass(manifestInput, "production");
 }
 
 export function walletStoreV2FixtureSecuritySummary(): {

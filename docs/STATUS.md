@@ -2,10 +2,10 @@
 
 Last reviewed: 2026-08-08
 
-Branch reviewed: `codex/pop33-wallet-store-v2`
+Branch reviewed: `codex/pop33-wallet-store-v2-hardening`
 
-Wallet Store v2 source baseline reviewed:
-`3048ee664b9e5096cfcb96e46c9160c7f6603469`
+Wallet Store v2 hardening source baseline:
+`0d494e61bed4e266b0547776104bb7433e18ae3b`
 
 Status: active development
 
@@ -137,25 +137,31 @@ write exists in this milestone. No real candidate, wallet store, wallet,
 manifest, checkpoint journal, funding plan, or execution authorization was
 created.
 
-A separate fixture/local Wallet Store v2 implementation is now prepared on
-`codex/pop33-wallet-store-v2`. It binds exactly 15 independently authenticated
-AES-256-GCM records to Base Sepolia, the current POP33 and dUSDC deployments,
-the ordered public manifest, and checkpoint `5 -> 20`. Its callback API
-decrypts and address-verifies exactly one selected record at a time, rejects
-secret serialization and callback return values, clears temporary secret
-buffers, and returns only strictly allowlisted public receipts. Store and
-manifest commit together through an atomic create-only directory rename; an
-encrypted create-only backup and fingerprint-checked restore are covered by
-local fixtures. No real-wallet generator, password CLI/environment input,
-wallet client, signer, RPC transport, or transaction primitive was added.
+A hardened Wallet Store v2 implementation is now prepared on
+`codex/pop33-wallet-store-v2-hardening`. Fixture and production artifacts carry
+distinct `artifactClass` values through the encrypted header, public manifest,
+fingerprints, runner binding, backup metadata, inspections, and receipts; both
+API families reject cross-use and there is no conversion. The production
+boundary adds a hidden raw-TTY password provider, a ceremony-gated Node CSPRNG
+generator for 15 independent keys, Windows create-only canonical-path/reparse
+and fail-closed ACL controls, independently supplied trusted backup identity,
+bounded parsing, authenticated-decrypt cleanup, and controlled orphan-temp
+cleanup. The production verifier performs only trusted identity, path/ACL,
+hidden unlock, one-record decryption, address comparison, cleanup, and a public
+receipt; it exposes no arbitrary callback, signer, wallet client, RPC write, or
+transaction transport.
 
-Full execution remains blocked pending an independent review of Wallet Store
-v2, an explicitly authorized real-record creation and backup ceremony, a
-hidden/OS-backed password input, a minimal selected-record signer callback,
-complete journal-v2 integration and semantic receipt reconciliation, real
-dual-source finality, a global run lock, non-null phase evidence, promoted
-readiness blockers, aggregate fee/funding enforcement, and separate
-authorization for one batch.
+Only deterministic fixture records and fake ACL adapters were used in this
+milestone. The production generator and hidden prompt were not run. No real
+wallet, password, store, manifest, trusted identity, backup, protected Piotr
+directory, signer, or transaction was created.
+
+Full execution remains blocked pending independent review of this hardening,
+a separately authorized real-record creation and backup ceremony, a future
+minimal internal trusted action, complete journal-v2 integration and semantic
+receipt reconciliation, real dual-source finality, a global run lock, non-null
+phase evidence, promoted readiness blockers, aggregate fee/funding enforcement,
+and separate authorization for one batch.
 
 The complete reviewed operator stack and reconciled preparation status are
 included in `codex/pop33-recovery` from source baseline

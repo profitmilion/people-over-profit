@@ -1,138 +1,169 @@
 # POP33 Wallet Store v2
 
-Status: fixture/local implementation prepared for review. No real checkpoint-20
-wallet store or wallet exists.
+Status: hardened fixture and production boundaries prepared for independent
+review. No production ceremony has been run. No real checkpoint-20 wallet,
+password, store, manifest, trusted identity, or backup exists.
 
-## What this is
+## Scope and three separate stages
 
-The encrypted wallet store is the future private file that will hold the
-minimum key material for the 15 checkpoint-20 candidates. The public manifest
-is a separate file containing only candidate indices, public addresses,
-deployment identity, checkpoint identity, and fingerprints.
+Wallet Store v2 is the future private persistence boundary for the 15
+checkpoint-20 candidates. The encrypted store contains one independently
+authenticated private-key record per candidate. Its separate public manifest
+contains only candidate indices, public addresses, deployment/checkpoint
+identity, artifact class, and fingerprints.
 
-Private keys never belong in the repository. The future real bundle is planned
-for an external directory such as `%LOCALAPPDATA%\POP33\operator\...`; this
-milestone creates and tests bundles only below temporary fixture directories.
-The repository ignores Wallet Store v2 store, manifest, backup, and bundle
-names as an additional defense against accidental staging.
+The stages below are independent authorization boundaries. Completing one does
+not authorize the next.
 
-## What was reused and what changed from v1
+### Fixture
 
-Reused:
+Fixture mode exists only for local automated tests. It requires the literal
+`POP33_WALLET_STORE_V2_TEST_FIXTURE_ONLY`, accepts deterministic test records,
+uses temporary external directories, and exposes the deliberately fixture-only
+callback harness used by leakage tests.
 
-- Node.js `scrypt` and AES-256-GCM rather than custom cryptography;
-- the existing external-path and atomic private-file helpers;
-- strict object validation, normalized EVM addresses, canonical fingerprints,
-  and checkpoint-20 manifest binding.
+Every fixture envelope, public manifest, binding, runner store binding, backup
+metadata, inspection, and receipt carries `artifactClass: "fixture"`. The
+production validators and production runner binding reject it. Changing only
+the artifact class changes the binding fingerprint and invalidates the bundle;
+there is no fixture-to-production conversion.
 
-Changed:
+### Production ceremony
 
-- v1 decrypts a single ciphertext containing every wallet and builds all
-  `Wallet` objects in memory;
-- v2 encrypts every record independently and decrypts only the selected index;
-- v2 has no `Wallet`, provider, signer, RPC, signature, or transaction API;
-- fixture creation is protected by the literal
-  `POP33_WALLET_STORE_V2_TEST_FIXTURE_ONLY`; there is no real-wallet generator.
+Production ceremony means creating 15 new, independent, unfunded Base Sepolia
+wallets and their encrypted store. The code boundary is prepared, but the
+ceremony is not authorized and has not been executed.
 
-## Cryptographic format
+The prepared production path requires all of the following together:
 
-- version: `2`;
+1. the production ceremony authorization gate;
+2. Node.js cryptographic `randomBytes(32)` for every independent private key,
+   with no mnemonic, deterministic seed, shared seed, or `Math.random()`
+   fallback;
+3. a hidden raw-TTY password prompt with confirmation; production APIs reject
+   injected/fixture password providers;
+4. a production bundle carrying `artifactClass: "production"` through every
+   identity and fingerprint;
+5. an absolute, canonical Windows path below the approved `%LOCALAPPDATA%`
+   root and outside the repository, worktrees, OneDrive, and known synchronized
+   directories;
+6. no symlink, junction, or other reparse point in the path;
+7. create-only persistence with ACL inheritance disabled and access restricted
+   to the current user, SYSTEM, and local Administrators;
+8. fail-closed ACL and canonical-path verification before creation, after the
+   atomic commit, and before every production open;
+9. a separately retained `TrustedWalletStoreIdentity` checked before backup,
+   restore, or selected-record verification.
+
+The intended root is:
+
+`%LOCALAPPDATA%\POP33\operator\checkpoint-20`
+
+Do not put the production root or backup in the repository, a worktree,
+OneDrive, Dropbox, Google Drive, a shared folder, or another synchronization
+root. Do not create the real root until a separately approved ceremony names
+the exact active-store path, backup path, trusted-identity custody, and human
+verification steps.
+
+The password is accepted only from the hidden interactive TTY provider. It is
+not accepted through command arguments, environment variables, `.env`, a
+PowerShell literal/history entry, a file, journal, stdout, or stderr. The
+current implementation uses mutable buffers where possible and clears them in
+`finally`. JavaScript/V8 does not guarantee complete zeroization; the short
+immutable hex string required by ethers address derivation is explicitly
+limited in lifetime and is never retained or logged.
+
+### Execute
+
+Execute is a separate, later milestone. Wallet Store v2 currently has no
+wallet client, signer, transaction sender, or RPC-write transport. Its minimal
+production verification flow stops after:
+
+production store -> trusted identity check -> ACL/path check -> hidden unlock
+-> decrypt one record -> derive address -> compare manifest -> public receipt
+-> cleanup
+
+There is no arbitrary callback in the production verification API. A future
+internal trusted action must be separately designed, reviewed, and connected
+only after the runner execute blockers listed below are resolved.
+
+## Cryptographic and identity format
+
+- format version: `2`;
 - KDF: Node.js `scrypt`, `N=65536`, `r=8`, `p=1`, random 16-byte store salt;
 - cipher: AES-256-GCM;
-- every record has a unique random 12-byte IV and a 16-byte authentication tag;
-- plaintext is only the selected 32-byte fixture key, never a JSON object;
-- authenticated additional data binds version, store ID, ordered public
-  address, index, Base Sepolia `84532`, POP33, dUSDC, and checkpoint `5 -> 20`;
-- record, ordered-set, encrypted-store, binding, and public-manifest
-  fingerprints detect corruption or substitution before use.
+- every record has a unique random 12-byte IV and 16-byte authentication tag;
+- plaintext is exactly one selected 32-byte key, never a JSON wallet set;
+- authenticated data binds artifact class, store ID, ordered address, index,
+  Base Sepolia `84532`, POP33, dUSDC, and checkpoint `5 -> 20`;
+- record, ordered-set, encrypted-store, binding, manifest, backup-metadata, and
+  trusted-identity fingerprints detect corruption and substitution.
 
-The unlock secret is passed as a non-serializable, one-use object. There is no
-CLI password parameter or environment password. A future password reader must
-use a hidden interactive/OS-backed mechanism and clear its temporary memory.
+Parsing is bounded before JSON/KDF/decryption: store, manifest, and backup
+metadata have independent file limits; the record count is exactly 15; encoded
+salt/IV/tag/ciphertext lengths and critical header strings are fixed. Duplicate
+IVs, altered KDF parameters, extra fields, oversized inputs, and malformed
+lengths fail closed.
 
-## One-record session
+## Trusted identity and backup
 
-The fixture API follows this sequence:
+`TrustedWalletStoreIdentity` is public but must come from a trusted source
+outside the backup being restored. It binds version, artifact class, store ID,
+chain, contract, token, checkpoint, record count, store binding, encrypted
+store fingerprint, manifest fingerprint, and its own fingerprint.
 
-1. validate the encrypted bundle and public manifest;
-2. validate candidate index `0..14`;
-3. derive the store key once;
-4. decrypt exactly the selected ciphertext;
-5. derive its public address and compare it with both the record and manifest;
-6. invoke one isolated callback;
-7. reject every callback return value;
-8. zero the plaintext/key buffers and close the session;
-9. return only an allowlisted public receipt.
+A backup cannot declare its own expected identity. Restore requires the
+operator to supply the independently retained identity and rejects substituted,
+stale, wrong-store, wrong-manifest, rollback, and overwrite cases. Store,
+manifest, and public backup metadata remain encrypted/public artifacts only;
+there is no plaintext backup. The password must never be stored beside them.
 
-Secret record, unlock-secret, and decrypted-session objects have private
-fields, no enumerable secret properties, throwing JSON/text conversion, and
-redacted `inspect` output. JavaScript cannot stop a malicious trusted callback
-from copying bytes deliberately, so a later signer adapter must remain a small,
-reviewed callback that never exposes or logs its input.
+Writes use a new temporary directory followed by a same-volume atomic rename.
+An existing active bundle is never replaced. Orphan cleanup is a separate,
+explicit operation: it recognizes only the exact Wallet Store v2 temp naming
+pattern and known encrypted/public files and refuses unknown entries.
 
-## Public output and manifest
+## Fixture callback warning
 
-Public output is a strict allowlist, not arbitrary objects plus regex
-redaction. Every allowed field is validated by type and format. A neutral field
-such as `note` is rejected even if its name does not look secret-bearing.
+The fixture session intentionally proves that an arbitrary callback can copy
+secret bytes through globals, file writes, console output, or thrown values.
+Regex redaction cannot make a malicious callback safe. The fixture harness
+therefore must never become a public production API. Production exposes only
+the internal address-verification operation and an allowlisted public receipt.
 
-The public manifest contains:
+Errors crossing the fixture boundary are replaced with generic secret-free
+errors; `cause`, stack, nested objects, neutral field names, and non-allowlisted
+output fields are rejected or discarded.
 
-- candidate indices `0..14` and ordered public addresses;
-- chain, POP33, dUSDC, baseline `5`, target `20`, and record count `15`;
-- store ID, format version, binding fingerprint, encrypted-store fingerprint,
-  and manifest fingerprint.
+## Never publish or paste
 
-It never contains a private key, mnemonic, seed, unlock secret, salt, IV,
-authentication tag, ciphertext, or decrypted payload. Reordering candidates
-changes the binding and manifest fingerprints and fails closed.
+Piotr must never paste, upload, commit, screenshot, or send:
 
-## Atomic bundle and backup
+- a private key, mnemonic, seed, password, or unlock material;
+- a decrypted record, production secret object, or session object;
+- the real encrypted store or backup unless the destination was explicitly
+  approved for encrypted custody;
+- terminal output that may contain secret material;
+- credential-bearing RPC URLs, wallet configuration, or signer material.
 
-Store and manifest are written into a new private temporary directory, checked,
-and committed together by a same-volume directory rename. Existing bundle
-directories are never overwritten. Interrupted writes remove the temporary
-directory and leave no final partial bundle.
+Only the reviewed public manifest, `TrustedWalletStoreIdentity`, and allowlisted
+public receipts are candidates for normal operator reporting, subject to the
+approved custody procedure.
 
-A fixture backup copies only the encrypted store and public manifest, adds
-public fingerprint metadata, then rereads and verifies the backup. Restore is
-create-only and must reproduce both encrypted-store and manifest fingerprints.
-No plaintext backup exists.
+## Still mandatory before execute
 
-Backups are useful only if both encrypted store and public manifest are
-recoverable and their fingerprints still match. The password must never be
-stored beside either copy.
+Wallet Store v2 does not fix or authorize the runner execute path. The
+following controls remain separate blockers:
 
-## Never share
-
-Never paste or upload any of the following to ChatGPT, GitHub, an issue, a
-runbook, screenshots, or logs:
-
-- private key, mnemonic, seed phrase, password, or unlock material;
-- decrypted record or session object;
-- real encrypted store if its handling policy has not explicitly approved the
-  destination;
-- terminal output that may contain a secret.
-
-Only the reviewed public manifest and public fingerprint receipts are intended
-for normal operator reports.
-
-## Still mandatory before real wallets or execute
-
-This milestone does not authorize real wallet generation. Before creating the
-15 real records, a separate review must approve the real secret-input source,
-hidden password flow, external directory, backup location, recovery procedure,
-permissions, and trusted selected-record callback.
-
-Before any execute-path, all security-review requirements remain mandatory:
-
-1. exact `poolCount === baseline + completedCandidates`;
+1. exact `poolCount === baseline + completedCandidates` enforcement;
 2. transaction journal v2 from prepared through final;
 3. semantic receipt reconciliation;
-4. dual-RPC confirmation depth and canonical block verification;
-5. a real global run lock;
+4. dual-RPC confirmation depth and canonical-block verification;
+5. a real global transaction run lock;
 6. mandatory non-null phase evidence;
 7. critical readiness risks promoted to execute blockers;
-8. aggregate fee and funding budget enforcement.
+8. aggregate fee and funding-budget enforcement.
 
-No item above is implemented or authorized by Wallet Store v2.
+After this hardening commit, the next step is an independent read-only security
+review. It is not a production ceremony and not authorization for a Base
+Sepolia transaction.

@@ -84,6 +84,7 @@ export const GUARDED_CHECKPOINT_20_FUNDING_LIMITS: Exact99FundingLimits = {
 
 export interface GuardedCheckpoint20StoreBinding {
   formatVersion: 2;
+  artifactClass: "fixture" | "production";
   storeId: string;
   publicFingerprint: string;
   selectedRecordDecryption: true;
@@ -275,6 +276,7 @@ export function buildGuardedCheckpoint20Manifest(input: {
   }
   if (
     input.storeBinding.formatVersion !== 2 ||
+    (input.storeBinding.artifactClass !== "fixture" && input.storeBinding.artifactClass !== "production") ||
     input.storeBinding.selectedRecordDecryption !== true ||
     input.storeBinding.externalPathRequired !== true
   ) throw new Error("Checkpoint-20 requires an external selected-record store v2 binding.");

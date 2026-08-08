@@ -14,7 +14,8 @@ import {
   WalletStoreV2FixtureSecretRecord,
   WalletStoreV2FixtureUnlockSecret,
   assertWalletStoreV2PublicOutput,
-  buildGuardedCheckpoint20ManifestFromWalletStoreV2,
+  buildFixtureGuardedCheckpoint20ManifestFromWalletStoreV2,
+  buildTrustedWalletStoreIdentity,
   buildWalletStoreV2FixtureBundle,
   createWalletStoreV2FixtureBackup,
   createWalletStoreV2FixtureBundleDirectory,
@@ -22,7 +23,7 @@ import {
   readAndInspectWalletStoreV2FixtureBundleDirectory,
   restoreWalletStoreV2FixtureBackup,
   validateWalletStoreV2FixtureBundle,
-  validateWalletStoreV2FixtureEnvelope,
+  validateWalletStoreV2Envelope,
   validateWalletStoreV2PublicManifest,
   walletStoreV2BundlePaths,
   walletStoreV2FixtureSecuritySummary,
@@ -268,7 +269,7 @@ describe("Guarded Checkpoint-20 Wallet Store v2", function () {
     assert.throws(() => validateWalletStoreV2PublicManifest(manifestFingerprint), /fingerprint/i);
     const storeFingerprint = structuredClone(bundle.envelope);
     storeFingerprint.encryptedStoreFingerprint = `sha256:${"e".repeat(64)}`;
-    assert.throws(() => validateWalletStoreV2FixtureEnvelope({
+    assert.throws(() => validateWalletStoreV2Envelope({
       value: storeFingerprint,
       manifest: bundle.manifest,
     }), /binding|fingerprint/i);
@@ -284,7 +285,7 @@ describe("Guarded Checkpoint-20 Wallet Store v2", function () {
   it("uses a strict public-output allowlist even when a secret has a neutral field name", function () {
     assert.throws(() => assertWalletStoreV2PublicOutput({
       kind: "wallet-store-v2-session-receipt",
-      fixtureOnly: true,
+      artifactClass: "fixture",
       storeId: STORE_ID,
       index: 0,
       address: candidates()[0].address,
@@ -295,7 +296,7 @@ describe("Guarded Checkpoint-20 Wallet Store v2", function () {
     }), /non-public|unsupported/);
     assert.throws(() => assertWalletStoreV2PublicOutput({
       kind: "wallet-store-v2-session-receipt",
-      fixtureOnly: true,
+      artifactClass: "fixture",
       storeId: STORE_ID,
       index: 0,
       address: `0x${privateKeyBytes(0).toString("hex")}`,
@@ -327,7 +328,7 @@ describe("Guarded Checkpoint-20 Wallet Store v2", function () {
       console.log = originalLog;
       console.error = originalError;
     }
-    const runnerManifest = buildGuardedCheckpoint20ManifestFromWalletStoreV2(bundle.manifest);
+    const runnerManifest = buildFixtureGuardedCheckpoint20ManifestFromWalletStoreV2(bundle.manifest);
     const journal = buildEmptyGuardedCheckpoint20Journal(runnerManifest);
     const publicArtifacts = [
       JSON.stringify(bundle.manifest),
@@ -402,9 +403,14 @@ describe("Guarded Checkpoint-20 Wallet Store v2", function () {
     const sourceDirectory = await temporaryDirectory("source");
     const backupDirectory = await temporaryDirectory("backup");
     const restoreDirectory = await temporaryDirectory("restore");
-    await createWalletStoreV2FixtureBundleDirectory({ directory: sourceDirectory, bundle: await buildBundle() });
+    const bundle = await buildBundle();
+    await createWalletStoreV2FixtureBundleDirectory({ directory: sourceDirectory, bundle });
     const backup = await createWalletStoreV2FixtureBackup({ sourceDirectory, backupDirectory });
-    const restored = await restoreWalletStoreV2FixtureBackup({ backupDirectory, restoreDirectory });
+    const restored = await restoreWalletStoreV2FixtureBackup({
+      backupDirectory,
+      restoreDirectory,
+      expectedIdentity: buildTrustedWalletStoreIdentity(bundle.manifest),
+    });
     assert.equal(backup.backupVerified, true);
     assert.equal(restored.backupVerified, true);
     assert.equal(restored.encryptedStoreFingerprint, backup.encryptedStoreFingerprint);
@@ -419,7 +425,7 @@ describe("Guarded Checkpoint-20 Wallet Store v2", function () {
 
   it("produces a runner-compatible store binding without signer or transaction capability", async function () {
     const bundle = await buildBundle();
-    const runnerManifest = buildGuardedCheckpoint20ManifestFromWalletStoreV2(bundle.manifest);
+    const runnerManifest = buildFixtureGuardedCheckpoint20ManifestFromWalletStoreV2(bundle.manifest);
     assert.equal(runnerManifest.addresses.length, 15);
     assert.equal(runnerManifest.storeBinding.storeId, STORE_ID);
     assert.equal(runnerManifest.storeBinding.publicFingerprint, bundle.manifest.fingerprint);
@@ -433,7 +439,7 @@ describe("Guarded Checkpoint-20 Wallet Store v2", function () {
     });
   });
 
-  it("contains no wallet client, signer, RPC write, transaction or random-wallet generator", async function () {
+  it("contains no wallet client, signer, RPC write, transaction or library wallet/mnemonic generator", async function () {
     const source = await readFile(
       new URL("../scripts/operator/guarded-checkpoint-20-wallet-store-v2.ts", import.meta.url),
       "utf8",

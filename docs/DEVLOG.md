@@ -33,6 +33,70 @@ documentation.
   current overview of implementation, gaps, and risks.
 - Do not guess. Mark unclear facts as requiring later reconstruction.
 
+## 2026-08-08 - Wallet Store v2 security hardening
+
+### At a glance
+
+Wallet Store v2 now has fail-closed fixture/production separation, a prepared
+hidden-unlock and CSPRNG ceremony boundary, Windows production path/ACL checks,
+and independently trusted backup identity. This remediates the five blockers
+from the first security review without creating real wallets or enabling
+execution.
+
+### Completed
+
+- Bound `artifactClass: "fixture" | "production"` into the encrypted header,
+  public manifest, store/runner bindings, fingerprints, backup metadata,
+  inspections, and receipts. Cross-use fails and there is no automatic
+  fixture-to-production conversion.
+- Added a production-only hidden raw-TTY password provider and a ceremony-gated
+  Node CSPRNG generator design for 15 independent keys. Tests never instantiate
+  or run the production generator and use only deterministic fixture records.
+- Added a testable Windows security adapter enforcing an absolute canonical
+  `%LOCALAPPDATA%` root outside worktrees and synchronization roots, no reparse
+  points, create-only writes, protected ACL inheritance, restricted principals,
+  and fail-closed checks before create, after commit, and before open.
+- Added `TrustedWalletStoreIdentity` as an external expected identity for
+  backup/restore and production verification, including rejection of
+  substitution, staleness, wrong store/manifest, rollback, and overwrite.
+- Added bounded file/header/base64 validation, exact 15-record enforcement,
+  duplicate-IV rejection, GCM-failure plaintext cleanup, derived-key and
+  mutable-buffer zeroization, generic error boundaries, and controlled orphan
+  temp cleanup.
+- Reworked the runbook into separate Fixture, Production ceremony, and Execute
+  stages and documented password, ACL, backup-identity, OneDrive, custody, and
+  publication prohibitions.
+
+### Verification
+
+- The focused Wallet Store v2 plus guarded-runner suites passed all 107 tests,
+  including 19 hardening cases.
+- All 705 contract/operator tests passed. Hardhat compilation and the contracts
+  TypeScript `--noEmit` check passed.
+- The root production build and all 29 frontend domain tests passed. Scoped
+  lint for every changed TypeScript implementation/test file passed.
+- No production generator or hidden prompt was run. No real key, wallet,
+  password, store, manifest, trusted identity, backup, ACL-protected Piotr
+  directory, signer, wallet client, public RPC write, blockchain transaction,
+  deployment, or Vercel action was created or executed.
+
+### Limitations and next step
+
+- This hardening still requires an independent read-only security review before
+  any production ceremony.
+- A ceremony, if later approved, must separately define exact active/backup
+  paths, trusted-identity custody, human checks, and recovery rehearsal.
+- Execute remains blocked by exact expected-count enforcement, transaction
+  journal v2, semantic receipt reconciliation, dual-RPC finality, a global run
+  lock, mandatory phase evidence, promoted readiness blockers, and aggregate
+  fee/funding enforcement.
+
+### Git
+
+- Branch: `codex/pop33-wallet-store-v2-hardening`
+- Source baseline: `0d494e61bed4e266b0547776104bb7433e18ae3b`
+- Record message: `fix(operator): harden wallet store v2`
+
 ## 2026-08-08 - Guarded checkpoint-20 Wallet Store v2 prepared
 
 ### At a glance

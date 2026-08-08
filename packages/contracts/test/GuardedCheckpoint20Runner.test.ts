@@ -47,6 +47,7 @@ function manifest(): GuardedCheckpoint20Manifest {
     addresses: Array.from({ length: 15 }, (_, index) => address(index)),
     storeBinding: {
       formatVersion: 2,
+      artifactClass: "fixture",
       storeId: "11111111-1111-4111-8111-111111111111",
       publicFingerprint: `sha256:${"a".repeat(64)}`,
       selectedRecordDecryption: true,

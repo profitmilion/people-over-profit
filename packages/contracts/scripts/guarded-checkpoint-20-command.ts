@@ -25,6 +25,7 @@ function fixtureManifest() {
       getAddress(`0x${(index + 1_000).toString(16).padStart(40, "0")}`)),
     storeBinding: {
       formatVersion: 2,
+      artifactClass: "fixture",
       storeId: "20202020-2020-4020-8020-202020202020",
       publicFingerprint: `sha256:${"2".repeat(64)}`,
       selectedRecordDecryption: true,

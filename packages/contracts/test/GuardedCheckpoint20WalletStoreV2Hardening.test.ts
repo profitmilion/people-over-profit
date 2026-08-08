@@ -266,7 +266,7 @@ describe("Guarded Checkpoint-20 Wallet Store v2 hardening", function () {
       "utf8",
     );
     assert.match(source, /readHiddenTtyBytes/);
-    assert.match(source, /randomBytes\(KEY_LENGTH\)/);
+    assert.match(source, /randomBytes\(32\)/);
     assert.doesNotMatch(source, /process\.argv|process\.env\.(?:PASSWORD|PASS|SECRET)|Math\.random|generateMnemonic|createRandom/);
   });
 
@@ -562,14 +562,15 @@ describe("Guarded Checkpoint-20 Wallet Store v2 hardening", function () {
       adapter,
     }), /must not be inside OneDrive/);
     adapter.reparsePaths.add(resolve(localRoot));
+    const checkpointRoot = join(localRoot, "POP33", "operator", "checkpoint-20");
     const security = new WindowsWalletStoreV2ProductionFileSecurity({
-      rootDirectory: join(localRoot, "POP33"),
+      rootDirectory: checkpointRoot,
       localAppDataDirectory: localRoot,
       workspaceDirectory: resolve(localRoot, "unrelated-workspace"),
       adapter,
     });
     await assert.rejects(
-      security.assertBeforeCreate(join(localRoot, "POP33", `store${WALLET_STORE_V2_BUNDLE_DIRECTORY_SUFFIX}`)),
+      security.assertBeforeCreate(join(checkpointRoot, `store${WALLET_STORE_V2_BUNDLE_DIRECTORY_SUFFIX}`)),
       /reparse point/,
     );
   });

@@ -2,10 +2,10 @@
 
 Last reviewed: 2026-08-08
 
-Branch reviewed: `codex/pop33-wallet-store-v2-hardening`
+Branch reviewed: `codex/pop33-wallet-store-v2-ceremony-hardening`
 
-Wallet Store v2 hardening source baseline:
-`0d494e61bed4e266b0547776104bb7433e18ae3b`
+Wallet Store v2 ceremony-hardening source baseline:
+`8f8f120aedfd6f1ca9be8bcd5f4817e854657867`
 
 Status: active development
 
@@ -138,7 +138,7 @@ manifest, checkpoint journal, funding plan, or execution authorization was
 created.
 
 A hardened Wallet Store v2 implementation is now prepared on
-`codex/pop33-wallet-store-v2-hardening`. Fixture and production artifacts carry
+`codex/pop33-wallet-store-v2-ceremony-hardening`. Fixture and production artifacts carry
 distinct `artifactClass` values through the encrypted header, public manifest,
 fingerprints, runner binding, backup metadata, inspections, and receipts; both
 API families reject cross-use and there is no conversion. The production
@@ -151,13 +151,36 @@ hidden unlock, one-record decryption, address comparison, cleanup, and a public
 receipt; it exposes no arbitrary callback, signer, wallet client, RPC write, or
 transaction transport.
 
-Only deterministic fixture records and fake ACL adapters were used in this
-milestone. The production generator and hidden prompt were not run. No real
+The second independent review's four ceremony blockers are now remediated in
+code for another read-only review. One fail-closed orchestrator validates the
+exact Windows roots and ACL/create-only boundaries before obtaining a hidden
+password or generating exactly 15 keys, then owns active store/manifest,
+independently persisted trusted identity, encrypted backup, backup verification,
+final verification, and public success. Its durable public-only state adds an
+explicit `keys-generating` boundary; only clean pre-generation states may retry,
+while any later incomplete, mismatched, partial, or orphan state blocks
+regeneration and automatic overwrite/cleanup. A complete ceremony is
+reverified and cannot generate a second set.
+
+Production path policy now accepts only
+`%LOCALAPPDATA%\POP33\operator\checkpoint-20` or its exact `active`, `backup`,
+and `identity` children. Hidden TTY handling covers data, EOF/end, close, error,
+Ctrl+C/SIGINT, no TTY, byte overflow, Unicode byte limits, backspace, CR/LF,
+and confirmation mismatch with one settlement, listener/raw-mode cleanup, and
+mutable-buffer clearing. Injected test entropy covers invalid scalar,
+duplicate key/address, derivation and normalization failure, Nth-record failure,
+and cleanup; production remains bound to `crypto.randomBytes(32)` and was not
+run. A real PowerShell/icacls integration test passed against only a disposable
+checkpoint-shaped temporary tree, never Piotr's production root.
+
+Only deterministic production-format fixture records were used for ceremony,
+backup/restore, crash, and one-record isolation tests. The production generator
+and real hidden prompt were not run. No real
 wallet, password, store, manifest, trusted identity, backup, protected Piotr
 directory, signer, or transaction was created.
 
-Full execution remains blocked pending independent review of this hardening,
-a separately authorized real-record creation and backup ceremony, a future
+Full execution remains blocked pending a third independent review of this
+ceremony hardening, a separately authorized real-record creation and backup ceremony, a future
 minimal internal trusted action, complete journal-v2 integration and semantic
 receipt reconciliation, real dual-source finality, a global run lock, non-null
 phase evidence, promoted readiness blockers, aggregate fee/funding enforcement,

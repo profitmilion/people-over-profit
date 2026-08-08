@@ -1,7 +1,9 @@
 # POP33 Wallet Store v2
 
-Status: hardened fixture and production boundaries prepared for independent
-review. No production ceremony has been run. No real checkpoint-20 wallet,
+Status: ceremony-hardened fixture and production boundaries prepared for a
+third independent read-only review. The production entrypoint has no CLI or
+package script and remains operationally disabled. No production ceremony has
+been run. No real checkpoint-20 wallet,
 password, store, manifest, trusted identity, or backup exists.
 
 ## Scope and three separate stages
@@ -44,9 +46,9 @@ The prepared production path requires all of the following together:
    injected/fixture password providers;
 4. a production bundle carrying `artifactClass: "production"` through every
    identity and fingerprint;
-5. an absolute, canonical Windows path below the approved `%LOCALAPPDATA%`
-   root and outside the repository, worktrees, OneDrive, and known synchronized
-   directories;
+5. an exact canonical Windows checkpoint root or one of its allowlisted
+   `active`, `backup`, or `identity` children, outside the repository,
+   worktrees, OneDrive, and known synchronized directories;
 6. no symlink, junction, or other reparse point in the path;
 7. create-only persistence with ACL inheritance disabled and access restricted
    to the current user, SYSTEM, and local Administrators;
@@ -59,11 +61,72 @@ The intended root is:
 
 `%LOCALAPPDATA%\POP33\operator\checkpoint-20`
 
+The only allowlisted children are:
+
+- `%LOCALAPPDATA%\POP33\operator\checkpoint-20\active`;
+- `%LOCALAPPDATA%\POP33\operator\checkpoint-20\backup`;
+- `%LOCALAPPDATA%\POP33\operator\checkpoint-20\identity`.
+
+The policy rejects `%LOCALAPPDATA%`, `%LOCALAPPDATA%\POP33`, the `operator`
+parent, arbitrary descendants, and similar-prefix paths before any ACL is
+changed. Active and backup bundle names are fixed below their respective
+children. The independently trusted identity and public ceremony state have
+fixed filenames below `identity`.
+
 Do not put the production root or backup in the repository, a worktree,
 OneDrive, Dropbox, Google Drive, a shared folder, or another synchronization
 root. Do not create the real root until a separately approved ceremony names
 the exact active-store path, backup path, trusted-identity custody, and human
 verification steps.
+
+## Production ceremony orchestrator and durable state
+
+One narrow library orchestrator now owns the complete production ordering:
+
+environment/authentication precheck -> exact active/backup/identity path and
+ACL validation -> hidden password and confirmation -> exactly 15 independent
+keys -> encrypted store and public manifest -> independently persisted
+`TrustedWalletStoreIdentity` -> encrypted backup -> backup verification against
+that external identity -> final active/backup/identity reread -> `complete`.
+
+There is deliberately no `npm run ceremony`, launcher, or enabled CLI. Calling
+the library entrypoint for real remains prohibited until a later independent
+review returns GO and Piotr separately authorizes the ceremony.
+
+The durable public-only state machine is:
+
+`prepared -> paths-verified -> keys-generating -> keys-generated ->
+store-written -> identity-written -> backup-written -> backup-verified ->
+final-verified -> complete`
+
+The state contains paths, timestamps, revision, stage, public trusted identity,
+and fingerprints only. It never contains a password, private key, plaintext
+record, derived key, or decrypted material. Final public success contains only
+the store ID, three public fingerprints, 15 public addresses, and fixed active,
+backup, identity, and state paths.
+
+The active bundle atomically includes a public ceremony metadata record. It
+binds the store ID to the fixed external trusted-identity/state paths and the
+trusted-identity fingerprint. The backup intentionally does not become the
+source of expected identity; restore still requires the independently retained
+identity file.
+
+Crash policy is intentionally conservative:
+
+- `prepared` or `paths-verified`, with no material or orphan artifacts, may be
+  revalidated and retried;
+- `keys-generating` or any later incomplete stage blocks regeneration and
+  requires an explicit operator recovery procedure;
+- active-without-manifest, store/manifest-without-identity,
+  identity-without-backup, unverified backup, unknown/orphan temp content, and
+  mismatched state/artifacts all fail closed;
+- a complete existing ceremony is reverified against the independent identity
+  and blocks generation of a second wallet set;
+- no partial artifact is overwritten or deleted automatically.
+
+Do not manually delete an incomplete state, bundle, identity, backup, lock, or
+orphan directory. Preserve it for incident analysis and follow a separately
+reviewed recovery/cleanup procedure. Blind resume is forbidden.
 
 The password is accepted only from the hidden interactive TTY provider. It is
 not accepted through command arguments, environment variables, `.env`, a
@@ -164,6 +227,6 @@ following controls remain separate blockers:
 7. critical readiness risks promoted to execute blockers;
 8. aggregate fee and funding-budget enforcement.
 
-After this hardening commit, the next step is an independent read-only security
-review. It is not a production ceremony and not authorization for a Base
-Sepolia transaction.
+After this ceremony-hardening commit, the next step is a third independent
+read-only security review. It is not a production ceremony and not
+authorization for a Base Sepolia transaction.

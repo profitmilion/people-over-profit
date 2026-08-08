@@ -8,7 +8,7 @@ import {
   timingSafeEqual,
 } from "node:crypto";
 import { chmod, lstat, mkdir, open, readdir, rename, rm } from "node:fs/promises";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { inspect } from "node:util";
 
 import { computeAddress, getAddress, isAddress } from "ethers";
@@ -42,6 +42,14 @@ export const WALLET_STORE_V2_MANIFEST_FILE_NAME =
   "checkpoint-20.wallet-store-v2.manifest.json";
 export const WALLET_STORE_V2_BACKUP_METADATA_FILE_NAME =
   "checkpoint-20.wallet-store-v2.backup.json";
+export const WALLET_STORE_V2_TRUSTED_IDENTITY_FILE_NAME =
+  "checkpoint-20.wallet-store-v2.trusted-identity.json";
+export const WALLET_STORE_V2_CEREMONY_STATE_FILE_NAME =
+  "checkpoint-20.wallet-store-v2.ceremony-state.json";
+export const WALLET_STORE_V2_CEREMONY_METADATA_FILE_NAME =
+  "checkpoint-20.wallet-store-v2.ceremony.json";
+export const WALLET_STORE_V2_CEREMONY_METADATA_PURPOSE =
+  "pop33-wallet-store-v2-production-ceremony-metadata";
 
 const FORMAT_VERSION = 2 as const;
 const PURPOSE = "pop33-guarded-checkpoint-20-wallet-store-v2" as const;
@@ -58,6 +66,8 @@ const KEY_LENGTH = 32;
 const SALT_LENGTH = 16;
 const IV_LENGTH = 12;
 const AUTH_TAG_LENGTH = 16;
+export const WALLET_STORE_V2_PASSWORD_MIN_BYTES = 16;
+export const WALLET_STORE_V2_PASSWORD_MAX_BYTES = 256;
 const MAX_STORE_FILE_BYTES = 64 * 1024;
 const MAX_MANIFEST_FILE_BYTES = 32 * 1024;
 const MAX_BACKUP_METADATA_BYTES = 16 * 1024;
@@ -234,6 +244,7 @@ export interface WalletStoreV2BundlePaths {
   storeFile: string;
   manifestFile: string;
   backupMetadataFile: string;
+  ceremonyMetadataFile: string;
 }
 
 export interface WalletStoreV2WriteHooks {
@@ -246,6 +257,14 @@ export interface WalletStoreV2ProductionFileSecurity {
   assertBeforeCreate(directory: string): Promise<void>;
   assertAfterCommit(directory: string): Promise<void>;
   assertBeforeOpen(directory: string): Promise<void>;
+}
+
+export type WalletStoreV2CeremonyPublicFileKind = "trusted-identity" | "ceremony-state";
+
+export interface WalletStoreV2CeremonyFileSecurity extends WalletStoreV2ProductionFileSecurity {
+  assertPublicFileBeforeCreate(path: string, kind: WalletStoreV2CeremonyPublicFileKind): Promise<void>;
+  assertPublicFileAfterCommit(path: string, kind: WalletStoreV2CeremonyPublicFileKind): Promise<void>;
+  assertPublicFileBeforeOpen(path: string, kind: WalletStoreV2CeremonyPublicFileKind): Promise<void>;
 }
 
 function canonicalJson(value: unknown): string {
@@ -514,6 +533,30 @@ export interface ProductionPasswordProvider {
   withPassword<T>(operation: (secret: WalletStoreV2ProductionUnlockSecret) => Promise<T>): Promise<T>;
 }
 
+export interface WalletStoreV2TtyInput {
+  readonly isTTY?: boolean;
+  readonly isRaw?: boolean;
+  setRawMode(mode: boolean): void;
+  resume(): void;
+  pause(): void;
+  on(event: "data", listener: (chunk: Buffer | string) => void): unknown;
+  on(event: "end" | "close", listener: () => void): unknown;
+  on(event: "error", listener: (error: Error) => void): unknown;
+  off(event: "data", listener: (chunk: Buffer | string) => void): unknown;
+  off(event: "end" | "close", listener: () => void): unknown;
+  off(event: "error", listener: (error: Error) => void): unknown;
+}
+
+export interface WalletStoreV2TtyOutput {
+  readonly isTTY?: boolean;
+  write(value: string): unknown;
+}
+
+export interface WalletStoreV2SignalSource {
+  on(event: "SIGINT", listener: () => void): unknown;
+  off(event: "SIGINT", listener: () => void): unknown;
+}
+
 export class WalletStoreV2ProductionUnlockSecret {
   #bytes: Buffer | null;
 
@@ -523,7 +566,11 @@ export class WalletStoreV2ProductionUnlockSecret {
   }
 
   static fromProviderBytes(bytes: Uint8Array): WalletStoreV2ProductionUnlockSecret {
-    if (!(bytes instanceof Uint8Array) || bytes.byteLength < 16 || bytes.byteLength > 1024) {
+    if (
+      !(bytes instanceof Uint8Array) ||
+      bytes.byteLength < WALLET_STORE_V2_PASSWORD_MIN_BYTES ||
+      bytes.byteLength > WALLET_STORE_V2_PASSWORD_MAX_BYTES
+    ) {
       throw new Error("Production Wallet Store v2 unlock input is invalid.");
     }
     return new WalletStoreV2ProductionUnlockSecret(Buffer.from(bytes));
@@ -552,46 +599,141 @@ export class WalletStoreV2ProductionUnlockSecret {
   }
 }
 
-async function readHiddenTtyBytes(prompt: string): Promise<Buffer> {
-  const input = process.stdin;
-  const output = process.stdout;
-  if (!input.isTTY || !output.isTTY || typeof input.setRawMode !== "function") {
+async function readHiddenTtyBytes(input: {
+  prompt: string;
+  ttyInput: WalletStoreV2TtyInput;
+  ttyOutput: WalletStoreV2TtyOutput;
+  signalSource: WalletStoreV2SignalSource;
+}): Promise<Buffer> {
+  const { ttyInput, ttyOutput, signalSource } = input;
+  const password = Buffer.alloc(WALLET_STORE_V2_PASSWORD_MAX_BYTES);
+  let length = 0;
+  let wasRaw = false;
+  let rawModeChanged = false;
+  if (!ttyInput.isTTY || !ttyOutput.isTTY || typeof ttyInput.setRawMode !== "function") {
     throw new Error("Production password input requires an interactive TTY.");
   }
-  output.write(prompt);
-  const bytes: number[] = [];
-  const wasRaw = input.isRaw;
-  input.setRawMode(true);
-  input.resume();
+  ttyOutput.write(input.prompt);
+  wasRaw = Boolean(ttyInput.isRaw);
+  ttyInput.setRawMode(true);
+  rawModeChanged = true;
+  ttyInput.resume();
   try {
     return await new Promise<Buffer>((resolvePromise, rejectPromise) => {
+      let settled = false;
+      const removeListeners = (): void => {
+        ttyInput.off("data", onData);
+        ttyInput.off("end", onEnd);
+        ttyInput.off("close", onClose);
+        ttyInput.off("error", onError);
+        signalSource.off("SIGINT", onSigint);
+      };
+      const rejectOnce = (message: string): void => {
+        if (settled) return;
+        settled = true;
+        removeListeners();
+        rejectPromise(new Error(message));
+      };
+      const resolveOnce = (): void => {
+        if (settled) return;
+        settled = true;
+        removeListeners();
+        resolvePromise(Buffer.from(password.subarray(0, length)));
+      };
       const onData = (chunk: Buffer | string): void => {
-        const data = typeof chunk === "string" ? Buffer.from(chunk, "utf8") : chunk;
-        for (const byte of data) {
-          if (byte === 3) {
-            input.off("data", onData);
-            rejectPromise(new Error("Production password input was cancelled."));
-            return;
+        const data = Buffer.from(chunk);
+        try {
+          for (const byte of data) {
+            if (byte === 3) {
+              rejectOnce("Production password input was cancelled.");
+              return;
+            }
+            if (byte === 13 || byte === 10) {
+              resolveOnce();
+              return;
+            }
+            if (byte === 8 || byte === 127) {
+              if (length > 0) {
+                let start = length - 1;
+                while (start > 0 && (password[start] & 0xc0) === 0x80) start -= 1;
+                password.fill(0, start, length);
+                length = start;
+              }
+            } else if (byte >= 32) {
+              if (length >= WALLET_STORE_V2_PASSWORD_MAX_BYTES) {
+                rejectOnce("Production password input exceeds the byte limit.");
+                return;
+              }
+              password[length] = byte;
+              length += 1;
+            }
           }
-          if (byte === 13 || byte === 10) {
-            input.off("data", onData);
-            resolvePromise(Buffer.from(bytes));
-            return;
-          }
-          if (byte === 8 || byte === 127) {
-            bytes.pop();
-          } else if (byte >= 32 && bytes.length < 1024) {
-            bytes.push(byte);
-          }
+        } finally {
+          data.fill(0);
         }
       };
-      input.on("data", onData);
+      const onEnd = (): void => rejectOnce("Production password input ended before completion.");
+      const onClose = (): void => rejectOnce("Production password terminal closed before completion.");
+      const onError = (): void => rejectOnce("Production password terminal failed.");
+      const onSigint = (): void => rejectOnce("Production password input was cancelled.");
+      ttyInput.on("data", onData);
+      ttyInput.on("end", onEnd);
+      ttyInput.on("close", onClose);
+      ttyInput.on("error", onError);
+      signalSource.on("SIGINT", onSigint);
     });
   } finally {
-    input.setRawMode(Boolean(wasRaw));
-    input.pause();
-    output.write("\n");
+    password.fill(0);
+    try {
+      if (rawModeChanged) ttyInput.setRawMode(wasRaw);
+    } finally {
+      ttyInput.pause();
+      ttyOutput.write("\n");
+    }
   }
+}
+
+export function readHiddenWalletStoreV2PasswordForFixture(input: {
+  ttyInput: WalletStoreV2TtyInput;
+  ttyOutput: WalletStoreV2TtyOutput;
+  signalSource: WalletStoreV2SignalSource;
+  authorization: string;
+}): Promise<Buffer> {
+  assertFixtureAuthorization(input.authorization);
+  return readHiddenTtyBytes({ ...input, prompt: "Wallet Store v2 fixture password: " });
+}
+
+async function readConfirmedTtyPassword(input: {
+  ttyInput: WalletStoreV2TtyInput;
+  ttyOutput: WalletStoreV2TtyOutput;
+  signalSource: WalletStoreV2SignalSource;
+}): Promise<Buffer> {
+  let first: Buffer | null = null;
+  let second: Buffer | null = null;
+  try {
+    first = await readHiddenTtyBytes({ ...input, prompt: "Wallet Store v2 password: " });
+    second = await readHiddenTtyBytes({ ...input, prompt: "Repeat Wallet Store v2 password: " });
+    if (
+      first.length < WALLET_STORE_V2_PASSWORD_MIN_BYTES ||
+      first.length > WALLET_STORE_V2_PASSWORD_MAX_BYTES ||
+      first.length !== second.length ||
+      !timingSafeEqual(first, second)
+    ) throw new Error("Production Wallet Store v2 password confirmation failed.");
+    return Buffer.from(first);
+  } finally {
+    first?.fill(0);
+    second?.fill(0);
+  }
+}
+
+export function readConfirmedWalletStoreV2PasswordForFixture(input: {
+  ttyInput: WalletStoreV2TtyInput;
+  ttyOutput: WalletStoreV2TtyOutput;
+  signalSource: WalletStoreV2SignalSource;
+  authorization: string;
+}): Promise<Buffer> {
+  assertFixtureAuthorization(input.authorization);
+  return readConfirmedTtyPassword(input);
 }
 
 export class ProductionTtyPasswordProvider implements ProductionPasswordProvider {
@@ -607,21 +749,20 @@ export class ProductionTtyPasswordProvider implements ProductionPasswordProvider
   }
 
   async withPassword<T>(operation: (secret: WalletStoreV2ProductionUnlockSecret) => Promise<T>): Promise<T> {
-    let first: Buffer | null = null;
-    let second: Buffer | null = null;
+    let confirmed: Buffer | null = null;
     let secret: WalletStoreV2ProductionUnlockSecret | null = null;
     try {
-      first = await readHiddenTtyBytes("Wallet Store v2 password: ");
-      second = await readHiddenTtyBytes("Repeat Wallet Store v2 password: ");
-      if (first.length < 16 || first.length !== second.length || !timingSafeEqual(first, second)) {
-        throw new Error("Production Wallet Store v2 password confirmation failed.");
-      }
-      secret = WalletStoreV2ProductionUnlockSecret.fromProviderBytes(first);
+      const tty = {
+        ttyInput: process.stdin as WalletStoreV2TtyInput,
+        ttyOutput: process.stdout as WalletStoreV2TtyOutput,
+        signalSource: process as WalletStoreV2SignalSource,
+      };
+      confirmed = await readConfirmedTtyPassword(tty);
+      secret = WalletStoreV2ProductionUnlockSecret.fromProviderBytes(confirmed);
       return await operation(secret);
     } finally {
       secret?.destroy();
-      first?.fill(0);
-      second?.fill(0);
+      confirmed?.fill(0);
     }
   }
 }
@@ -685,32 +826,74 @@ export class WalletStoreV2ProductionSecretRecord {
 }
 
 export class NodeCSPRNGProductionWalletGenerator {
-  readonly generatorClass = "node-csprng-production" as const;
+  readonly generatorClass: "node-csprng-production" | "injected-test-entropy";
+  readonly #nextBytes: (length: number) => Buffer;
+  readonly #deriveCandidateAddress: (bytes: Buffer) => string;
 
-  private constructor() { Object.freeze(this); }
+  private constructor(
+    generatorClass: "node-csprng-production" | "injected-test-entropy",
+    nextBytes: (length: number) => Buffer,
+    deriveCandidateAddress: (bytes: Buffer) => string,
+  ) {
+    this.generatorClass = generatorClass;
+    this.#nextBytes = nextBytes;
+    this.#deriveCandidateAddress = deriveCandidateAddress;
+    Object.freeze(this);
+  }
 
   static create(authorization: string): NodeCSPRNGProductionWalletGenerator {
     if (authorization !== WALLET_STORE_V2_PRODUCTION_CEREMONY_AUTHORIZATION) {
       throw new Error("Production wallet generation requires ceremony authorization.");
     }
-    return new NodeCSPRNGProductionWalletGenerator();
+    return new NodeCSPRNGProductionWalletGenerator(
+      "node-csprng-production",
+      () => randomBytes(32),
+      deriveAddress,
+    );
+  }
+
+  static createForInjectedTests(input: {
+    nextBytes(length: number): Buffer;
+    deriveAddressForTest?(bytes: Buffer): string;
+    authorization: string;
+  }): NodeCSPRNGProductionWalletGenerator {
+    assertFixtureAuthorization(input.authorization);
+    return new NodeCSPRNGProductionWalletGenerator(
+      "injected-test-entropy",
+      input.nextBytes,
+      input.deriveAddressForTest ?? deriveAddress,
+    );
   }
 
   generateIndependentSet(): WalletStoreV2ProductionSecretRecord[] {
     const records: WalletStoreV2ProductionSecretRecord[] = [];
+    const addresses = new Set<string>();
     try {
       for (let index = 0; index < 15; index += 1) {
-        let bytes: Buffer | null = null;
-        while (!bytes) {
-          const candidate = randomBytes(KEY_LENGTH);
+        let accepted = false;
+        while (!accepted) {
+          let candidate: Buffer | null = null;
           try {
-            deriveAddress(candidate);
-            bytes = candidate;
-          } catch {
-            candidate.fill(0);
+            candidate = this.#nextBytes(KEY_LENGTH);
+            if (!Buffer.isBuffer(candidate) || candidate.length !== KEY_LENGTH) {
+              throw new Error("Production entropy source returned an invalid candidate.");
+            }
+            let address: string;
+            try {
+              address = this.#deriveCandidateAddress(candidate);
+            } catch {
+              continue;
+            }
+            if (addresses.has(address.toLowerCase())) continue;
+            const record = WalletStoreV2ProductionSecretRecord[createProductionRecord](index, candidate);
+            candidate = null;
+            records.push(record);
+            addresses.add(address.toLowerCase());
+            accepted = true;
+          } finally {
+            candidate?.fill(0);
           }
         }
-        records.push(WalletStoreV2ProductionSecretRecord[createProductionRecord](index, bytes));
       }
       return records;
     } catch {
@@ -950,6 +1133,107 @@ export async function buildWalletStoreV2FixtureBundle(input: {
   return validateWalletStoreV2FixtureBundle({ artifactClass: "fixture", manifest, envelope });
 }
 
+async function buildWalletStoreV2ProductionClassBundle(input: {
+  passwordProvider: ProductionPasswordProvider;
+  walletGenerator: NodeCSPRNGProductionWalletGenerator;
+  createdAt: string;
+  storeId?: string;
+  afterGenerationForTest?: () => void;
+}): Promise<WalletStoreV2ProductionBundle> {
+  const createdAt = iso(input.createdAt, "Production Wallet Store v2 creation time");
+  const storeId = input.storeId ?? randomUUID();
+  if (!isUuid(storeId)) throw new Error("Production Wallet Store v2 store ID is invalid.");
+  try {
+    return await input.passwordProvider.withPassword(async (unlockSecret) =>
+      unlockSecret[consumeProductionPassword](async (unlockBytes) => {
+        const secretRecords: WalletStoreV2ProductionSecretRecord[] = [];
+        let salt: Buffer | null = null;
+        let key: Buffer | null = null;
+        try {
+          secretRecords.push(...input.walletGenerator.generateIndependentSet());
+          input.afterGenerationForTest?.();
+          const candidates = normalizeCandidates(secretRecords.map((record) => ({
+            index: record.index,
+            address: record.address,
+          })));
+          const bindingFingerprint = digest(bindingBase({
+            artifactClass: "production",
+            createdAt,
+            storeId,
+            candidates,
+          }));
+          salt = randomBytes(SALT_LENGTH);
+          const saltBase64 = salt.toString("base64");
+          key = await deriveKey(unlockBytes, salt);
+          const records: WalletStoreV2EncryptedRecord[] = [];
+          const usedIvs = new Set<string>();
+          for (const secretRecord of secretRecords) {
+            let iv = randomBytes(IV_LENGTH);
+            while (usedIvs.has(iv.toString("base64"))) iv = randomBytes(IV_LENGTH);
+            usedIvs.add(iv.toString("base64"));
+            try {
+              records.push(await secretRecord[consumeProductionRecord](async (privateKeyBytes) =>
+                encryptRecord({
+                  key: key!,
+                  bindingFingerprint,
+                  index: secretRecord.index,
+                  address: secretRecord.address,
+                  privateKeyBytes,
+                  iv,
+                })));
+            } finally {
+              iv.fill(0);
+              secretRecord.destroy();
+            }
+          }
+          const recordsFingerprint = digest(records.map((record) => record.recordFingerprint));
+          const envelopeBase: Omit<WalletStoreV2Envelope, "encryptedStoreFingerprint" | "manifestFingerprint"> = {
+            formatVersion: FORMAT_VERSION,
+            purpose: PURPOSE,
+            artifactClass: "production",
+            createdAt,
+            storeId,
+            chainId: "84532",
+            contractAddress: getAddress(GUARDED_CHECKPOINT_20_CONTRACT),
+            tokenAddress: getAddress(GUARDED_CHECKPOINT_20_TOKEN),
+            checkpointId: CHECKPOINT_ID,
+            baselineCount: "5",
+            targetCount: "20",
+            recordCount: 15,
+            cipher: CIPHER,
+            kdf: KDF,
+            kdfParameters: { n: SCRYPT_N, r: SCRYPT_R, p: SCRYPT_P, salt: saltBase64 },
+            bindingFingerprint,
+            recordsFingerprint,
+            records,
+          };
+          const encryptedStoreFingerprint = digest(envelopeFingerprintBase(envelopeBase));
+          const manifestBase: Omit<WalletStoreV2PublicManifest, "fingerprint"> = {
+            formatVersion: FORMAT_VERSION,
+            purpose: MANIFEST_PURPOSE,
+            artifactClass: "production",
+            createdAt,
+            chainId: "84532",
+            contractAddress: getAddress(GUARDED_CHECKPOINT_20_CONTRACT),
+            tokenAddress: getAddress(GUARDED_CHECKPOINT_20_TOKEN),
+            checkpoint: { id: CHECKPOINT_ID, baselineCount: "5", targetCount: "20", recordCount: 15 },
+            store: { formatVersion: FORMAT_VERSION, storeId, bindingFingerprint, encryptedStoreFingerprint },
+            candidates,
+          };
+          const manifest = { ...manifestBase, fingerprint: digest(manifestBase) };
+          const envelope = { ...envelopeBase, encryptedStoreFingerprint, manifestFingerprint: manifest.fingerprint };
+          return validateWalletStoreV2ProductionBundle({ artifactClass: "production", manifest, envelope });
+        } finally {
+          key?.fill(0);
+          salt?.fill(0);
+          for (const record of secretRecords) record.destroy();
+        }
+      }));
+  } catch {
+    throw new Error("Production Wallet Store v2 creation failed without exposing secret material.");
+  }
+}
+
 export async function buildWalletStoreV2ProductionBundle(input: {
   passwordProvider: ProductionTtyPasswordProvider;
   walletGenerator: NodeCSPRNGProductionWalletGenerator;
@@ -963,93 +1247,32 @@ export async function buildWalletStoreV2ProductionBundle(input: {
   if (!(input.passwordProvider instanceof ProductionTtyPasswordProvider)) {
     throw new Error("Production Wallet Store v2 rejects injected or fixture password providers.");
   }
-  if (!(input.walletGenerator instanceof NodeCSPRNGProductionWalletGenerator)) {
+  if (
+    !(input.walletGenerator instanceof NodeCSPRNGProductionWalletGenerator) ||
+    input.walletGenerator.generatorClass !== "node-csprng-production"
+  ) {
     throw new Error("Production Wallet Store v2 rejects fixture or injected wallet generators.");
   }
-  const createdAt = iso(input.createdAt, "Production Wallet Store v2 creation time");
-  const storeId = input.storeId ?? randomUUID();
-  if (!isUuid(storeId)) throw new Error("Production Wallet Store v2 store ID is invalid.");
-  const secretRecords = input.walletGenerator.generateIndependentSet();
-  const candidates = normalizeCandidates(secretRecords.map((record) => ({
-    index: record.index,
-    address: record.address,
-  })));
-  const bindingFingerprint = digest(bindingBase({ artifactClass: "production", createdAt, storeId, candidates }));
-  const salt = randomBytes(SALT_LENGTH);
-  const saltBase64 = salt.toString("base64");
-  const records: WalletStoreV2EncryptedRecord[] = [];
-  const usedIvs = new Set<string>();
-  try {
-    await input.passwordProvider.withPassword(async (unlockSecret) =>
-      unlockSecret[consumeProductionPassword](async (unlockBytes) => {
-        const key = await deriveKey(unlockBytes, salt);
-        try {
-          for (const secretRecord of secretRecords) {
-            let iv = randomBytes(IV_LENGTH);
-            while (usedIvs.has(iv.toString("base64"))) iv = randomBytes(IV_LENGTH);
-            usedIvs.add(iv.toString("base64"));
-            try {
-              records.push(await secretRecord[consumeProductionRecord](async (privateKeyBytes) =>
-                encryptRecord({
-                  key,
-                  bindingFingerprint,
-                  index: secretRecord.index,
-                  address: secretRecord.address,
-                  privateKeyBytes,
-                  iv,
-                })));
-            } finally {
-              iv.fill(0);
-              secretRecord.destroy();
-            }
-          }
-        } finally {
-          key.fill(0);
-        }
-      }));
-  } catch {
-    throw new Error("Production Wallet Store v2 creation failed without exposing secret material.");
-  } finally {
-    salt.fill(0);
-    for (const record of secretRecords) record.destroy();
+  return buildWalletStoreV2ProductionClassBundle(input);
+}
+
+export async function buildWalletStoreV2ProductionFormatFixtureBundle(input: {
+  passwordProvider: InjectedTestPasswordProvider;
+  walletGenerator: NodeCSPRNGProductionWalletGenerator;
+  createdAt: string;
+  storeId?: string;
+  authorization: string;
+  afterGenerationForTest?: () => void;
+}): Promise<WalletStoreV2ProductionBundle> {
+  assertFixtureAuthorization(input.authorization);
+  if (
+    !(input.passwordProvider instanceof InjectedTestPasswordProvider) ||
+    !(input.walletGenerator instanceof NodeCSPRNGProductionWalletGenerator) ||
+    input.walletGenerator.generatorClass !== "injected-test-entropy"
+  ) {
+    throw new Error("Production-format fixture construction requires injected test-only dependencies.");
   }
-  const recordsFingerprint = digest(records.map((record) => record.recordFingerprint));
-  const envelopeBase: Omit<WalletStoreV2Envelope, "encryptedStoreFingerprint" | "manifestFingerprint"> = {
-    formatVersion: FORMAT_VERSION,
-    purpose: PURPOSE,
-    artifactClass: "production",
-    createdAt,
-    storeId,
-    chainId: "84532",
-    contractAddress: getAddress(GUARDED_CHECKPOINT_20_CONTRACT),
-    tokenAddress: getAddress(GUARDED_CHECKPOINT_20_TOKEN),
-    checkpointId: CHECKPOINT_ID,
-    baselineCount: "5",
-    targetCount: "20",
-    recordCount: 15,
-    cipher: CIPHER,
-    kdf: KDF,
-    kdfParameters: { n: SCRYPT_N, r: SCRYPT_R, p: SCRYPT_P, salt: saltBase64 },
-    bindingFingerprint,
-    recordsFingerprint,
-    records,
-  };
-  const encryptedStoreFingerprint = digest(envelopeFingerprintBase(envelopeBase));
-  const manifestBase: Omit<WalletStoreV2PublicManifest, "fingerprint"> = {
-    formatVersion: FORMAT_VERSION,
-    purpose: MANIFEST_PURPOSE,
-    artifactClass: "production",
-    createdAt,
-    chainId: "84532",
-    contractAddress: getAddress(GUARDED_CHECKPOINT_20_CONTRACT),
-    tokenAddress: getAddress(GUARDED_CHECKPOINT_20_TOKEN),
-    checkpoint: { id: CHECKPOINT_ID, baselineCount: "5", targetCount: "20", recordCount: 15 },
-    store: { formatVersion: FORMAT_VERSION, storeId, bindingFingerprint, encryptedStoreFingerprint },
-    candidates,
-  };
-  const manifest = { ...manifestBase, fingerprint: digest(manifestBase) };
-  const envelope = { ...envelopeBase, encryptedStoreFingerprint, manifestFingerprint: manifest.fingerprint };
-  return validateWalletStoreV2ProductionBundle({ artifactClass: "production", manifest, envelope });
+  return buildWalletStoreV2ProductionClassBundle(input);
 }
 
 export function validateWalletStoreV2PublicManifest(value: unknown): WalletStoreV2PublicManifest {
@@ -1389,6 +1612,7 @@ export function walletStoreV2BundlePaths(directoryInput: string): WalletStoreV2B
     storeFile: join(directory, WALLET_STORE_V2_STORE_FILE_NAME),
     manifestFile: join(directory, WALLET_STORE_V2_MANIFEST_FILE_NAME),
     backupMetadataFile: join(directory, WALLET_STORE_V2_BACKUP_METADATA_FILE_NAME),
+    ceremonyMetadataFile: join(directory, WALLET_STORE_V2_CEREMONY_METADATA_FILE_NAME),
   };
 }
 
@@ -1426,6 +1650,7 @@ async function assertBundlePaths(paths: WalletStoreV2BundlePaths): Promise<void>
   await assertSafeExternalFilePath(paths.storeFile, ".wallet-store-v2.enc.json");
   await assertSafeExternalFilePath(paths.manifestFile, ".wallet-store-v2.manifest.json");
   await assertSafeExternalFilePath(paths.backupMetadataFile, ".wallet-store-v2.backup.json");
+  await assertSafeExternalFilePath(paths.ceremonyMetadataFile, ".wallet-store-v2.ceremony.json");
 }
 
 function serialize(value: unknown): string {
@@ -1438,6 +1663,7 @@ async function writeSerializedBundleDirectory(input: {
   storeSerialized: string;
   manifestSerialized: string;
   backupMetadataSerialized?: string;
+  ceremonyMetadataSerialized?: string;
   hooks?: WalletStoreV2WriteHooks;
   productionSecurity?: WalletStoreV2ProductionFileSecurity;
 }): Promise<void> {
@@ -1466,12 +1692,19 @@ async function writeSerializedBundleDirectory(input: {
       storeFile: join(temporaryDirectory, WALLET_STORE_V2_STORE_FILE_NAME),
       manifestFile: join(temporaryDirectory, WALLET_STORE_V2_MANIFEST_FILE_NAME),
       backupMetadataFile: join(temporaryDirectory, WALLET_STORE_V2_BACKUP_METADATA_FILE_NAME),
+      ceremonyMetadataFile: join(temporaryDirectory, WALLET_STORE_V2_CEREMONY_METADATA_FILE_NAME),
     };
     await atomicWritePrivateFile(temporaryPaths.storeFile, input.storeSerialized);
     await input.hooks?.afterStoreWrite?.();
     await atomicWritePrivateFile(temporaryPaths.manifestFile, input.manifestSerialized);
     if (input.backupMetadataSerialized !== undefined) {
       await atomicWritePrivateFile(temporaryPaths.backupMetadataFile, input.backupMetadataSerialized);
+    }
+    if (input.ceremonyMetadataSerialized !== undefined) {
+      if (input.artifactClass !== "production") {
+        throw new Error("Wallet Store v2 ceremony metadata is production-only.");
+      }
+      await atomicWritePrivateFile(temporaryPaths.ceremonyMetadataFile, input.ceremonyMetadataSerialized);
     }
     await input.hooks?.beforeDirectoryCommit?.();
     if (await pathExists(finalPaths.directory)) {
@@ -1536,6 +1769,7 @@ export async function cleanupWalletStoreV2OrphanDirectory(input: {
     WALLET_STORE_V2_STORE_FILE_NAME,
     WALLET_STORE_V2_MANIFEST_FILE_NAME,
     WALLET_STORE_V2_BACKUP_METADATA_FILE_NAME,
+    WALLET_STORE_V2_CEREMONY_METADATA_FILE_NAME,
   ]);
   for (const entry of entries) {
     const entryPath = join(orphan, entry);
@@ -1564,13 +1798,54 @@ export async function createWalletStoreV2FixtureBundleDirectory(input: {
   return readAndInspectWalletStoreV2FixtureBundleDirectory(input.directory);
 }
 
+function validateWalletStoreV2CeremonyMetadata(
+  value: unknown,
+  bundle: WalletStoreV2ProductionBundle,
+): Record<string, unknown> {
+  const metadata = exactObject(value, [
+    "formatVersion", "purpose", "storeId", "trustedIdentityFile", "stateFile",
+    "trustedIdentityFingerprint", "fingerprint",
+  ], "Wallet Store v2 ceremony metadata");
+  if (
+    metadata.formatVersion !== 1 ||
+    metadata.purpose !== WALLET_STORE_V2_CEREMONY_METADATA_PURPOSE ||
+    metadata.storeId !== bundle.envelope.storeId ||
+    typeof metadata.trustedIdentityFile !== "string" ||
+    !isAbsolute(metadata.trustedIdentityFile) ||
+    basename(metadata.trustedIdentityFile) !== WALLET_STORE_V2_TRUSTED_IDENTITY_FILE_NAME ||
+    typeof metadata.stateFile !== "string" ||
+    !isAbsolute(metadata.stateFile) ||
+    basename(metadata.stateFile) !== WALLET_STORE_V2_CEREMONY_STATE_FILE_NAME
+  ) throw new Error("Wallet Store v2 ceremony metadata identity or path is invalid.");
+  const base = {
+    formatVersion: 1,
+    purpose: WALLET_STORE_V2_CEREMONY_METADATA_PURPOSE,
+    storeId: bundle.envelope.storeId,
+    trustedIdentityFile: resolve(metadata.trustedIdentityFile),
+    stateFile: resolve(metadata.stateFile),
+    trustedIdentityFingerprint: requireDigest(
+      metadata.trustedIdentityFingerprint,
+      "Wallet Store v2 trusted identity fingerprint",
+    ),
+  };
+  const checkedFingerprint = requireDigest(metadata.fingerprint, "Wallet Store v2 ceremony metadata fingerprint");
+  if (digest(base) !== checkedFingerprint) {
+    throw new Error("Wallet Store v2 ceremony metadata fingerprint mismatch.");
+  }
+  return { ...base, fingerprint: checkedFingerprint };
+}
+
 export async function createWalletStoreV2ProductionBundleDirectory(input: {
   directory: string;
   bundle: WalletStoreV2ProductionBundle;
   productionSecurity: WalletStoreV2ProductionFileSecurity;
   hooks?: WalletStoreV2WriteHooks;
+  ceremonyMetadata?: unknown;
 }): Promise<WalletStoreV2PublicInspection> {
   const bundle = validateWalletStoreV2ProductionBundle(input.bundle);
+  const ceremonyMetadata = input.ceremonyMetadata === undefined
+    ? undefined
+    : validateWalletStoreV2CeremonyMetadata(input.ceremonyMetadata, bundle);
   await writeSerializedBundleDirectory({
     directory: input.directory,
     artifactClass: "production",
@@ -1578,6 +1853,9 @@ export async function createWalletStoreV2ProductionBundleDirectory(input: {
     manifestSerialized: serialize(bundle.manifest),
     productionSecurity: input.productionSecurity,
     hooks: input.hooks,
+    ceremonyMetadataSerialized: ceremonyMetadata === undefined
+      ? undefined
+      : serialize(ceremonyMetadata),
   });
   return readAndInspectWalletStoreV2ProductionBundleDirectory({
     directory: input.directory,
@@ -1844,13 +2122,14 @@ export async function restoreWalletStoreV2FixtureBackup(input: {
   return backupReceipt(restored);
 }
 
-export async function createWalletStoreV2ProductionBackup(input: {
+export async function createUnverifiedWalletStoreV2ProductionBackupForCeremony(input: {
   sourceDirectory: string;
   backupDirectory: string;
   expectedIdentity: TrustedWalletStoreIdentity;
   sourceSecurity: WalletStoreV2ProductionFileSecurity;
   backupSecurity: WalletStoreV2ProductionFileSecurity;
-}): Promise<WalletStoreV2BackupReceipt> {
+  hooks?: WalletStoreV2WriteHooks;
+}): Promise<void> {
   const source = await readBundleFiles(input.sourceDirectory, "production", input.sourceSecurity);
   const inspection = inspectWalletStoreV2ProductionBundle(source.bundle as WalletStoreV2ProductionBundle);
   assertInspectionMatchesTrustedIdentity(inspection, input.expectedIdentity);
@@ -1862,7 +2141,15 @@ export async function createWalletStoreV2ProductionBackup(input: {
     manifestSerialized: source.manifestSerialized,
     backupMetadataSerialized: serialize(metadata),
     productionSecurity: input.backupSecurity,
+    hooks: input.hooks,
   });
+}
+
+export async function verifyWalletStoreV2ProductionBackup(input: {
+  backupDirectory: string;
+  expectedIdentity: TrustedWalletStoreIdentity;
+  backupSecurity: WalletStoreV2ProductionFileSecurity;
+}): Promise<WalletStoreV2BackupReceipt> {
   const backup = await readBundleFiles(input.backupDirectory, "production", input.backupSecurity);
   const backupInspection = inspectWalletStoreV2ProductionBundle(backup.bundle as WalletStoreV2ProductionBundle);
   assertInspectionMatchesTrustedIdentity(backupInspection, input.expectedIdentity);
@@ -1873,6 +2160,18 @@ export async function createWalletStoreV2ProductionBackup(input: {
   );
   validateBackupMetadata(JSON.parse(metadataText), backupInspection);
   return backupReceipt(backupInspection);
+}
+
+export async function createWalletStoreV2ProductionBackup(input: {
+  sourceDirectory: string;
+  backupDirectory: string;
+  expectedIdentity: TrustedWalletStoreIdentity;
+  sourceSecurity: WalletStoreV2ProductionFileSecurity;
+  backupSecurity: WalletStoreV2ProductionFileSecurity;
+  hooks?: WalletStoreV2WriteHooks;
+}): Promise<WalletStoreV2BackupReceipt> {
+  await createUnverifiedWalletStoreV2ProductionBackupForCeremony(input);
+  return verifyWalletStoreV2ProductionBackup(input);
 }
 
 export async function restoreWalletStoreV2ProductionBackup(input: {
@@ -1982,16 +2281,14 @@ export async function withDecryptedWalletStoreV2FixtureRecord(input: {
   }
 }
 
-export async function verifyDecryptedWalletStoreV2ProductionRecord(input: {
+async function verifyDecryptedWalletStoreV2ProductionClassRecord(input: {
   directory: string;
   index: number;
-  passwordProvider: ProductionTtyPasswordProvider;
+  passwordProvider: ProductionPasswordProvider;
   productionSecurity: WalletStoreV2ProductionFileSecurity;
   expectedIdentity: TrustedWalletStoreIdentity;
+  onRecordDecrypted?: (index: number) => void;
 }): Promise<WalletStoreV2SessionReceipt> {
-  if (!(input.passwordProvider instanceof ProductionTtyPasswordProvider)) {
-    throw new Error("Production Wallet Store v2 rejects injected or fixture password providers.");
-  }
   let key: Buffer | null = null;
   let plaintext: Buffer | null = null;
   let updatePlaintext: Buffer | null = null;
@@ -2026,6 +2323,7 @@ export async function verifyDecryptedWalletStoreV2ProductionRecord(input: {
       updatePlaintext = decipher.update(ciphertext);
       finalPlaintext = decipher.final();
       plaintext = Buffer.concat([updatePlaintext, finalPlaintext]);
+      input.onRecordDecrypted?.(input.index);
     } finally {
       updatePlaintext?.fill(0);
       finalPlaintext?.fill(0);
@@ -2056,6 +2354,35 @@ export async function verifyDecryptedWalletStoreV2ProductionRecord(input: {
     plaintext?.fill(0);
     key?.fill(0);
   }
+}
+
+export async function verifyDecryptedWalletStoreV2ProductionRecord(input: {
+  directory: string;
+  index: number;
+  passwordProvider: ProductionTtyPasswordProvider;
+  productionSecurity: WalletStoreV2ProductionFileSecurity;
+  expectedIdentity: TrustedWalletStoreIdentity;
+}): Promise<WalletStoreV2SessionReceipt> {
+  if (!(input.passwordProvider instanceof ProductionTtyPasswordProvider)) {
+    throw new Error("Production Wallet Store v2 rejects injected or fixture password providers.");
+  }
+  return verifyDecryptedWalletStoreV2ProductionClassRecord(input);
+}
+
+export async function verifyDecryptedWalletStoreV2ProductionFormatFixtureRecord(input: {
+  directory: string;
+  index: number;
+  passwordProvider: InjectedTestPasswordProvider;
+  productionSecurity: WalletStoreV2ProductionFileSecurity;
+  expectedIdentity: TrustedWalletStoreIdentity;
+  authorization: string;
+  onRecordDecrypted?: (index: number) => void;
+}): Promise<WalletStoreV2SessionReceipt> {
+  assertFixtureAuthorization(input.authorization);
+  if (!(input.passwordProvider instanceof InjectedTestPasswordProvider)) {
+    throw new Error("Production-format record fixture requires an injected test-only password provider.");
+  }
+  return verifyDecryptedWalletStoreV2ProductionClassRecord(input);
 }
 
 function buildGuardedCheckpoint20ManifestForArtifactClass(

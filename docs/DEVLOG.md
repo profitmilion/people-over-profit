@@ -33,6 +33,73 @@ documentation.
   current overview of implementation, gaps, and risks.
 - Do not guess. Mark unclear facts as requiring later reconstruction.
 
+## 2026-08-08 - Wallet Store v2 ceremony hardening
+
+### At a glance
+
+The four blockers from the second independent review are remediated for a third
+read-only review: one fail-closed ceremony orchestrator and durable public state,
+complete CSPRNG cleanup, exact Windows root policy with a real temporary ACL
+test, and robust byte-bounded hidden TTY handling. The real ceremony remains
+disabled and was not run.
+
+### Completed
+
+- Added one orchestrator owning environment/path/ACL preflight, hidden password,
+  exactly 15 keys, encrypted active store and manifest, independently persisted
+  trusted identity, encrypted backup, backup verification, final verification,
+  and public-only success.
+- Added the durable `prepared -> paths-verified -> keys-generating ->
+  keys-generated -> store-written -> identity-written -> backup-written ->
+  backup-verified -> final-verified -> complete` state machine. Clean
+  pre-generation retries are allowed; later incomplete, partial, mismatched, or
+  orphan states block regeneration and overwrite.
+- Moved all post-generation work inside cleanup boundaries and added injected
+  entropy tests for invalid scalars, duplicate keys/derived addresses,
+  derivation/normalization failures, failures after records 1 and 14, and prior
+  buffer cleanup. Production stays fixed to `crypto.randomBytes(32)` and was not
+  invoked.
+- Restricted Windows roots to the exact checkpoint-20 path or the allowlisted
+  `active`, `backup`, and `identity` children before ACL mutation. Fixed safe
+  path transport into PowerShell ACL inspection.
+- Reworked hidden TTY input for data/end/error/close, Ctrl+C/SIGINT, EOF, no
+  TTY, overflow rejection, UTF-8 byte limits, backspace, CR/LF, and confirmation
+  mismatch with single settlement and deterministic cleanup.
+- Added production-format fixture backup/restore adversarial coverage and the
+  missing test proving corrupted record 10 is not decrypted while record 3 is
+  selected.
+
+### Verification and safety
+
+- The focused ceremony-hardening plus existing Wallet Store v2 hardening suites
+  passed all 32 tests using only injected fixture entropy and temporary external
+  paths. All 719 contract/operator tests and contracts TypeScript checking
+  passed; Hardhat compile reported no contracts requiring recompilation.
+- A real Windows PowerShell/icacls integration test passed on a disposable
+  checkpoint-shaped temporary tree and cleaned it afterward. It did not touch
+  `%LOCALAPPDATA%\POP33\operator\checkpoint-20`.
+- All 29 frontend domain tests, the root production build, scoped lint for the
+  changed TypeScript files, and `git diff --check` passed.
+- No real key, wallet, password, production store, trusted identity, backup,
+  signer, transaction, deployment, Vercel action, master change, or recovery
+  fast-forward occurred.
+
+### Limitations and next step
+
+- The production ceremony library has no CLI/package script and remains
+  operationally disabled pending a third independent read-only security review
+  and separate human authorization.
+- Execute remains blocked by exact-count enforcement, journal v2, semantic
+  receipt reconciliation, dual-RPC finality, global transaction locking,
+  mandatory phase evidence, promoted readiness blockers, and aggregate
+  fee/funding enforcement.
+
+### Git
+
+- Branch: `codex/pop33-wallet-store-v2-ceremony-hardening`
+- Source baseline: `8f8f120aedfd6f1ca9be8bcd5f4817e854657867`
+- Record message: `fix(operator): harden wallet ceremony flow`
+
 ## 2026-08-08 - Wallet Store v2 security hardening
 
 ### At a glance

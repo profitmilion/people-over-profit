@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
-import { EventEmitter } from "node:events";
-import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { EventEmitter, once } from "node:events";
+import { fork } from "node:child_process";
+import { mkdir, readFile, readdir, rm, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
   WALLET_STORE_V2_BUNDLE_DIRECTORY_SUFFIX,
@@ -15,14 +17,17 @@ import {
   NodeCSPRNGProductionWalletGenerator,
   buildTrustedWalletStoreIdentity,
   buildWalletStoreV2ProductionFormatFixtureBundle,
-  createWalletStoreV2ProductionBackup,
+  createWalletStoreV2ProductionFormatFixtureBackup,
+  createWalletStoreV2ProductionFormatFixtureBundleDirectory,
   createWalletStoreV2ProductionBundleDirectory,
   readConfirmedWalletStoreV2PasswordForFixture,
   readHiddenWalletStoreV2PasswordForFixture,
-  restoreWalletStoreV2ProductionBackup,
+  restoreWalletStoreV2ProductionFormatFixtureBackup,
+  validateWalletStoreV2ProductionBundle,
+  validateWalletStoreV2FixtureBundle,
   verifyDecryptedWalletStoreV2ProductionFormatFixtureRecord,
-  type WalletStoreV2CeremonyFileSecurity,
-  type WalletStoreV2ProductionBundle,
+  type WalletStoreV2ProductionFormatFixtureBundle,
+  type WalletStoreV2ProductionFormatFixtureCeremonyFileSecurity,
   type WalletStoreV2SignalSource,
   type WalletStoreV2TtyInput,
   type WalletStoreV2TtyOutput,
@@ -40,6 +45,7 @@ import {
 } from "../scripts/operator/wallet-store-v2-windows-security.js";
 
 const CREATED_AT = "2026-08-08T18:00:00.000Z";
+const CEREMONY_ID = "60606060-6060-4060-8060-606060606060";
 const PASSWORD = Buffer.from("fixture-production-format-password", "utf8");
 const roots: string[] = [];
 
@@ -65,12 +71,13 @@ function testGenerator(retained?: Buffer[]): NodeCSPRNGProductionWalletGenerator
 async function productionFormatBundle(
   createdAt = CREATED_AT,
   storeId = randomUUID(),
-): Promise<WalletStoreV2ProductionBundle> {
+): Promise<WalletStoreV2ProductionFormatFixtureBundle> {
   const password = new InjectedTestPasswordProvider(PASSWORD, WALLET_STORE_V2_FIXTURE_AUTHORIZATION);
   try {
     return await buildWalletStoreV2ProductionFormatFixtureBundle({
       passwordProvider: password,
       walletGenerator: testGenerator(),
+      ceremonyId: CEREMONY_ID,
       createdAt,
       storeId,
       authorization: WALLET_STORE_V2_FIXTURE_AUTHORIZATION,
@@ -92,7 +99,7 @@ function digest(value: unknown): string {
   return `sha256:${createHash("sha256").update(canonicalJson(value), "utf8").digest("hex")}`;
 }
 
-function recomputeProductionFormatFingerprints(bundle: WalletStoreV2ProductionBundle): void {
+function recomputeProductionFormatFingerprints(bundle: WalletStoreV2ProductionFormatFixtureBundle): void {
   for (const record of bundle.envelope.records) {
     const base: Partial<typeof record> = { ...record };
     delete base.recordFingerprint;
@@ -110,8 +117,8 @@ function recomputeProductionFormatFingerprints(bundle: WalletStoreV2ProductionBu
   bundle.envelope.manifestFingerprint = bundle.manifest.fingerprint;
 }
 
-class PermissiveCeremonySecurity implements WalletStoreV2CeremonyFileSecurity {
-  readonly artifactClass = "production" as const;
+class PermissiveCeremonySecurity implements WalletStoreV2ProductionFormatFixtureCeremonyFileSecurity {
+  readonly artifactClass = "production-format-fixture" as const;
   async assertBeforeCreate(): Promise<void> {}
   async assertAfterCommit(): Promise<void> {}
   async assertBeforeOpen(): Promise<void> {}
@@ -204,11 +211,13 @@ function ceremonyDependencies(input: {
 }): WalletStoreV2CeremonyDependencies {
   const security = new PermissiveCeremonySecurity();
   return {
+    artifactClass: "production-format-fixture",
     paths: walletStoreV2CeremonyPaths(join(input.root, "checkpoint-20")),
     activeSecurity: security,
     backupSecurity: security,
     identitySecurity: security,
     buildBundle: input.build ?? ((createdAt) => productionFormatBundle(createdAt)),
+    createCeremonyId: () => CEREMONY_ID,
     now: () => CREATED_AT,
     fault: input.fault,
   };
@@ -219,6 +228,17 @@ describe("Wallet Store v2 ceremony hardening", function () {
 
   afterEach(async function () {
     while (roots.length > 0) await rm(roots.pop()!, { recursive: true, force: true });
+  });
+
+  it("does not expose an accidental package ceremony command", async function () {
+    const packageJson = JSON.parse(await readFile(
+      fileURLToPath(new URL("../package.json", import.meta.url)),
+      "utf8",
+    )) as { scripts?: Record<string, string> };
+    assert.equal(
+      Object.keys(packageJson.scripts ?? {}).some((name) => /ceremony/i.test(name)),
+      false,
+    );
   });
 
   it("cleans invalid, duplicate, accepted, wrong-length, and failed entropy buffers", function () {
@@ -308,6 +328,7 @@ describe("Wallet Store v2 ceremony hardening", function () {
       await assert.rejects(buildWalletStoreV2ProductionFormatFixtureBundle({
         passwordProvider: password,
         walletGenerator: testGenerator(retained),
+        ceremonyId: CEREMONY_ID,
         createdAt: CREATED_AT,
         authorization: WALLET_STORE_V2_FIXTURE_AUTHORIZATION,
         afterGenerationForTest: () => { throw new Error("fixture normalization failure"); },
@@ -317,6 +338,56 @@ describe("Wallet Store v2 ceremony hardening", function () {
     } finally {
       password.destroy();
     }
+  });
+
+  it("separates deterministic production-format fixtures from every real production path", async function () {
+    const root = await temporaryRoot("artifact-separation");
+    const bundle = await productionFormatBundle();
+    assert.equal(bundle.artifactClass, "production-format-fixture");
+    assert.equal(bundle.manifest.artifactClass, "production-format-fixture");
+    assert.equal(bundle.envelope.artifactClass, "production-format-fixture");
+    assert.throws(() => validateWalletStoreV2FixtureBundle(bundle as never), /fixture bundle marker/);
+    assert.throws(() => validateWalletStoreV2ProductionBundle(bundle as never), /production API/);
+    const runtimeConstructor = NodeCSPRNGProductionWalletGenerator as unknown as {
+      new (...args: unknown[]): NodeCSPRNGProductionWalletGenerator;
+    };
+    assert.throws(() => Reflect.construct(runtimeConstructor, [
+      "node-csprng-production",
+      () => Buffer.alloc(32),
+      () => "fixture-address",
+    ]), /internal construction capability/);
+    const productionSecurity = {
+      artifactClass: "production" as const,
+      async assertBeforeCreate(): Promise<void> {},
+      async assertAfterCommit(): Promise<void> {},
+      async assertBeforeOpen(): Promise<void> {},
+    };
+    await assert.rejects(createWalletStoreV2ProductionBundleDirectory({
+      directory: resolve(root, `forbidden${WALLET_STORE_V2_BUNDLE_DIRECTORY_SUFFIX}`),
+      bundle: bundle as never,
+      productionSecurity,
+      runtimeCapability: {},
+    }), /runtime capability/);
+    const module = await import("../scripts/operator/guarded-checkpoint-20-wallet-store-v2.js");
+    assert.equal("buildWalletStoreV2ProductionBundle" in module, false);
+    assert.equal("buildProductionGuardedCheckpoint20ManifestFromWalletStoreV2" in module, false);
+
+    let builds = 0;
+    const forbiddenDependencies = ceremonyDependencies({
+      root,
+      build: async (createdAt) => {
+        builds += 1;
+        return productionFormatBundle(createdAt);
+      },
+    });
+    forbiddenDependencies.paths = walletStoreV2CeremonyPaths(
+      resolve(process.cwd(), "forbidden-production-format-fixture-root"),
+    );
+    await assert.rejects(runWalletStoreV2ProductionFormatFixtureCeremony({
+      authorization: WALLET_STORE_V2_FIXTURE_AUTHORIZATION,
+      dependencies: forbiddenDependencies,
+    }), /temporary test root/);
+    assert.equal(builds, 0);
   });
 
   it("handles hidden TTY success, UTF-8 byte overflow, EOF, close, error, Ctrl+C, SIGINT, and no TTY", async function () {
@@ -399,6 +470,33 @@ describe("Wallet Store v2 ceremony hardening", function () {
     queueMicrotask(() => overflowInput.emit("data", "€".repeat(86)));
     await assert.rejects(overflow, /byte limit/);
     assertTtyClean(overflowInput, overflowSignal);
+
+    const resumeFailureInput = new FakeTtyInput();
+    const resumeFailureSignal = new EventEmitter();
+    resumeFailureInput.resume = () => { throw new Error("fixture resume failure"); };
+    await assert.rejects(readHiddenWalletStoreV2PasswordForFixture({
+      ttyInput: resumeFailureInput,
+      ttyOutput: new FakeTtyOutput(),
+      signalSource: resumeFailureSignal as WalletStoreV2SignalSource,
+      authorization: WALLET_STORE_V2_FIXTURE_AUTHORIZATION,
+    }), /resume failure/);
+    assertTtyClean(resumeFailureInput, resumeFailureSignal);
+    assert.deepEqual(resumeFailureInput.rawChanges, [true, false]);
+
+    const listenerFailureInput = new FakeTtyInput();
+    const listenerFailureSignal = new EventEmitter();
+    const originalOn = listenerFailureInput.on.bind(listenerFailureInput);
+    listenerFailureInput.on = ((event: string, listener: (...args: unknown[]) => void) => {
+      if (event === "end") throw new Error("fixture listener failure");
+      return originalOn(event, listener);
+    }) as typeof listenerFailureInput.on;
+    await assert.rejects(readHiddenWalletStoreV2PasswordForFixture({
+      ttyInput: listenerFailureInput,
+      ttyOutput: new FakeTtyOutput(),
+      signalSource: listenerFailureSignal as WalletStoreV2SignalSource,
+      authorization: WALLET_STORE_V2_FIXTURE_AUTHORIZATION,
+    }), /listener registration failed/);
+    assertTtyClean(listenerFailureInput, listenerFailureSignal);
 
     const noTtyInput = new FakeTtyInput();
     noTtyInput.isTTY = false;
@@ -494,6 +592,21 @@ describe("Wallet Store v2 ceremony hardening", function () {
         adapter,
       }), /checkpoint-20 root|allowlisted/);
     }
+    const rawDotPaths = [
+      `${checkpointRoot}${sep}..${sep}checkpoint-20`,
+      `${resolve(localAppData, "POP33", "operator")}${sep}.${sep}checkpoint-20`,
+      `${checkpointRoot}${sep}active${sep}..${sep}..${sep}checkpoint-20`,
+      `${checkpointRoot}/active\\..\\active`,
+    ];
+    for (const rootDirectory of rawDotPaths) {
+      assert.throws(() => new WindowsWalletStoreV2ProductionFileSecurity({
+        rootDirectory,
+        localAppDataDirectory: localAppData,
+        workspaceDirectory: resolve(localAppData, "unrelated-workspace"),
+        adapter,
+      }), /raw dot segments/);
+    }
+    assert.equal(adapter.protected, false, "raw paths must fail before ACL mutation");
   });
 
   it("completes active store, independent identity, backup, final verification, and blocks regeneration", async function () {
@@ -517,6 +630,12 @@ describe("Wallet Store v2 ceremony hardening", function () {
     assert.equal(builds, 1);
     const state = JSON.parse(await readFile(dependencies.paths.stateFile, "utf8")) as { stage: string };
     assert.equal(state.stage, "complete");
+    const marker = JSON.parse(await readFile(dependencies.paths.startMarkerFile, "utf8")) as {
+      ceremonyId: string;
+      artifactClass: string;
+    };
+    assert.equal(marker.ceremonyId, CEREMONY_ID);
+    assert.equal(marker.artifactClass, "production-format-fixture");
     const activeMetadata = JSON.parse(await readFile(
       resolve(dependencies.paths.activeBundleDirectory, WALLET_STORE_V2_CEREMONY_METADATA_FILE_NAME),
       "utf8",
@@ -566,10 +685,10 @@ describe("Wallet Store v2 ceremony hardening", function () {
           "utf8",
         );
       } else if (scenario === "store-manifest-without-identity") {
-        await createWalletStoreV2ProductionBundleDirectory({
+        await createWalletStoreV2ProductionFormatFixtureBundleDirectory({
           directory: dependencies.paths.activeBundleDirectory,
           bundle: await productionFormatBundle(),
-          productionSecurity: dependencies.activeSecurity,
+          fixtureSecurity: dependencies.activeSecurity as WalletStoreV2ProductionFormatFixtureCeremonyFileSecurity,
         });
       } else if (scenario === "identity-without-backup") {
         await mkdir(dependencies.paths.identityRoot, { recursive: true });
@@ -657,6 +776,96 @@ describe("Wallet Store v2 ceremony hardening", function () {
     }
   });
 
+  it("fails closed when state is deleted after keys-generating and preserves the start marker", async function () {
+    const root = await temporaryRoot("deleted-state");
+    let builds = 0;
+    let tripped = false;
+    const dependencies = ceremonyDependencies({
+      root,
+      fault: (boundary) => {
+        if (!tripped && boundary === "after-keys-generating") {
+          tripped = true;
+          throw new Error("fixture stop after keys-generating");
+        }
+      },
+      build: async (createdAt) => {
+        builds += 1;
+        return productionFormatBundle(createdAt);
+      },
+    });
+    await assert.rejects(runWalletStoreV2ProductionFormatFixtureCeremony({
+      authorization: WALLET_STORE_V2_FIXTURE_AUTHORIZATION,
+      dependencies,
+    }), /stop after keys-generating/);
+    assert.equal(builds, 0);
+    const markerBefore = await readFile(dependencies.paths.startMarkerFile, "utf8");
+    await unlink(dependencies.paths.stateFile);
+    await assert.rejects(runWalletStoreV2ProductionFormatFixtureCeremony({
+      authorization: WALLET_STORE_V2_FIXTURE_AUTHORIZATION,
+      dependencies,
+    }), /start marker exists without state|incident recovery/);
+    assert.equal(builds, 0);
+    assert.equal(await readFile(dependencies.paths.startMarkerFile, "utf8"), markerBefore);
+  });
+
+  it("rejects marker A with tampered state B while active metadata remains A", async function () {
+    const root = await temporaryRoot("state-ceremony-mismatch");
+    let tripped = false;
+    const dependencies = ceremonyDependencies({
+      root,
+      fault: (boundary) => {
+        if (!tripped && boundary === "after-store-written") {
+          tripped = true;
+          throw new Error("fixture stop after store-written");
+        }
+      },
+    });
+    await assert.rejects(runWalletStoreV2ProductionFormatFixtureCeremony({
+      authorization: WALLET_STORE_V2_FIXTURE_AUTHORIZATION,
+      dependencies,
+    }), /stop after store-written/);
+    const activeMetadata = JSON.parse(await readFile(
+      resolve(dependencies.paths.activeBundleDirectory, WALLET_STORE_V2_CEREMONY_METADATA_FILE_NAME),
+      "utf8",
+    )) as { ceremonyId: string };
+    assert.equal(activeMetadata.ceremonyId, CEREMONY_ID);
+    const state = JSON.parse(await readFile(dependencies.paths.stateFile, "utf8")) as Record<string, unknown>;
+    state.ceremonyId = "61616161-6161-4161-8161-616161616161";
+    delete state.fingerprint;
+    state.fingerprint = digest(state);
+    await writeFile(dependencies.paths.stateFile, `${JSON.stringify(state, null, 2)}\n`, "utf8");
+    await assert.rejects(runWalletStoreV2ProductionFormatFixtureCeremony({
+      authorization: WALLET_STORE_V2_FIXTURE_AUTHORIZATION,
+      dependencies,
+    }), /state values|start marker|ceremony/);
+  });
+
+  for (const selectedBoundary of ["after-backup-verified", "after-final-verification"] as const) {
+    it(`freshly rereads backup after ${selectedBoundary}`, async function () {
+      const root = await temporaryRoot(`fresh-backup-${selectedBoundary}`);
+      let substituted = false;
+      const dependencies = ceremonyDependencies({
+        root,
+        fault: async (boundary) => {
+          if (substituted || boundary !== selectedBoundary) return;
+          substituted = true;
+          await writeFile(
+            resolve(dependencies.paths.backupBundleDirectory, WALLET_STORE_V2_STORE_FILE_NAME),
+            "{}\n",
+            "utf8",
+          );
+        },
+      });
+      await assert.rejects(runWalletStoreV2ProductionFormatFixtureCeremony({
+        authorization: WALLET_STORE_V2_FIXTURE_AUTHORIZATION,
+        dependencies,
+      }), /bundle|manifest|invalid|incomplete/);
+      assert.equal(substituted, true);
+      const state = JSON.parse(await readFile(dependencies.paths.stateFile, "utf8")) as { stage: string };
+      assert.equal(state.stage, selectedBoundary === "after-backup-verified" ? "backup-verified" : "final-verified");
+    });
+  }
+
   it("fail-closes entropy crashes after records 1 and 14 and cleans every candidate buffer", async function () {
     for (const acceptedBeforeCrash of [1, 14]) {
       const root = await temporaryRoot(`entropy-crash-${acceptedBeforeCrash}`);
@@ -682,6 +891,7 @@ describe("Wallet Store v2 ceremony hardening", function () {
             return await buildWalletStoreV2ProductionFormatFixtureBundle({
               passwordProvider: password,
               walletGenerator: generator,
+              ceremonyId: CEREMONY_ID,
               createdAt,
               authorization: WALLET_STORE_V2_FIXTURE_AUTHORIZATION,
             });
@@ -703,18 +913,57 @@ describe("Wallet Store v2 ceremony hardening", function () {
     }
   });
 
+  it("blocks restart after real child-process termination at durable ceremony boundaries", async function () {
+    for (const selectedBoundary of ["after-start-marker", "after-keys-generating", "after-store-written"] as const) {
+      const root = await temporaryRoot(`hard-kill-${selectedBoundary}`);
+      const child = fork(
+        fileURLToPath(new URL("../test-support/wallet-store-v2-ceremony-hard-kill-child.ts", import.meta.url)),
+        [root, selectedBoundary],
+        { execArgv: ["--import", "tsx"], stdio: ["ignore", "ignore", "ignore", "ipc"] },
+      );
+      try {
+        await new Promise<void>((resolvePromise, rejectPromise) => {
+          child.once("message", (message) => {
+            if ((message as { boundary?: unknown }).boundary === selectedBoundary) resolvePromise();
+          });
+          child.once("error", rejectPromise);
+          child.once("exit", (code) => {
+            if (code !== null) rejectPromise(new Error(`hard-kill fixture exited early with ${code}`));
+          });
+        });
+        child.kill("SIGKILL");
+        await once(child, "exit");
+      } finally {
+        if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
+      }
+      let builds = 0;
+      const dependencies = ceremonyDependencies({
+        root,
+        build: async (createdAt) => {
+          builds += 1;
+          return productionFormatBundle(createdAt);
+        },
+      });
+      await assert.rejects(runWalletStoreV2ProductionFormatFixtureCeremony({
+        authorization: WALLET_STORE_V2_FIXTURE_AUTHORIZATION,
+        dependencies,
+      }), /incident recovery|required|regeneration is forbidden|partial artifacts/);
+      assert.equal(builds, 0, selectedBoundary);
+    }
+  });
+
   it("uses production-format fixtures for backup, trusted restore, and exactly one selected record", async function () {
     const root = await temporaryRoot("production-format-restore");
     const paths = walletStoreV2CeremonyPaths(join(root, "checkpoint-20"));
     const security = new PermissiveCeremonySecurity();
     const bundle = await productionFormatBundle();
     const identity = buildTrustedWalletStoreIdentity(bundle.manifest);
-    await createWalletStoreV2ProductionBundleDirectory({
+    await createWalletStoreV2ProductionFormatFixtureBundleDirectory({
       directory: paths.activeBundleDirectory,
       bundle,
-      productionSecurity: security,
+      fixtureSecurity: security,
     });
-    await createWalletStoreV2ProductionBackup({
+    await createWalletStoreV2ProductionFormatFixtureBackup({
       sourceDirectory: paths.activeBundleDirectory,
       backupDirectory: paths.backupBundleDirectory,
       expectedIdentity: identity,
@@ -722,7 +971,7 @@ describe("Wallet Store v2 ceremony hardening", function () {
       backupSecurity: security,
     });
     const restoreDirectory = resolve(paths.activeRoot, `restore.checkpoint-20-wallet-store-v2-bundle`);
-    await restoreWalletStoreV2ProductionBackup({
+    await restoreWalletStoreV2ProductionFormatFixtureBackup({
       backupDirectory: paths.backupBundleDirectory,
       restoreDirectory,
       expectedIdentity: identity,
@@ -761,19 +1010,19 @@ describe("Wallet Store v2 ceremony hardening", function () {
     ] as const) {
       const root = await temporaryRoot(`restore-${label}`);
       const paths = walletStoreV2CeremonyPaths(join(root, "checkpoint-20"));
-      await createWalletStoreV2ProductionBundleDirectory({
+      await createWalletStoreV2ProductionFormatFixtureBundleDirectory({
         directory: paths.activeBundleDirectory,
         bundle: candidate,
-        productionSecurity: security,
+        fixtureSecurity: security,
       });
-      await createWalletStoreV2ProductionBackup({
+      await createWalletStoreV2ProductionFormatFixtureBackup({
         sourceDirectory: paths.activeBundleDirectory,
         backupDirectory: paths.backupBundleDirectory,
         expectedIdentity: buildTrustedWalletStoreIdentity(candidate.manifest),
         sourceSecurity: security,
         backupSecurity: security,
       });
-      await assert.rejects(restoreWalletStoreV2ProductionBackup({
+      await assert.rejects(restoreWalletStoreV2ProductionFormatFixtureBackup({
         backupDirectory: paths.backupBundleDirectory,
         restoreDirectory: resolve(paths.activeRoot, `restore${WALLET_STORE_V2_BUNDLE_DIRECTORY_SUFFIX}`),
         expectedIdentity,
@@ -784,12 +1033,12 @@ describe("Wallet Store v2 ceremony hardening", function () {
 
     const root = await temporaryRoot("restore-wrong-and-overwrite");
     const paths = walletStoreV2CeremonyPaths(join(root, "checkpoint-20"));
-    await createWalletStoreV2ProductionBundleDirectory({
+    await createWalletStoreV2ProductionFormatFixtureBundleDirectory({
       directory: paths.activeBundleDirectory,
       bundle: expectedBundle,
-      productionSecurity: security,
+      fixtureSecurity: security,
     });
-    await createWalletStoreV2ProductionBackup({
+    await createWalletStoreV2ProductionFormatFixtureBackup({
       sourceDirectory: paths.activeBundleDirectory,
       backupDirectory: paths.backupBundleDirectory,
       expectedIdentity,
@@ -799,14 +1048,14 @@ describe("Wallet Store v2 ceremony hardening", function () {
     const wrongIdentity = buildTrustedWalletStoreIdentity(
       (await productionFormatBundle(CREATED_AT, "72727272-7272-4272-8272-727272727272")).manifest,
     );
-    await assert.rejects(restoreWalletStoreV2ProductionBackup({
+    await assert.rejects(restoreWalletStoreV2ProductionFormatFixtureBackup({
       backupDirectory: paths.backupBundleDirectory,
       restoreDirectory: resolve(paths.activeRoot, `wrong${WALLET_STORE_V2_BUNDLE_DIRECTORY_SUFFIX}`),
       expectedIdentity: wrongIdentity,
       backupSecurity: security,
       restoreSecurity: security,
     }), /trusted identity/);
-    await assert.rejects(restoreWalletStoreV2ProductionBackup({
+    await assert.rejects(restoreWalletStoreV2ProductionFormatFixtureBackup({
       backupDirectory: paths.backupBundleDirectory,
       restoreDirectory: paths.activeBundleDirectory,
       expectedIdentity,
@@ -823,10 +1072,10 @@ describe("Wallet Store v2 ceremony hardening", function () {
     bundle.envelope.records[10].ciphertext = Buffer.alloc(32, 0xa5).toString("base64");
     recomputeProductionFormatFingerprints(bundle);
     const identity = buildTrustedWalletStoreIdentity(bundle.manifest);
-    await createWalletStoreV2ProductionBundleDirectory({
+    await createWalletStoreV2ProductionFormatFixtureBundleDirectory({
       directory: paths.activeBundleDirectory,
       bundle,
-      productionSecurity: security,
+      fixtureSecurity: security,
     });
     const selected: number[] = [];
     const password = new InjectedTestPasswordProvider(PASSWORD, WALLET_STORE_V2_FIXTURE_AUTHORIZATION);

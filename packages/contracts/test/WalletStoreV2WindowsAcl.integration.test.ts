@@ -6,6 +6,7 @@ import { join, resolve } from "node:path";
 import {
   WALLET_STORE_V2_BUNDLE_DIRECTORY_SUFFIX,
   WALLET_STORE_V2_CEREMONY_STATE_FILE_NAME,
+  WALLET_STORE_V2_CEREMONY_START_MARKER_FILE_NAME,
   WALLET_STORE_V2_FIXTURE_AUTHORIZATION,
   WALLET_STORE_V2_MANIFEST_FILE_NAME,
   WALLET_STORE_V2_STORE_FILE_NAME,
@@ -53,6 +54,7 @@ describe("Wallet Store v2 real Windows ACL integration", function () {
       for (const [fileName, kind] of [
         [WALLET_STORE_V2_TRUSTED_IDENTITY_FILE_NAME, "trusted-identity"],
         [WALLET_STORE_V2_CEREMONY_STATE_FILE_NAME, "ceremony-state"],
+        [WALLET_STORE_V2_CEREMONY_START_MARKER_FILE_NAME, "ceremony-start-marker"],
       ] as const) {
         const path = resolve(identityRoot, fileName);
         await identitySecurity.assertPublicFileBeforeCreate(path, kind);

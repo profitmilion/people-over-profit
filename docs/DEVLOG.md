@@ -33,6 +33,68 @@ documentation.
   current overview of implementation, gaps, and risks.
 - Do not guess. Mark unclear facts as requiring later reconstruction.
 
+## 2026-08-08 - Wallet Store v2 ceremony closure
+
+### At a glance
+
+The closure patch addresses the bypass, provenance, crash, TOCTOU, raw-path,
+and TTY findings from the third independent review. The result is
+`READY_FOR_FINAL_INDEPENDENT_CEREMONY_REVIEW`; it is not approval to run a real
+wallet ceremony.
+
+### Completed
+
+- Made the ceremony orchestrator the only production creation path with a
+  module-private production builder, an unforgeable runtime capability, and an
+  in-memory provenance mark required by the production writer.
+- Split `fixture`, `production-format-fixture`, and `production` into distinct,
+  non-convertible artifact classes bound into headers, AAD, manifests,
+  fingerprints, identities, metadata, receipts, and runner bindings. Test
+  entropy can create only temporary production-format fixtures.
+- Made production password acquisition and `crypto.randomBytes(32)` selection
+  internal to the production orchestrator; arbitrary injected entropy remains
+  test-only.
+- Added a create-only public ceremony start marker before generation and bound
+  a public `ceremonyId` through marker, state, active metadata, store binding,
+  manifest, trusted identity, backup metadata, and receipts. Missing or
+  mismatched post-marker state blocks restart and regeneration.
+- Replaced cached final backup evidence with fresh active, identity, and backup
+  reads before both `final-verified` and `complete`.
+- Rejected raw `.` and `..` Windows path segments before canonicalization or
+  ACL mutation, and extended TTY cleanup around raw-mode setup, resume, listener
+  registration, stream failure, EOF/close, and Ctrl+C.
+- Added child-process hard-kill coverage after the start marker,
+  `keys-generating`, and `store-written` boundaries.
+
+### Verification and safety
+
+- Focused Wallet Store v2, ceremony, Windows ACL, and Guarded Checkpoint-20
+  suites passed using only deterministic fixtures and disposable temporary
+  roots. The final contracts/operator regression passed all 726 tests; Hardhat
+  compile required no contract recompilation and contracts TypeScript checking
+  passed. All 29 frontend domain tests, the root production build, scoped lint,
+  no-secret scan, and `git diff --check` also passed.
+- No ceremony CLI, package script, PowerShell real-ceremony launcher, real key,
+  wallet, password, production store, trusted identity, backup, protected Piotr
+  root, signer, blockchain transaction, deployment, master change, or recovery
+  fast-forward was created or performed.
+
+### Limitations and next step
+
+- The exact next step is a final independent read-only ceremony review. A real
+  production ceremony still requires a separate later decision and explicit
+  human authorization.
+- Execute remains blocked by exact-count enforcement, journal v2, semantic
+  receipt reconciliation, dual-RPC finality, global transaction locking,
+  mandatory phase evidence, promoted readiness blockers, and aggregate
+  fee/funding enforcement.
+
+### Git
+
+- Branch: `codex/pop33-wallet-store-v2-ceremony-closure`
+- Source baseline: `654c89f972cc671438acd3a36e63cb6a9d2fe0f2`
+- Record message: `fix(operator): close wallet ceremony bypasses`
+
 ## 2026-08-08 - Wallet Store v2 ceremony hardening
 
 ### At a glance

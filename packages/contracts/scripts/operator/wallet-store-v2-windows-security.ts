@@ -8,6 +8,7 @@ import {
   WALLET_STORE_V2_BUNDLE_DIRECTORY_SUFFIX,
   WALLET_STORE_V2_BACKUP_METADATA_FILE_NAME,
   WALLET_STORE_V2_CEREMONY_STATE_FILE_NAME,
+  WALLET_STORE_V2_CEREMONY_START_MARKER_FILE_NAME,
   WALLET_STORE_V2_CEREMONY_METADATA_FILE_NAME,
   WALLET_STORE_V2_FIXTURE_AUTHORIZATION,
   WALLET_STORE_V2_MANIFEST_FILE_NAME,
@@ -53,6 +54,9 @@ function isInside(candidate: string, parent: string): boolean {
 }
 
 function requireAbsolute(value: string, label: string): string {
+  if (value.split(/[\\/]+/u).some((segment) => segment === "." || segment === "..")) {
+    throw new Error(`${label} must not contain raw dot segments.`);
+  }
   if (!isAbsolute(value)) throw new Error(`${label} must be absolute.`);
   return resolve(value);
 }
@@ -271,7 +275,9 @@ export class WindowsWalletStoreV2ProductionFileSecurity implements WalletStoreV2
     const absolute = requireAbsolute(path, "Wallet Store v2 ceremony file");
     const expectedName = kind === "trusted-identity"
       ? WALLET_STORE_V2_TRUSTED_IDENTITY_FILE_NAME
-      : WALLET_STORE_V2_CEREMONY_STATE_FILE_NAME;
+      : kind === "ceremony-state"
+        ? WALLET_STORE_V2_CEREMONY_STATE_FILE_NAME
+        : WALLET_STORE_V2_CEREMONY_START_MARKER_FILE_NAME;
     if (normalizedPath(absolute) !== normalizedPath(resolve(this.#rootDirectory, expectedName))) {
       throw new Error("Wallet Store v2 ceremony file path is not allowlisted.");
     }

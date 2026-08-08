@@ -2,12 +2,15 @@
 
 Last reviewed: 2026-08-08
 
-Branch reviewed: `codex/pop33-wallet-store-v2-ceremony-hardening`
+Branch reviewed: `codex/pop33-wallet-store-v2-ceremony-closure`
 
-Wallet Store v2 ceremony-hardening source baseline:
-`8f8f120aedfd6f1ca9be8bcd5f4817e854657867`
+Wallet Store v2 ceremony-closure source baseline:
+`654c89f972cc671438acd3a36e63cb6a9d2fe0f2`
 
 Status: active development
+
+Wallet Store v2 ceremony status:
+`READY_FOR_FINAL_INDEPENDENT_CEREMONY_REVIEW`
 
 ## Summary
 
@@ -137,54 +140,50 @@ write exists in this milestone. No real candidate, wallet store, wallet,
 manifest, checkpoint journal, funding plan, or execution authorization was
 created.
 
-A hardened Wallet Store v2 implementation is now prepared on
-`codex/pop33-wallet-store-v2-ceremony-hardening`. Fixture and production artifacts carry
-distinct `artifactClass` values through the encrypted header, public manifest,
-fingerprints, runner binding, backup metadata, inspections, and receipts; both
-API families reject cross-use and there is no conversion. The production
-boundary adds a hidden raw-TTY password provider, a ceremony-gated Node CSPRNG
-generator for 15 independent keys, Windows create-only canonical-path/reparse
-and fail-closed ACL controls, independently supplied trusted backup identity,
-bounded parsing, authenticated-decrypt cleanup, and controlled orphan-temp
-cleanup. The production verifier performs only trusted identity, path/ACL,
-hidden unlock, one-record decryption, address comparison, cleanup, and a public
-receipt; it exposes no arbitrary callback, signer, wallet client, RPC write, or
-transaction transport.
+A Wallet Store v2 ceremony closure patch is now prepared on
+`codex/pop33-wallet-store-v2-ceremony-closure` after the third independent
+review returned `NO_GO_FOR_REAL_WALLET_CEREMONY`. The public artifact model now
+has three non-convertible classes: `fixture`, `production-format-fixture`, and
+`production`. Deterministic entropy can create only test artifacts below an
+approved temporary root; production validators, writers, runner bindings, and
+future execution reject them.
 
-The second independent review's four ceremony blockers are now remediated in
-code for another read-only review. One fail-closed orchestrator validates the
-exact Windows roots and ACL/create-only boundaries before obtaining a hidden
-password or generating exactly 15 keys, then owns active store/manifest,
-independently persisted trusted identity, encrypted backup, backup verification,
-final verification, and public success. Its durable public-only state adds an
-explicit `keys-generating` boundary; only clean pre-generation states may retry,
-while any later incomplete, mismatched, partial, or orphan state blocks
-regeneration and automatic overwrite/cleanup. A complete ceremony is
-reverified and cannot generate a second set.
+The fail-closed ceremony orchestrator is the only runtime path able to create a
+real production bundle. Its production builder is module-private, and the
+production writer requires both an unforgeable runtime capability and an
+in-memory provenance mark issued only by that builder. The orchestrator selects
+the hidden production password provider and `crypto.randomBytes(32)` generator
+internally. No public custom-entropy, production-builder, or standalone real
+store-creation path exists, and no ceremony CLI or package script was added.
 
-Production path policy now accepts only
-`%LOCALAPPDATA%\POP33\operator\checkpoint-20` or its exact `active`, `backup`,
-and `identity` children. Hidden TTY handling covers data, EOF/end, close, error,
-Ctrl+C/SIGINT, no TTY, byte overflow, Unicode byte limits, backspace, CR/LF,
-and confirmation mismatch with one settlement, listener/raw-mode cleanup, and
-mutable-buffer clearing. Injected test entropy covers invalid scalar,
-duplicate key/address, derivation and normalization failure, Nth-record failure,
-and cleanup; production remains bound to `crypto.randomBytes(32)` and was not
-run. A real PowerShell/icacls integration test passed against only a disposable
-checkpoint-shaped temporary tree, never Piotr's production root.
+Every ceremony has a public random `ceremonyId` bound through the store AAD,
+manifest, binding, trusted identity, public state, active metadata, backup
+metadata, receipts, and a create-only ceremony start marker written before key
+generation. A marker without state, a marker/state identity mismatch, or any
+post-marker partial state is an incident that blocks restart and produces zero
+new keys. Child-process hard-kill tests cover termination after the marker,
+`keys-generating`, and `store-written` boundaries.
 
-Only deterministic production-format fixture records were used for ceremony,
-backup/restore, crash, and one-record isolation tests. The production generator
-and real hidden prompt were not run. No real
-wallet, password, store, manifest, trusted identity, backup, protected Piotr
-directory, signer, or transaction was created.
+Before both `final-verified` and `complete`, the orchestrator freshly rereads
+the active store, active manifest and metadata, trusted identity, encrypted
+backup, backup manifest, and backup metadata. It rejects substitution after an
+earlier backup verification instead of trusting cached objects. Windows policy
+rejects raw `.` and `..` segments before normalization or ACL work. Hidden TTY
+cleanup now covers raw-mode setup, `resume()`, listener registration, stream
+errors, EOF/close, and Ctrl+C with one settlement and buffer clearing.
 
-Full execution remains blocked pending a third independent review of this
-ceremony hardening, a separately authorized real-record creation and backup ceremony, a future
-minimal internal trusted action, complete journal-v2 integration and semantic
-receipt reconciliation, real dual-source finality, a global run lock, non-null
-phase evidence, promoted readiness blockers, aggregate fee/funding enforcement,
-and separate authorization for one batch.
+Only deterministic `production-format-fixture` data and disposable temporary
+roots were used for closure tests. The production generator and real hidden
+prompt were not run. No real wallet, key, password, store, manifest, trusted
+identity, backup, protected Piotr directory, signer, transaction, or deployment
+was created.
+
+Status is `READY_FOR_FINAL_INDEPENDENT_CEREMONY_REVIEW`, not authorization for
+a real ceremony. Full execution also remains blocked by a separately authorized
+real-record ceremony, a future minimal internal trusted action, complete
+journal-v2 integration and semantic receipt reconciliation, real dual-source
+finality, a global run lock, non-null phase evidence, promoted readiness
+blockers, aggregate fee/funding enforcement, and separate batch authorization.
 
 The complete reviewed operator stack and reconciled preparation status are
 included in `codex/pop33-recovery` from source baseline

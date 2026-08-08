@@ -1,10 +1,10 @@
 # POP33 Wallet Store v2
 
-Status: ceremony-hardened fixture and production boundaries prepared for a
-third independent read-only review. The production entrypoint has no CLI or
-package script and remains operationally disabled. No production ceremony has
-been run. No real checkpoint-20 wallet,
-password, store, manifest, trusted identity, or backup exists.
+Status: `READY_FOR_FINAL_INDEPENDENT_CEREMONY_REVIEW`. This is not
+`GO_FOR_REAL_WALLET_CEREMONY`. The production entrypoint has no CLI, package
+script, or launcher and remains operationally disabled. No production ceremony
+has been run. No real checkpoint-20 wallet, password, store, manifest, trusted
+identity, or backup exists.
 
 ## Scope and three separate stages
 
@@ -30,6 +30,14 @@ production validators and production runner binding reject it. Changing only
 the artifact class changes the binding fingerprint and invalidates the bundle;
 there is no fixture-to-production conversion.
 
+### Production-format fixture
+
+`artifactClass: "production-format-fixture"` exercises the exact production
+record, manifest, trusted-identity, backup, and ceremony shapes with injected
+deterministic entropy. It is accepted only below an approved disposable system
+temporary root. Production validators, production writers, runner bindings,
+and future execution reject it. It cannot be converted to `production`.
+
 ### Production ceremony
 
 Production ceremony means creating 15 new, independent, unfunded Base Sepolia
@@ -38,12 +46,14 @@ ceremony is not authorized and has not been executed.
 
 The prepared production path requires all of the following together:
 
-1. the production ceremony authorization gate;
-2. Node.js cryptographic `randomBytes(32)` for every independent private key,
+1. the production ceremony orchestrator's private runtime capability and
+   provenance mark; neither is available to external callers;
+2. Node.js cryptographic `randomBytes(32)` selected internally for every
+   independent private key,
    with no mnemonic, deterministic seed, shared seed, or `Math.random()`
    fallback;
-3. a hidden raw-TTY password prompt with confirmation; production APIs reject
-   injected/fixture password providers;
+3. an internally selected hidden raw-TTY password prompt with confirmation;
+   production APIs reject injected/fixture password providers;
 4. a production bundle carrying `artifactClass: "production"` through every
    identity and fingerprint;
 5. an exact canonical Windows checkpoint root or one of its allowlisted
@@ -81,7 +91,8 @@ verification steps.
 
 ## Production ceremony orchestrator and durable state
 
-One narrow library orchestrator now owns the complete production ordering:
+One narrow library orchestrator is the only production creation path and owns
+the complete ordering:
 
 environment/authentication precheck -> exact active/backup/identity path and
 ACL validation -> hidden password and confirmation -> exactly 15 independent
@@ -89,8 +100,11 @@ keys -> encrypted store and public manifest -> independently persisted
 `TrustedWalletStoreIdentity` -> encrypted backup -> backup verification against
 that external identity -> final active/backup/identity reread -> `complete`.
 
-There is deliberately no `npm run ceremony`, launcher, or enabled CLI. Calling
-the library entrypoint for real remains prohibited until a later independent
+The production bundle builder is module-private. Production persistence
+requires the orchestrator-only runtime capability and a bundle provenance mark
+that cannot be reconstructed from JSON or a TypeScript assertion. There is
+deliberately no `npm run ceremony`, launcher, or enabled CLI. Calling the
+library entrypoint for real remains prohibited until a later independent
 review returns GO and Piotr separately authorizes the ceremony.
 
 The durable public-only state machine is:
@@ -99,11 +113,21 @@ The durable public-only state machine is:
 store-written -> identity-written -> backup-written -> backup-verified ->
 final-verified -> complete`
 
-The state contains paths, timestamps, revision, stage, public trusted identity,
-and fingerprints only. It never contains a password, private key, plaintext
-record, derived key, or decrypted material. Final public success contains only
-the store ID, three public fingerprints, 15 public addresses, and fixed active,
-backup, identity, and state paths.
+Before state or key generation, the orchestrator create-only persists
+`checkpoint-20.wallet-store-v2.ceremony-start-marker.json`. The marker contains
+only public `ceremonyId`, artifact class, checkpoint identity, timestamp, fixed
+active/backup/identity roots, and its fingerprint. Marker presence without
+state is an incident, never a new ceremony; it blocks generation and is not
+automatically deleted or overwritten.
+
+The state contains `ceremonyId`, paths, timestamps, revision, stage, public
+trusted identity, and fingerprints only. It never contains a password, private
+key, plaintext record, derived key, or decrypted material. `ceremonyId` is also
+bound into store AAD and binding, manifest, active metadata, trusted identity,
+backup metadata, inspections, and receipts. Artifacts from different ceremonies
+fail closed. Final public success contains only the ceremony/store IDs, public
+fingerprints, 15 public addresses, and fixed marker, active, backup, identity,
+and state paths.
 
 The active bundle atomically includes a public ceremony metadata record. It
 binds the store ID to the fixed external trusted-identity/state paths and the
@@ -117,12 +141,22 @@ Crash policy is intentionally conservative:
   revalidated and retried;
 - `keys-generating` or any later incomplete stage blocks regeneration and
   requires an explicit operator recovery procedure;
+- marker-without-state, state-without-marker, marker/state `ceremonyId`
+  mismatch, and deletion of state after generation begins all fail closed with
+  zero new keys;
 - active-without-manifest, store/manifest-without-identity,
   identity-without-backup, unverified backup, unknown/orphan temp content, and
   mismatched state/artifacts all fail closed;
 - a complete existing ceremony is reverified against the independent identity
   and blocks generation of a second wallet set;
 - no partial artifact is overwritten or deleted automatically.
+
+Immediately before `final-verified`, and again immediately before `complete`,
+the orchestrator freshly reads the active encrypted store, manifest and
+metadata, independent trusted identity, and backup encrypted store, manifest
+and metadata. It verifies that every artifact has the same `ceremonyId` and
+matches the independent identity. Cached backup results cannot satisfy either
+final proof.
 
 Do not manually delete an incomplete state, bundle, identity, backup, lock, or
 orphan directory. Preserve it for incident analysis and follow a separately
@@ -227,6 +261,8 @@ following controls remain separate blockers:
 7. critical readiness risks promoted to execute blockers;
 8. aggregate fee and funding-budget enforcement.
 
-After this ceremony-hardening commit, the next step is a third independent
-read-only security review. It is not a production ceremony and not
-authorization for a Base Sepolia transaction.
+After this closure patch, the next step is a final independent read-only
+ceremony review. Current status is
+`READY_FOR_FINAL_INDEPENDENT_CEREMONY_REVIEW`, not
+`GO_FOR_REAL_WALLET_CEREMONY`; it is not a production ceremony or authorization
+for a Base Sepolia transaction.

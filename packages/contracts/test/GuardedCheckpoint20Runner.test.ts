@@ -48,6 +48,7 @@ function manifest(): GuardedCheckpoint20Manifest {
     storeBinding: {
       formatVersion: 2,
       artifactClass: "fixture",
+      ceremonyId: "12121212-1212-4121-8121-121212121212",
       storeId: "11111111-1111-4111-8111-111111111111",
       publicFingerprint: `sha256:${"a".repeat(64)}`,
       selectedRecordDecryption: true,

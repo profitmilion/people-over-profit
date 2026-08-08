@@ -37,6 +37,7 @@ import {
 } from "../scripts/operator/guarded-checkpoint-20.js";
 
 const CREATED_AT = "2026-08-08T12:00:00.000Z";
+const CEREMONY_ID = "10101010-1010-4010-8010-101010101010";
 const STORE_ID = "20202020-2020-4020-8020-202020202020";
 const FIXTURE_UNLOCK_TEXT = "fixture-only-neutral-canary-unlock-value";
 const NEUTRAL_MNEMONIC_CANARY =
@@ -85,6 +86,7 @@ async function buildBundle(input: {
     candidates: input.publicCandidates ?? candidates(),
     unlockSecret: unlock(),
     createdAt: CREATED_AT,
+    ceremonyId: CEREMONY_ID,
     storeId: STORE_ID,
     authorization: WALLET_STORE_V2_FIXTURE_AUTHORIZATION,
     provideRecord: async (index) => {
@@ -286,6 +288,7 @@ describe("Guarded Checkpoint-20 Wallet Store v2", function () {
     assert.throws(() => assertWalletStoreV2PublicOutput({
       kind: "wallet-store-v2-session-receipt",
       artifactClass: "fixture",
+      ceremonyId: CEREMONY_ID,
       storeId: STORE_ID,
       index: 0,
       address: candidates()[0].address,
@@ -297,6 +300,7 @@ describe("Guarded Checkpoint-20 Wallet Store v2", function () {
     assert.throws(() => assertWalletStoreV2PublicOutput({
       kind: "wallet-store-v2-session-receipt",
       artifactClass: "fixture",
+      ceremonyId: CEREMONY_ID,
       storeId: STORE_ID,
       index: 0,
       address: `0x${privateKeyBytes(0).toString("hex")}`,

@@ -85,6 +85,7 @@ export const GUARDED_CHECKPOINT_20_FUNDING_LIMITS: Exact99FundingLimits = {
 export interface GuardedCheckpoint20StoreBinding {
   formatVersion: 2;
   artifactClass: "fixture" | "production";
+  ceremonyId: string;
   storeId: string;
   publicFingerprint: string;
   selectedRecordDecryption: true;
@@ -270,6 +271,7 @@ export function buildGuardedCheckpoint20Manifest(input: {
   storeBinding: GuardedCheckpoint20StoreBinding;
 }): GuardedCheckpoint20Manifest {
   const addresses = normalizeAddresses(input.addresses);
+  if (!UUID.test(input.storeBinding.ceremonyId)) throw new Error("Ceremony ID must be a UUID.");
   if (!UUID.test(input.storeBinding.storeId)) throw new Error("Store ID must be a UUID.");
   if (!DIGEST.test(input.storeBinding.publicFingerprint)) {
     throw new Error("Store public fingerprint is invalid.");

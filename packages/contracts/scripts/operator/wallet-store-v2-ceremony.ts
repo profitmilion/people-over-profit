@@ -1,35 +1,51 @@
 import { createHash } from "node:crypto";
 import { lstat, readFile, readdir } from "node:fs/promises";
-import { resolve } from "node:path";
+import { tmpdir } from "node:os";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 
 import { atomicWritePrivateFile, pathIsRegularFile, withExclusiveFileLock } from "./durable-file.js";
 import {
   WALLET_STORE_V2_BUNDLE_DIRECTORY_SUFFIX,
   WALLET_STORE_V2_CEREMONY_METADATA_FILE_NAME,
   WALLET_STORE_V2_CEREMONY_METADATA_PURPOSE,
+  WALLET_STORE_V2_CEREMONY_START_MARKER_FILE_NAME,
   WALLET_STORE_V2_CEREMONY_STATE_FILE_NAME,
   WALLET_STORE_V2_FIXTURE_AUTHORIZATION,
-  WALLET_STORE_V2_PRODUCTION_CEREMONY_AUTHORIZATION,
   WALLET_STORE_V2_TRUSTED_IDENTITY_FILE_NAME,
-  NodeCSPRNGProductionWalletGenerator,
-  ProductionTtyPasswordProvider,
+  assertWalletStoreV2ProductionCeremonyRuntimeCapability,
   buildTrustedWalletStoreIdentity,
-  buildWalletStoreV2ProductionBundle,
   createUnverifiedWalletStoreV2ProductionBackupForCeremony,
+  createUnverifiedWalletStoreV2ProductionFormatFixtureBackupForCeremony,
   createWalletStoreV2ProductionBundleDirectory,
+  createWalletStoreV2ProductionFormatFixtureBundleDirectory,
   readAndInspectWalletStoreV2ProductionBundleDirectory,
+  readAndInspectWalletStoreV2ProductionFormatFixtureBundleDirectory,
+  runWalletStoreV2ProductionCeremonyRuntime,
   verifyWalletStoreV2ProductionBackup,
+  verifyWalletStoreV2ProductionFormatFixtureBackup,
   validateTrustedWalletStoreIdentity,
   type TrustedWalletStoreIdentity,
   type WalletStoreV2CeremonyFileSecurity,
+  type WalletStoreV2ProductionFormatFixtureBundle,
+  type WalletStoreV2ProductionFormatFixtureCeremonyFileSecurity,
   type WalletStoreV2ProductionBundle,
   type WalletStoreV2PublicInspection,
 } from "./guarded-checkpoint-20-wallet-store-v2.js";
-import { createDefaultWindowsWalletStoreV2ProductionSecurity } from "./wallet-store-v2-windows-security.js";
 
-const STATE_PURPOSE = "pop33-wallet-store-v2-production-ceremony-state" as const;
+const STATE_PURPOSE = "pop33-wallet-store-v2-ceremony-state" as const;
+const START_MARKER_PURPOSE = "pop33-wallet-store-v2-ceremony-start-marker" as const;
 const MAX_STATE_BYTES = 32 * 1024;
 const MAX_IDENTITY_BYTES = 16 * 1024;
+const MAX_START_MARKER_BYTES = 16 * 1024;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+type WalletStoreV2CeremonyArtifactClass = "production-format-fixture" | "production";
+type WalletStoreV2CeremonyBundle =
+  | WalletStoreV2ProductionFormatFixtureBundle
+  | WalletStoreV2ProductionBundle;
+type WalletStoreV2AnyCeremonyFileSecurity =
+  | WalletStoreV2CeremonyFileSecurity
+  | WalletStoreV2ProductionFormatFixtureCeremonyFileSecurity;
 
 export type WalletStoreV2CeremonyStage =
   | "prepared"
@@ -43,7 +59,13 @@ export type WalletStoreV2CeremonyStage =
   | "final-verified"
   | "complete";
 
+const CEREMONY_STAGES: readonly WalletStoreV2CeremonyStage[] = [
+  "prepared", "paths-verified", "keys-generating", "keys-generated", "store-written",
+  "identity-written", "backup-written", "backup-verified", "final-verified", "complete",
+];
+
 export type WalletStoreV2CeremonyFaultBoundary =
+  | "after-start-marker"
   | "after-prepared"
   | "after-paths-verified"
   | "after-keys-generating"
@@ -69,12 +91,28 @@ export interface WalletStoreV2CeremonyPaths {
   activeBundleDirectory: string;
   backupBundleDirectory: string;
   trustedIdentityFile: string;
+  startMarkerFile: string;
   stateFile: string;
+}
+
+export interface WalletStoreV2CeremonyStartMarker {
+  formatVersion: 1;
+  purpose: typeof START_MARKER_PURPOSE;
+  ceremonyId: string;
+  artifactClass: WalletStoreV2CeremonyArtifactClass;
+  createdAt: string;
+  checkpointId: "checkpoint-5-to-20";
+  activeRoot: string;
+  backupRoot: string;
+  identityRoot: string;
+  fingerprint: string;
 }
 
 export interface WalletStoreV2CeremonyState {
   formatVersion: 1;
   purpose: typeof STATE_PURPOSE;
+  ceremonyId: string;
+  artifactClass: WalletStoreV2CeremonyArtifactClass;
   stage: WalletStoreV2CeremonyStage;
   revision: number;
   createdAt: string;
@@ -85,12 +123,15 @@ export interface WalletStoreV2CeremonyState {
 }
 
 export interface WalletStoreV2CeremonyReceipt {
-  kind: "wallet-store-v2-production-ceremony-receipt";
+  kind: "wallet-store-v2-ceremony-receipt";
   stage: "complete";
+  ceremonyId: string;
+  artifactClass: WalletStoreV2CeremonyArtifactClass;
   storeId: string;
   activeBundleDirectory: string;
   backupBundleDirectory: string;
   trustedIdentityFile: string;
+  startMarkerFile: string;
   stateFile: string;
   bindingFingerprint: string;
   encryptedStoreFingerprint: string;
@@ -106,6 +147,8 @@ export interface WalletStoreV2CeremonyReceipt {
 interface WalletStoreV2ActiveCeremonyMetadata {
   formatVersion: 1;
   purpose: typeof WALLET_STORE_V2_CEREMONY_METADATA_PURPOSE;
+  artifactClass: WalletStoreV2CeremonyArtifactClass;
+  ceremonyId: string;
   storeId: string;
   trustedIdentityFile: string;
   stateFile: string;
@@ -114,11 +157,14 @@ interface WalletStoreV2ActiveCeremonyMetadata {
 }
 
 export interface WalletStoreV2CeremonyDependencies {
+  artifactClass: WalletStoreV2CeremonyArtifactClass;
+  runtimeCapability?: unknown;
   paths: WalletStoreV2CeremonyPaths;
-  activeSecurity: WalletStoreV2CeremonyFileSecurity;
-  backupSecurity: WalletStoreV2CeremonyFileSecurity;
-  identitySecurity: WalletStoreV2CeremonyFileSecurity;
-  buildBundle(createdAt: string): Promise<WalletStoreV2ProductionBundle>;
+  activeSecurity: WalletStoreV2AnyCeremonyFileSecurity;
+  backupSecurity: WalletStoreV2AnyCeremonyFileSecurity;
+  identitySecurity: WalletStoreV2AnyCeremonyFileSecurity;
+  buildBundle(createdAt: string, ceremonyId: string): Promise<WalletStoreV2CeremonyBundle>;
+  createCeremonyId(): string;
   now(): string;
   fault?(boundary: WalletStoreV2CeremonyFaultBoundary): Promise<void> | void;
 }
@@ -148,6 +194,14 @@ function checkedIso(value: unknown, label: string): string {
   return value;
 }
 
+function assertProductionFormatFixtureCeremonyTempRoot(paths: WalletStoreV2CeremonyPaths): void {
+  const temporaryRoot = resolve(tmpdir());
+  const child = relative(temporaryRoot, resolve(paths.checkpointRoot));
+  if (!child || child === ".." || child.startsWith(`..${sep}`) || isAbsolute(child)) {
+    throw new Error("Production-format fixture ceremony requires an approved temporary test root.");
+  }
+}
+
 function normalizePaths(input: WalletStoreV2CeremonyPaths): WalletStoreV2CeremonyPaths {
   const paths = Object.fromEntries(
     Object.entries(input).map(([key, value]) => [key, resolve(value)]),
@@ -165,6 +219,7 @@ function normalizePaths(input: WalletStoreV2CeremonyPaths): WalletStoreV2Ceremon
     paths.activeBundleDirectory !== resolve(paths.activeRoot, `active${WALLET_STORE_V2_BUNDLE_DIRECTORY_SUFFIX}`) ||
     paths.backupBundleDirectory !== resolve(paths.backupRoot, `backup${WALLET_STORE_V2_BUNDLE_DIRECTORY_SUFFIX}`) ||
     paths.trustedIdentityFile !== resolve(paths.identityRoot, WALLET_STORE_V2_TRUSTED_IDENTITY_FILE_NAME) ||
+    paths.startMarkerFile !== resolve(paths.identityRoot, WALLET_STORE_V2_CEREMONY_START_MARKER_FILE_NAME) ||
     paths.stateFile !== resolve(paths.identityRoot, WALLET_STORE_V2_CEREMONY_STATE_FILE_NAME)
   ) throw new Error("Wallet Store v2 ceremony artifact paths are invalid.");
   return paths;
@@ -183,20 +238,88 @@ export function walletStoreV2CeremonyPaths(checkpointRootInput: string): WalletS
     activeBundleDirectory: resolve(activeRoot, `active${WALLET_STORE_V2_BUNDLE_DIRECTORY_SUFFIX}`),
     backupBundleDirectory: resolve(backupRoot, `backup${WALLET_STORE_V2_BUNDLE_DIRECTORY_SUFFIX}`),
     trustedIdentityFile: resolve(identityRoot, WALLET_STORE_V2_TRUSTED_IDENTITY_FILE_NAME),
+    startMarkerFile: resolve(identityRoot, WALLET_STORE_V2_CEREMONY_START_MARKER_FILE_NAME),
     stateFile: resolve(identityRoot, WALLET_STORE_V2_CEREMONY_STATE_FILE_NAME),
   });
 }
 
+function buildStartMarker(input: {
+  ceremonyId: string;
+  artifactClass: WalletStoreV2CeremonyArtifactClass;
+  createdAt: string;
+  paths: WalletStoreV2CeremonyPaths;
+}): WalletStoreV2CeremonyStartMarker {
+  if (!UUID.test(input.ceremonyId)) throw new Error("Wallet Store v2 ceremony ID is invalid.");
+  const paths = normalizePaths(input.paths);
+  const base: Omit<WalletStoreV2CeremonyStartMarker, "fingerprint"> = {
+    formatVersion: 1,
+    purpose: START_MARKER_PURPOSE,
+    ceremonyId: input.ceremonyId,
+    artifactClass: input.artifactClass,
+    createdAt: checkedIso(input.createdAt, "Wallet Store v2 ceremony marker creation time"),
+    checkpointId: "checkpoint-5-to-20",
+    activeRoot: paths.activeRoot,
+    backupRoot: paths.backupRoot,
+    identityRoot: paths.identityRoot,
+  };
+  return { ...base, fingerprint: fingerprint(base) };
+}
+
+function validateStartMarker(
+  value: unknown,
+  artifactClass: WalletStoreV2CeremonyArtifactClass,
+  pathsInput: WalletStoreV2CeremonyPaths,
+): WalletStoreV2CeremonyStartMarker {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Wallet Store v2 ceremony start marker is invalid.");
+  }
+  const record = value as Record<string, unknown>;
+  const keys = [
+    "formatVersion", "purpose", "ceremonyId", "artifactClass", "createdAt", "checkpointId",
+    "activeRoot", "backupRoot", "identityRoot", "fingerprint",
+  ];
+  if (Object.keys(record).length !== keys.length || keys.some((key) => !(key in record))) {
+    throw new Error("Wallet Store v2 ceremony start marker shape is invalid.");
+  }
+  if (
+    record.formatVersion !== 1 || record.purpose !== START_MARKER_PURPOSE ||
+    record.artifactClass !== artifactClass || typeof record.ceremonyId !== "string" ||
+    !UUID.test(record.ceremonyId) || record.checkpointId !== "checkpoint-5-to-20" ||
+    typeof record.fingerprint !== "string"
+  ) throw new Error("Wallet Store v2 ceremony start marker values are invalid.");
+  const paths = normalizePaths(pathsInput);
+  const marker = buildStartMarker({
+    ceremonyId: record.ceremonyId,
+    artifactClass,
+    createdAt: checkedIso(record.createdAt, "Wallet Store v2 ceremony marker creation time"),
+    paths,
+  });
+  if (
+    record.activeRoot !== paths.activeRoot || record.backupRoot !== paths.backupRoot ||
+    record.identityRoot !== paths.identityRoot || record.fingerprint !== marker.fingerprint
+  ) throw new Error("Wallet Store v2 ceremony start marker does not match this invocation.");
+  return marker;
+}
+
 function buildState(input: {
   previous?: WalletStoreV2CeremonyState;
+  marker: WalletStoreV2CeremonyStartMarker;
   stage: WalletStoreV2CeremonyStage;
   paths: WalletStoreV2CeremonyPaths;
   trustedIdentity: TrustedWalletStoreIdentity | null;
   now: string;
 }): WalletStoreV2CeremonyState {
+  const expectedIndex = input.previous === undefined
+    ? 0
+    : CEREMONY_STAGES.indexOf(input.previous.stage) + 1;
+  if (CEREMONY_STAGES[expectedIndex] !== input.stage) {
+    throw new Error("Wallet Store v2 ceremony state transition is not monotonic.");
+  }
   const base: Omit<WalletStoreV2CeremonyState, "fingerprint"> = {
     formatVersion: 1,
     purpose: STATE_PURPOSE,
+    ceremonyId: input.marker.ceremonyId,
+    artifactClass: input.marker.artifactClass,
     stage: input.stage,
     revision: (input.previous?.revision ?? -1) + 1,
     createdAt: input.previous?.createdAt ?? input.now,
@@ -216,6 +339,8 @@ function buildActiveMetadata(
   const base: Omit<WalletStoreV2ActiveCeremonyMetadata, "fingerprint"> = {
     formatVersion: 1,
     purpose: WALLET_STORE_V2_CEREMONY_METADATA_PURPOSE,
+    artifactClass: identity.artifactClass as WalletStoreV2CeremonyArtifactClass,
+    ceremonyId: identity.ceremonyId,
     storeId: identity.storeId,
     trustedIdentityFile: paths.trustedIdentityFile,
     stateFile: paths.stateFile,
@@ -242,31 +367,34 @@ function validateActiveMetadata(
   return expected;
 }
 
-function validateState(value: unknown, expectedPaths: WalletStoreV2CeremonyPaths): WalletStoreV2CeremonyState {
+function validateState(
+  value: unknown,
+  expectedPaths: WalletStoreV2CeremonyPaths,
+  marker: WalletStoreV2CeremonyStartMarker,
+): WalletStoreV2CeremonyState {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("Wallet Store v2 ceremony state is invalid.");
   }
   const record = value as Record<string, unknown>;
   const keys = [
-    "formatVersion", "purpose", "stage", "revision", "createdAt", "updatedAt",
+    "formatVersion", "purpose", "ceremonyId", "artifactClass", "stage", "revision", "createdAt", "updatedAt",
     "paths", "trustedIdentity", "fingerprint",
   ];
   if (Object.keys(record).length !== keys.length || keys.some((key) => !(key in record))) {
     throw new Error("Wallet Store v2 ceremony state shape is invalid.");
   }
-  const stages: readonly WalletStoreV2CeremonyStage[] = [
-    "prepared", "paths-verified", "keys-generating", "keys-generated", "store-written",
-    "identity-written", "backup-written", "backup-verified", "final-verified", "complete",
-  ];
   if (
     record.formatVersion !== 1 || record.purpose !== STATE_PURPOSE ||
-    typeof record.stage !== "string" || !stages.includes(record.stage as WalletStoreV2CeremonyStage) ||
+    record.ceremonyId !== marker.ceremonyId || record.artifactClass !== marker.artifactClass ||
+    typeof record.stage !== "string" || !CEREMONY_STAGES.includes(record.stage as WalletStoreV2CeremonyStage) ||
     !Number.isSafeInteger(record.revision) || (record.revision as number) < 0 ||
     typeof record.fingerprint !== "string"
   ) throw new Error("Wallet Store v2 ceremony state values are invalid.");
   const state: WalletStoreV2CeremonyState = {
     formatVersion: 1,
     purpose: STATE_PURPOSE,
+    ceremonyId: marker.ceremonyId,
+    artifactClass: marker.artifactClass,
     stage: record.stage as WalletStoreV2CeremonyStage,
     revision: record.revision as number,
     createdAt: checkedIso(record.createdAt, "Wallet Store v2 ceremony creation time"),
@@ -277,8 +405,14 @@ function validateState(value: unknown, expectedPaths: WalletStoreV2CeremonyPaths
       : validateTrustedWalletStoreIdentity(record.trustedIdentity),
     fingerprint: record.fingerprint,
   };
+  if (state.revision !== CEREMONY_STAGES.indexOf(state.stage)) {
+    throw new Error("Wallet Store v2 ceremony state transition revision is invalid.");
+  }
   if (canonicalJson(state.paths) !== canonicalJson(normalizePaths(expectedPaths))) {
     throw new Error("Wallet Store v2 ceremony state paths do not match this invocation.");
+  }
+  if (state.createdAt !== marker.createdAt) {
+    throw new Error("Wallet Store v2 ceremony state and start marker creation time disagree.");
   }
   if (fingerprint(withoutFingerprint(state)) !== state.fingerprint) {
     throw new Error("Wallet Store v2 ceremony state fingerprint mismatch.");
@@ -311,20 +445,73 @@ async function readBoundedJson(path: string, maximumBytes: number): Promise<unkn
   }
 }
 
-async function loadState(dependencies: WalletStoreV2CeremonyDependencies): Promise<WalletStoreV2CeremonyState | null> {
+async function loadStartMarker(
+  dependencies: WalletStoreV2CeremonyDependencies,
+): Promise<WalletStoreV2CeremonyStartMarker | null> {
+  if (!(await exists(dependencies.paths.startMarkerFile))) return null;
+  await dependencies.identitySecurity.assertPublicFileBeforeOpen(
+    dependencies.paths.startMarkerFile,
+    "ceremony-start-marker",
+  );
+  return validateStartMarker(
+    await readBoundedJson(dependencies.paths.startMarkerFile, MAX_START_MARKER_BYTES),
+    dependencies.artifactClass,
+    dependencies.paths,
+  );
+}
+
+async function persistStartMarker(
+  dependencies: WalletStoreV2CeremonyDependencies,
+  ceremonyId: string,
+  createdAt: string,
+): Promise<WalletStoreV2CeremonyStartMarker> {
+  const marker = buildStartMarker({
+    ceremonyId,
+    artifactClass: dependencies.artifactClass,
+    createdAt,
+    paths: dependencies.paths,
+  });
+  await dependencies.identitySecurity.assertPublicFileBeforeCreate(
+    dependencies.paths.startMarkerFile,
+    "ceremony-start-marker",
+  );
+  await atomicWritePrivateFile(
+    dependencies.paths.startMarkerFile,
+    `${JSON.stringify(marker, null, 2)}\n`,
+  );
+  await dependencies.identitySecurity.assertPublicFileAfterCommit(
+    dependencies.paths.startMarkerFile,
+    "ceremony-start-marker",
+  );
+  return validateStartMarker(
+    await readBoundedJson(dependencies.paths.startMarkerFile, MAX_START_MARKER_BYTES),
+    dependencies.artifactClass,
+    dependencies.paths,
+  );
+}
+
+async function loadState(
+  dependencies: WalletStoreV2CeremonyDependencies,
+  marker: WalletStoreV2CeremonyStartMarker,
+): Promise<WalletStoreV2CeremonyState | null> {
   if (!(await exists(dependencies.paths.stateFile))) return null;
   await dependencies.identitySecurity.assertPublicFileBeforeOpen(dependencies.paths.stateFile, "ceremony-state");
-  return validateState(await readBoundedJson(dependencies.paths.stateFile, MAX_STATE_BYTES), dependencies.paths);
+  return validateState(
+    await readBoundedJson(dependencies.paths.stateFile, MAX_STATE_BYTES),
+    dependencies.paths,
+    marker,
+  );
 }
 
 async function persistState(
   dependencies: WalletStoreV2CeremonyDependencies,
   previous: WalletStoreV2CeremonyState | undefined,
+  marker: WalletStoreV2CeremonyStartMarker,
   stage: WalletStoreV2CeremonyStage,
   trustedIdentity: TrustedWalletStoreIdentity | null,
 ): Promise<WalletStoreV2CeremonyState> {
   const now = checkedIso(dependencies.now(), "Wallet Store v2 ceremony clock");
-  const state = buildState({ previous, stage, paths: dependencies.paths, trustedIdentity, now });
+  const state = buildState({ previous, marker, stage, paths: dependencies.paths, trustedIdentity, now });
   if (previous) {
     await dependencies.identitySecurity.assertPublicFileBeforeOpen(dependencies.paths.stateFile, "ceremony-state");
   } else {
@@ -332,7 +519,11 @@ async function persistState(
   }
   await atomicWritePrivateFile(dependencies.paths.stateFile, `${JSON.stringify(state, null, 2)}\n`);
   await dependencies.identitySecurity.assertPublicFileAfterCommit(dependencies.paths.stateFile, "ceremony-state");
-  return validateState(await readBoundedJson(dependencies.paths.stateFile, MAX_STATE_BYTES), dependencies.paths);
+  return validateState(
+    await readBoundedJson(dependencies.paths.stateFile, MAX_STATE_BYTES),
+    dependencies.paths,
+    marker,
+  );
 }
 
 async function persistTrustedIdentity(
@@ -390,7 +581,8 @@ function assertInspectionIdentity(
     inspection.bindingFingerprint !== identity.bindingFingerprint ||
     inspection.encryptedStoreFingerprint !== identity.encryptedStoreFingerprint ||
     inspection.manifestFingerprint !== identity.manifestFingerprint ||
-    inspection.artifactClass !== "production"
+    inspection.artifactClass !== identity.artifactClass ||
+    inspection.ceremonyId !== identity.ceremonyId
   ) throw new Error("Wallet Store v2 ceremony artifact does not match the trusted identity.");
 }
 
@@ -400,12 +592,15 @@ function receipt(
   addresses: readonly string[],
 ): WalletStoreV2CeremonyReceipt {
   return {
-    kind: "wallet-store-v2-production-ceremony-receipt",
+    kind: "wallet-store-v2-ceremony-receipt",
     stage: "complete",
+    ceremonyId: identity.ceremonyId,
+    artifactClass: dependencies.artifactClass,
     storeId: identity.storeId,
     activeBundleDirectory: dependencies.paths.activeBundleDirectory,
     backupBundleDirectory: dependencies.paths.backupBundleDirectory,
     trustedIdentityFile: dependencies.paths.trustedIdentityFile,
+    startMarkerFile: dependencies.paths.startMarkerFile,
     stateFile: dependencies.paths.stateFile,
     bindingFingerprint: identity.bindingFingerprint,
     encryptedStoreFingerprint: identity.encryptedStoreFingerprint,
@@ -435,6 +630,7 @@ async function assertNoMaterialArtifacts(paths: WalletStoreV2CeremonyPaths): Pro
     const allowed = new Set([
       WALLET_STORE_V2_CEREMONY_STATE_FILE_NAME,
       `${WALLET_STORE_V2_CEREMONY_STATE_FILE_NAME}.lock`,
+      WALLET_STORE_V2_CEREMONY_START_MARKER_FILE_NAME,
     ]);
     if ((await readdir(paths.identityRoot)).some((entry) => !allowed.has(entry))) {
       throw new Error("Wallet Store v2 ceremony found an unexpected identity artifact and refuses regeneration.");
@@ -442,8 +638,97 @@ async function assertNoMaterialArtifacts(paths: WalletStoreV2CeremonyPaths): Pro
   }
 }
 
+async function readCeremonyBundle(
+  dependencies: WalletStoreV2CeremonyDependencies,
+  directory: string,
+  security: WalletStoreV2AnyCeremonyFileSecurity,
+): Promise<WalletStoreV2PublicInspection> {
+  if (dependencies.artifactClass === "production") {
+    return readAndInspectWalletStoreV2ProductionBundleDirectory({
+      directory,
+      productionSecurity: security as WalletStoreV2CeremonyFileSecurity,
+    });
+  }
+  return readAndInspectWalletStoreV2ProductionFormatFixtureBundleDirectory({
+    directory,
+    fixtureSecurity: security as WalletStoreV2ProductionFormatFixtureCeremonyFileSecurity,
+  });
+}
+
+async function writeActiveBundle(
+  dependencies: WalletStoreV2CeremonyDependencies,
+  bundle: WalletStoreV2CeremonyBundle,
+  identity: TrustedWalletStoreIdentity,
+): Promise<WalletStoreV2PublicInspection> {
+  const common = {
+    directory: dependencies.paths.activeBundleDirectory,
+    hooks: { afterStoreWrite: () => dependencies.fault?.("during-store-commit") },
+    ceremonyMetadata: buildActiveMetadata(dependencies.paths, identity),
+  };
+  if (dependencies.artifactClass === "production") {
+    assertWalletStoreV2ProductionCeremonyRuntimeCapability(dependencies.runtimeCapability);
+    return createWalletStoreV2ProductionBundleDirectory({
+      ...common,
+      bundle: bundle as WalletStoreV2ProductionBundle,
+      productionSecurity: dependencies.activeSecurity as WalletStoreV2CeremonyFileSecurity,
+      runtimeCapability: dependencies.runtimeCapability,
+    });
+  }
+  return createWalletStoreV2ProductionFormatFixtureBundleDirectory({
+    ...common,
+    bundle: bundle as WalletStoreV2ProductionFormatFixtureBundle,
+    fixtureSecurity: dependencies.activeSecurity as WalletStoreV2ProductionFormatFixtureCeremonyFileSecurity,
+  });
+}
+
+async function writeUnverifiedBackup(
+  dependencies: WalletStoreV2CeremonyDependencies,
+  identity: TrustedWalletStoreIdentity,
+): Promise<void> {
+  const common = {
+    sourceDirectory: dependencies.paths.activeBundleDirectory,
+    backupDirectory: dependencies.paths.backupBundleDirectory,
+    expectedIdentity: identity,
+    hooks: { afterStoreWrite: () => dependencies.fault?.("during-backup-write") },
+  };
+  if (dependencies.artifactClass === "production") {
+    assertWalletStoreV2ProductionCeremonyRuntimeCapability(dependencies.runtimeCapability);
+    return createUnverifiedWalletStoreV2ProductionBackupForCeremony({
+      ...common,
+      sourceSecurity: dependencies.activeSecurity as WalletStoreV2CeremonyFileSecurity,
+      backupSecurity: dependencies.backupSecurity as WalletStoreV2CeremonyFileSecurity,
+      runtimeCapability: dependencies.runtimeCapability,
+    });
+  }
+  return createUnverifiedWalletStoreV2ProductionFormatFixtureBackupForCeremony({
+    ...common,
+    sourceSecurity: dependencies.activeSecurity as WalletStoreV2ProductionFormatFixtureCeremonyFileSecurity,
+    backupSecurity: dependencies.backupSecurity as WalletStoreV2ProductionFormatFixtureCeremonyFileSecurity,
+  });
+}
+
+async function verifyCeremonyBackup(
+  dependencies: WalletStoreV2CeremonyDependencies,
+  identity: TrustedWalletStoreIdentity,
+): Promise<void> {
+  if (dependencies.artifactClass === "production") {
+    await verifyWalletStoreV2ProductionBackup({
+      backupDirectory: dependencies.paths.backupBundleDirectory,
+      expectedIdentity: identity,
+      backupSecurity: dependencies.backupSecurity as WalletStoreV2CeremonyFileSecurity,
+    });
+    return;
+  }
+  await verifyWalletStoreV2ProductionFormatFixtureBackup({
+    backupDirectory: dependencies.paths.backupBundleDirectory,
+    expectedIdentity: identity,
+    backupSecurity: dependencies.backupSecurity as WalletStoreV2ProductionFormatFixtureCeremonyFileSecurity,
+  });
+}
+
 async function verifyCompletedCeremony(
   dependencies: WalletStoreV2CeremonyDependencies,
+  marker: WalletStoreV2CeremonyStartMarker,
   state: WalletStoreV2CeremonyState,
 ): Promise<WalletStoreV2CeremonyReceipt> {
   if (!state.trustedIdentity) throw new Error("Completed Wallet Store v2 ceremony has no trusted identity.");
@@ -451,29 +736,68 @@ async function verifyCompletedCeremony(
   if (persistedIdentity.fingerprint !== state.trustedIdentity.fingerprint) {
     throw new Error("Wallet Store v2 ceremony state and trusted identity disagree.");
   }
-  const active = await readAndInspectWalletStoreV2ProductionBundleDirectory({
-    directory: dependencies.paths.activeBundleDirectory,
-    productionSecurity: dependencies.activeSecurity,
-  });
-  const backup = await readAndInspectWalletStoreV2ProductionBundleDirectory({
-    directory: dependencies.paths.backupBundleDirectory,
-    productionSecurity: dependencies.backupSecurity,
-  });
+  if (
+    persistedIdentity.ceremonyId !== marker.ceremonyId ||
+    persistedIdentity.artifactClass !== marker.artifactClass
+  ) throw new Error("Wallet Store v2 completed ceremony identity does not match its start marker.");
+  const active = await readCeremonyBundle(
+    dependencies,
+    dependencies.paths.activeBundleDirectory,
+    dependencies.activeSecurity,
+  );
+  const backup = await readCeremonyBundle(
+    dependencies,
+    dependencies.paths.backupBundleDirectory,
+    dependencies.backupSecurity,
+  );
   assertInspectionIdentity(active, persistedIdentity);
   assertInspectionIdentity(backup, persistedIdentity);
   await loadActiveMetadata(dependencies, persistedIdentity);
-  await verifyWalletStoreV2ProductionBackup({
-    backupDirectory: dependencies.paths.backupBundleDirectory,
-    expectedIdentity: persistedIdentity,
-    backupSecurity: dependencies.backupSecurity,
-  });
+  await verifyCeremonyBackup(dependencies, persistedIdentity);
   return receipt(dependencies, persistedIdentity, active.addresses);
 }
 
-async function runCeremonyCore(
+async function verifyFinalCompletionProof(
+  dependencies: WalletStoreV2CeremonyDependencies,
+  marker: WalletStoreV2CeremonyStartMarker,
+): Promise<{ identity: TrustedWalletStoreIdentity; active: WalletStoreV2PublicInspection }> {
+  const identity = await loadTrustedIdentity(dependencies);
+  if (identity.ceremonyId !== marker.ceremonyId || identity.artifactClass !== marker.artifactClass) {
+    throw new Error("Wallet Store v2 final identity does not match the ceremony start marker.");
+  }
+  const active = await readCeremonyBundle(
+    dependencies,
+    dependencies.paths.activeBundleDirectory,
+    dependencies.activeSecurity,
+  );
+  const backup = await readCeremonyBundle(
+    dependencies,
+    dependencies.paths.backupBundleDirectory,
+    dependencies.backupSecurity,
+  );
+  await loadActiveMetadata(dependencies, identity);
+  assertInspectionIdentity(active, identity);
+  assertInspectionIdentity(backup, identity);
+  await verifyCeremonyBackup(dependencies, identity);
+  return { identity, active };
+}
+
+export async function runWalletStoreV2CeremonyCore(
   dependenciesInput: WalletStoreV2CeremonyDependencies,
 ): Promise<WalletStoreV2CeremonyReceipt> {
   const dependencies = { ...dependenciesInput, paths: normalizePaths(dependenciesInput.paths) };
+  if (dependencies.artifactClass === "production") {
+    assertWalletStoreV2ProductionCeremonyRuntimeCapability(dependencies.runtimeCapability);
+  } else if (dependencies.runtimeCapability !== undefined) {
+    throw new Error("Production-format fixture ceremony rejects production runtime capability.");
+  } else {
+    assertProductionFormatFixtureCeremonyTempRoot(dependencies.paths);
+  }
+  for (const security of [dependencies.activeSecurity, dependencies.backupSecurity, dependencies.identitySecurity]) {
+    if (security.artifactClass !== dependencies.artifactClass) {
+      throw new Error("Wallet Store v2 ceremony security artifact class mismatch.");
+    }
+  }
   const stateExists = await exists(dependencies.paths.stateFile);
   if (stateExists) {
     await dependencies.identitySecurity.assertPublicFileBeforeOpen(dependencies.paths.stateFile, "ceremony-state");
@@ -481,16 +805,35 @@ async function runCeremonyCore(
     await dependencies.identitySecurity.assertPublicFileBeforeCreate(dependencies.paths.stateFile, "ceremony-state");
   }
   return withExclusiveFileLock(dependencies.paths.stateFile, async () => {
-    let state = await loadState(dependencies);
-    if (state?.stage === "complete") return verifyCompletedCeremony(dependencies, state);
+    let marker = await loadStartMarker(dependencies);
+    const durableStateExists = await exists(dependencies.paths.stateFile);
+    if (marker && !durableStateExists) {
+      throw new Error(
+        "Wallet Store v2 ceremony start marker exists without state; incident recovery is required.",
+      );
+    }
+    if (!marker && durableStateExists) {
+      throw new Error(
+        "Wallet Store v2 ceremony state exists without its start marker; incident recovery is required.",
+      );
+    }
+    let state: WalletStoreV2CeremonyState | null = null;
+    if (marker) state = await loadState(dependencies, marker);
+    if (state?.stage === "complete") return verifyCompletedCeremony(dependencies, marker!, state);
     if (state && state.stage !== "prepared" && state.stage !== "paths-verified") {
       throw new Error(
         `Wallet Store v2 ceremony stopped at ${state.stage}; regeneration is forbidden and operator recovery is required.`,
       );
     }
     await assertNoMaterialArtifacts(dependencies.paths);
+    if (!marker) {
+      const ceremonyId = dependencies.createCeremonyId();
+      const createdAt = checkedIso(dependencies.now(), "Wallet Store v2 ceremony clock");
+      marker = await persistStartMarker(dependencies, ceremonyId, createdAt);
+      await dependencies.fault?.("after-start-marker");
+    }
     if (!state) {
-      state = await persistState(dependencies, undefined, "prepared", null);
+      state = await persistState(dependencies, undefined, marker, "prepared", null);
       await dependencies.fault?.("after-prepared");
     }
     await dependencies.activeSecurity.assertBeforeCreate(dependencies.paths.activeBundleDirectory);
@@ -500,65 +843,48 @@ async function runCeremonyCore(
       "trusted-identity",
     );
     if (state.stage !== "paths-verified") {
-      state = await persistState(dependencies, state, "paths-verified", null);
+      state = await persistState(dependencies, state, marker, "paths-verified", null);
       await dependencies.fault?.("after-paths-verified");
     }
-    state = await persistState(dependencies, state, "keys-generating", null);
+    state = await persistState(dependencies, state, marker, "keys-generating", null);
     await dependencies.fault?.("after-keys-generating");
-    const bundle = await dependencies.buildBundle(state.createdAt);
+    const bundle = await dependencies.buildBundle(state.createdAt, marker.ceremonyId);
+    if (
+      bundle.artifactClass !== marker.artifactClass ||
+      bundle.manifest.ceremonyId !== marker.ceremonyId ||
+      bundle.envelope.ceremonyId !== marker.ceremonyId
+    ) throw new Error("Wallet Store v2 generated bundle does not match the ceremony start marker.");
     const identity = buildTrustedWalletStoreIdentity(bundle.manifest);
-    state = await persistState(dependencies, state, "keys-generated", identity);
+    state = await persistState(dependencies, state, marker, "keys-generated", identity);
     await dependencies.fault?.("after-keys-generated");
     await dependencies.fault?.("before-store-commit");
-    const active = await createWalletStoreV2ProductionBundleDirectory({
-      directory: dependencies.paths.activeBundleDirectory,
-      bundle,
-      productionSecurity: dependencies.activeSecurity,
-      hooks: { afterStoreWrite: () => dependencies.fault?.("during-store-commit") },
-      ceremonyMetadata: buildActiveMetadata(dependencies.paths, identity),
-    });
+    const active = await writeActiveBundle(dependencies, bundle, identity);
     assertInspectionIdentity(active, identity);
-    state = await persistState(dependencies, state, "store-written", identity);
+    state = await persistState(dependencies, state, marker, "store-written", identity);
     await dependencies.fault?.("after-store-written");
     const persistedIdentity = await persistTrustedIdentity(dependencies, identity);
-    state = await persistState(dependencies, state, "identity-written", persistedIdentity);
+    state = await persistState(dependencies, state, marker, "identity-written", persistedIdentity);
     await dependencies.fault?.("after-identity-written");
     await dependencies.fault?.("before-backup-write");
-    await createUnverifiedWalletStoreV2ProductionBackupForCeremony({
-      sourceDirectory: dependencies.paths.activeBundleDirectory,
-      backupDirectory: dependencies.paths.backupBundleDirectory,
-      expectedIdentity: persistedIdentity,
-      sourceSecurity: dependencies.activeSecurity,
-      backupSecurity: dependencies.backupSecurity,
-      hooks: { afterStoreWrite: () => dependencies.fault?.("during-backup-write") },
-    });
-    state = await persistState(dependencies, state, "backup-written", persistedIdentity);
+    await writeUnverifiedBackup(dependencies, persistedIdentity);
+    state = await persistState(dependencies, state, marker, "backup-written", persistedIdentity);
     await dependencies.fault?.("after-backup-written");
-    await verifyWalletStoreV2ProductionBackup({
-      backupDirectory: dependencies.paths.backupBundleDirectory,
-      expectedIdentity: persistedIdentity,
-      backupSecurity: dependencies.backupSecurity,
-    });
-    const backup = await readAndInspectWalletStoreV2ProductionBundleDirectory({
-      directory: dependencies.paths.backupBundleDirectory,
-      productionSecurity: dependencies.backupSecurity,
-    });
+    await verifyCeremonyBackup(dependencies, persistedIdentity);
+    const backup = await readCeremonyBundle(
+      dependencies,
+      dependencies.paths.backupBundleDirectory,
+      dependencies.backupSecurity,
+    );
     assertInspectionIdentity(backup, persistedIdentity);
-    state = await persistState(dependencies, state, "backup-verified", persistedIdentity);
+    state = await persistState(dependencies, state, marker, "backup-verified", persistedIdentity);
     await dependencies.fault?.("after-backup-verified");
     await dependencies.fault?.("before-final-verification");
-    const rereadActive = await readAndInspectWalletStoreV2ProductionBundleDirectory({
-      directory: dependencies.paths.activeBundleDirectory,
-      productionSecurity: dependencies.activeSecurity,
-    });
-    const rereadIdentity = await loadTrustedIdentity(dependencies);
-    await loadActiveMetadata(dependencies, rereadIdentity);
-    assertInspectionIdentity(rereadActive, rereadIdentity);
-    assertInspectionIdentity(backup, rereadIdentity);
-    state = await persistState(dependencies, state, "final-verified", rereadIdentity);
+    let proof = await verifyFinalCompletionProof(dependencies, marker);
+    state = await persistState(dependencies, state, marker, "final-verified", proof.identity);
     await dependencies.fault?.("after-final-verification");
-    state = await persistState(dependencies, state, "complete", rereadIdentity);
-    return receipt(dependencies, rereadIdentity, rereadActive.addresses);
+    proof = await verifyFinalCompletionProof(dependencies, marker);
+    state = await persistState(dependencies, state, marker, "complete", proof.identity);
+    return receipt(dependencies, proof.identity, proof.active.addresses);
   });
 }
 
@@ -566,27 +892,7 @@ export async function runWalletStoreV2ProductionCeremony(input: {
   authorization: string;
   now?: () => string;
 }): Promise<WalletStoreV2CeremonyReceipt> {
-  if (input.authorization !== WALLET_STORE_V2_PRODUCTION_CEREMONY_AUTHORIZATION) {
-    throw new Error("Production Wallet Store v2 ceremony authorization is required.");
-  }
-  const localAppData = process.env.LOCALAPPDATA;
-  if (!localAppData) throw new Error("LOCALAPPDATA is required for production Wallet Store v2 ceremony.");
-  const paths = walletStoreV2CeremonyPaths(resolve(localAppData, "POP33", "operator", "checkpoint-20"));
-  const passwordProvider = ProductionTtyPasswordProvider.create(input.authorization);
-  const walletGenerator = NodeCSPRNGProductionWalletGenerator.create(input.authorization);
-  return runCeremonyCore({
-    paths,
-    activeSecurity: createDefaultWindowsWalletStoreV2ProductionSecurity(paths.activeRoot),
-    backupSecurity: createDefaultWindowsWalletStoreV2ProductionSecurity(paths.backupRoot),
-    identitySecurity: createDefaultWindowsWalletStoreV2ProductionSecurity(paths.identityRoot),
-    buildBundle: (createdAt) => buildWalletStoreV2ProductionBundle({
-      passwordProvider,
-      walletGenerator,
-      createdAt,
-      authorization: input.authorization,
-    }),
-    now: input.now ?? (() => new Date().toISOString()),
-  });
+  return runWalletStoreV2ProductionCeremonyRuntime(input);
 }
 
 export async function runWalletStoreV2ProductionFormatFixtureCeremony(input: {
@@ -596,5 +902,8 @@ export async function runWalletStoreV2ProductionFormatFixtureCeremony(input: {
   if (input.authorization !== WALLET_STORE_V2_FIXTURE_AUTHORIZATION) {
     throw new Error("Production-format ceremony fixture requires test-only authorization.");
   }
-  return runCeremonyCore(input.dependencies);
+  if (input.dependencies.artifactClass !== "production-format-fixture") {
+    throw new Error("Fixture ceremony requires production-format-fixture artifact class.");
+  }
+  return runWalletStoreV2CeremonyCore(input.dependencies);
 }

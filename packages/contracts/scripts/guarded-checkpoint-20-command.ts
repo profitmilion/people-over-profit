@@ -26,6 +26,7 @@ function fixtureManifest() {
     storeBinding: {
       formatVersion: 2,
       artifactClass: "fixture",
+      ceremonyId: "21212121-2121-4121-8121-212121212121",
       storeId: "20202020-2020-4020-8020-202020202020",
       publicFingerprint: `sha256:${"2".repeat(64)}`,
       selectedRecordDecryption: true,

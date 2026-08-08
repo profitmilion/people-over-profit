@@ -10,18 +10,14 @@ import { computeAddress, getAddress } from "ethers";
 import {
   WALLET_STORE_V2_BUNDLE_DIRECTORY_SUFFIX,
   WALLET_STORE_V2_FIXTURE_AUTHORIZATION,
-  WALLET_STORE_V2_PRODUCTION_CEREMONY_AUTHORIZATION,
   WALLET_STORE_V2_STORE_FILE_NAME,
   InjectedTestPasswordProvider,
-  ProductionTtyPasswordProvider,
   WalletStoreV2FixtureSecretRecord,
   WalletStoreV2FixtureUnlockSecret,
   assertWalletStoreV2PublicOutput,
   buildFixtureGuardedCheckpoint20ManifestFromWalletStoreV2,
-  buildProductionGuardedCheckpoint20ManifestFromWalletStoreV2,
   buildTrustedWalletStoreIdentity,
   buildWalletStoreV2FixtureBundle,
-  buildWalletStoreV2ProductionBundle,
   calculateWalletStoreV2BindingFingerprint,
   cleanupWalletStoreV2OrphanDirectory,
   createWalletStoreV2FixtureBackup,
@@ -45,6 +41,7 @@ import {
 
 const CREATED_AT = "2026-08-08T15:00:00.000Z";
 const STORE_ID = "30303030-3030-4030-8030-303030303030";
+const CEREMONY_ID = "31313131-3131-4131-8131-313131313131";
 const FIXTURE_PASSWORD = "fixture-hardening-password-value";
 const roots: string[] = [];
 
@@ -94,6 +91,7 @@ async function buildBundle(
     unlockSecret: fixtureUnlock(),
     provideRecord: async (index) => fixtureRecord(index),
     createdAt,
+    ceremonyId: CEREMONY_ID,
     storeId,
     authorization: WALLET_STORE_V2_FIXTURE_AUTHORIZATION,
   });
@@ -190,10 +188,6 @@ describe("Guarded Checkpoint-20 Wallet Store v2 hardening", function () {
       "fixture",
     );
     assert.throws(
-      () => buildProductionGuardedCheckpoint20ManifestFromWalletStoreV2(bundle.manifest),
-      /fixture artifact is rejected/,
-    );
-    assert.throws(
       () => validateWalletStoreV2ProductionBundle(bundle as never),
       /Fixture store is rejected/,
     );
@@ -208,7 +202,12 @@ describe("Guarded Checkpoint-20 Wallet Store v2 hardening", function () {
   });
 
   it("changes the binding fingerprint when only artifactClass changes", function () {
-    const base = { createdAt: CREATED_AT, storeId: STORE_ID, candidates: candidates() };
+    const base = {
+      ceremonyId: CEREMONY_ID,
+      createdAt: CREATED_AT,
+      storeId: STORE_ID,
+      candidates: candidates(),
+    };
     const fixture = calculateWalletStoreV2BindingFingerprint({ ...base, artifactClass: "fixture" });
     const production = calculateWalletStoreV2BindingFingerprint({ ...base, artifactClass: "production" });
     assert.notEqual(fixture, production);
@@ -222,7 +221,7 @@ describe("Guarded Checkpoint-20 Wallet Store v2 hardening", function () {
     );
   });
 
-  it("keeps injected passwords test-only and rejects them from production creation", async function () {
+  it("keeps injected passwords test-only and exposes no direct production builder", async function () {
     const providerBytes = Buffer.from("fixture-injected-provider-password", "utf8");
     const provider = new InjectedTestPasswordProvider(providerBytes, WALLET_STORE_V2_FIXTURE_AUTHORIZATION);
     providerBytes.fill(0);
@@ -230,33 +229,21 @@ describe("Guarded Checkpoint-20 Wallet Store v2 hardening", function () {
       assert.throws(() => JSON.stringify(secret), /cannot be serialized/);
       assert.match(inspect(secret), /REDACTED/);
     });
-    await assert.rejects(
-      buildWalletStoreV2ProductionBundle({
-        passwordProvider: provider as never,
-        walletGenerator: {} as never,
-        createdAt: CREATED_AT,
-        authorization: WALLET_STORE_V2_PRODUCTION_CEREMONY_AUTHORIZATION,
-      }),
-      /rejects injected|fixture password providers/,
-    );
+    const module = await import("../scripts/operator/guarded-checkpoint-20-wallet-store-v2.js");
+    assert.equal("buildWalletStoreV2ProductionBundle" in module, false);
+    assert.equal("buildProductionGuardedCheckpoint20ManifestFromWalletStoreV2" in module, false);
     provider.destroy();
   });
 
-  it("requires production authorization for TTY and never instantiates the CSPRNG generator", async function () {
-    assert.throws(
-      () => ProductionTtyPasswordProvider.create(WALLET_STORE_V2_FIXTURE_AUTHORIZATION),
-      /ceremony authorization/,
-    );
-    assert.equal(
-      ProductionTtyPasswordProvider.create(WALLET_STORE_V2_PRODUCTION_CEREMONY_AUTHORIZATION).providerClass,
-      "production-tty",
-    );
+  it("requires the private ceremony runtime for TTY and production CSPRNG construction", async function () {
     const source = await readFile(
       new URL("../scripts/operator/guarded-checkpoint-20-wallet-store-v2.ts", import.meta.url),
       "utf8",
     );
     assert.match(source, /class NodeCSPRNGProductionWalletGenerator/);
+    assert.doesNotMatch(source, /export class ProductionTtyPasswordProvider/);
     assert.match(source, /Production wallet generation requires ceremony authorization/);
+    assert.match(source, /productionCeremonyRuntimeCapability/);
     assert.match(source, /input\.walletGenerator instanceof NodeCSPRNGProductionWalletGenerator/);
   });
 

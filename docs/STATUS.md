@@ -1,8 +1,10 @@
 # POP33 Development Status
 
-Last reviewed: 2026-07-30
+Last reviewed: 2026-08-08
 
-Branch reviewed: `codex/pop33-manual-checkpoint-5-prep`
+Branch reviewed: `codex/pop33-recovery`
+
+Recovery HEAD reviewed: `7f03a3741232b622831e98eacdd068f12b44fa8c`
 
 Status: active development
 
@@ -107,6 +109,10 @@ records public snapshot and transaction evidence.
 
 Manual checkpoint 5 status: `prepared, not executed`.
 
+The complete reviewed operator stack through this preparation is included in
+`codex/pop33-recovery` at
+`7f03a3741232b622831e98eacdd068f12b44fa8c`.
+
 The preparation reviewed the public `codex/pop33-recovery` Vercel Preview on
 landing, `#/demo-v1`, `#/archive-v1`, and a mobile-sized Demo V1 route. All
 loaded without a login wall or obvious runtime error. No wallet was connected.
@@ -132,11 +138,10 @@ separate user actions. Missing mobile providers are directed to a compatible
 wallet's built-in browser; WalletConnect and new wallet dependencies were not
 added.
 
-This onboarding change is verified only in the local source worktree at
-`e41cfd0f8230b367fe646bf39ece2b58d71ed448` plus uncommitted changes. It has not
-been committed, pushed, or deployed to Vercel Preview, Production, or
-Farcaster. The current public Preview therefore continues to represent its
-previous deployed source until a separately approved deployment occurs.
+This onboarding change was committed as
+`01437927f9ae40b726ec39edafe9b6d57ed7b3a6` and is included in the current
+recovery history. That Git status does not by itself establish a Vercel
+Preview, Vercel Production, or Farcaster deployment.
 
 The controlled Demo V1 pair is now deployed on Base Sepolia. It
 includes the POP33-owned, six-decimal POP33 Demo USD (`dUSDC`) faucet token and

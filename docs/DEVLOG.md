@@ -88,8 +88,9 @@ session and imposes a hard stop at `5/100`.
 
 - Branch: `codex/pop33-manual-checkpoint-5-prep`
 - Base commit: `002164c79bb052d106de577499e7f3a6cebb6971`
-- Commit: pending Piotr's direct approval
-- Proposed message: `docs(operator): prepare guarded manual checkpoint 5`
+- Commit: `7f03a3741232b622831e98eacdd068f12b44fa8c`
+- Message: `docs(operator): prepare guarded manual checkpoint 5`
+- Recovery: included in `codex/pop33-recovery` at this commit.
 
 ## 2026-07-30 - Read-only exact-99 Base Sepolia readiness
 
@@ -146,15 +147,15 @@ pool and 99 new wallets.
   authorized operation.
 - Wallet store v1 is not approved for live exact-99. The old coordinator and
   runner remain fixture-only and are not used by readiness.
-- Before creating wallets or executing transactions, review and consolidate
-  the complete operator stack into `codex/pop33-recovery`.
+- The complete reviewed operator stack through this milestone is consolidated
+  into `codex/pop33-recovery`.
 
 ### Git
 
 - Branch: `codex/pop33-exact-99-base-sepolia-readiness`
 - Base commit: `c2d78cb6a83e9d2f48549fbbfea0cea15b43f8c5`
-- Commit: pending Piotr's direct approval
-- Proposed message: `feat(operator): add exact-99 Base Sepolia readiness plan`
+- Commit: `002164c79bb052d106de577499e7f3a6cebb6971`
+- Message: `feat(operator): add exact-99 Base Sepolia readiness plan`
 
 ## 2026-07-30 - Guarded single-Draw operator
 
@@ -213,8 +214,8 @@ Base Sepolia Draw attempt.
 
 - Branch: `codex/pop33-guarded-single-draw-operator`.
 - Source baseline: `76738b72e1afb5bb3affb06c902e5df69587af4f`.
-- Commit and push: intentionally not created in this task.
-- Proposed message: `feat(operator): add guarded single-Draw operator`.
+- Commit: `c2d78cb6a83e9d2f48549fbbfea0cea15b43f8c5`.
+- Message: `feat(operator): add guarded single-Draw operator`.
 
 ## 2026-07-30 - Lifecycle plan freshness revalidation
 
@@ -284,8 +285,8 @@ pinned snapshot.
 - Branch: `codex/pop33-lifecycle-plan-revalidation`.
 - Source baseline:
   `964e64c87f0bc2cabf710c415cde40bb5a3a92e7`.
-- Commit and push: intentionally not created in this task.
-- Proposed message: `feat(operator): add lifecycle plan revalidation`.
+- Commit: `76738b72e1afb5bb3affb06c902e5df69587af4f`.
+- Message: `feat(operator): add lifecycle plan revalidation`.
 
 ## 2026-07-30 - Base Sepolia lifecycle supervisor adapter
 
@@ -341,8 +342,8 @@ single pinned block of the public POP33 Demo V1 deployment.
 - Branch: `codex/pop33-base-sepolia-supervisor-adapter`.
 - Source baseline:
   `9cda4e4e6b2543cf3c31357081d9d7dc10026b42`.
-- Commit and push: intentionally not created in this task.
-- Proposed message: `feat(operator): add Base Sepolia lifecycle adapter`.
+- Commit: `964e64c87f0bc2cabf710c415cde40bb5a3a92e7`.
+- Message: `feat(operator): add Base Sepolia lifecycle adapter`.
 
 ## 2026-07-30 - Read-only multi-pool lifecycle supervisor
 
@@ -392,8 +393,8 @@ submitting a transaction.
 - Branch: `codex/pop33-lifecycle-supervisor`.
 - Source baseline:
   `01437927f9ae40b726ec39edafe9b6d57ed7b3a6`.
-- Commit: not created at the time this entry was written.
-- Proposed message: `feat(operator): add read-only lifecycle supervisor`.
+- Commit: `9cda4e4e6b2543cf3c31357081d9d7dc10026b42`.
+- Message: `feat(operator): add read-only lifecycle supervisor`.
 
 ## 2026-07-29 - Mobile-first Demo V1 preparation flow
 

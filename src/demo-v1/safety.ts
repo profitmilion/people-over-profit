@@ -2,7 +2,7 @@ import { getAddress, isAddress, type Address } from "viem";
 
 export const DEMO_V1_CHAIN_ID = 84_532;
 export const DEMO_V1_CONTRACT_ADDRESS = getAddress(
-  "0x140DA1b29F0B00b003Cabe86AE1a473d6745f56F",
+  "0xc2fAA10d3E5FEeB88604dc3A1Ab33656fFeBCA98",
 );
 export const DEMO_V1_TOKEN_ADDRESS = getAddress(
   "0xA7FA084b34c888061757d4b5FBb08a7B53fee786",
@@ -94,6 +94,9 @@ export function validateDemoV1PublicConfig(input: {
 
   if (!input.contractAddress) errors.push("missing-contract");
   else if (!contractAddress) errors.push("invalid-contract");
+  else if (!sameAddress(contractAddress, DEMO_V1_CONTRACT_ADDRESS)) {
+    errors.push("unexpected-contract");
+  }
 
   if (!input.tokenAddress) errors.push("missing-token");
   else if (!tokenAddress) errors.push("invalid-token");

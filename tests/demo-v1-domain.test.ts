@@ -227,7 +227,7 @@ test("claim eligibility requires the connected winner and an unclaimed finalized
   assert.equal(canClaim({ roundStatus: 1, claimed: true, winner, user: winner }), false);
 });
 
-test("public configuration accepts a configured pilot contract but fixes the token and Base Sepolia", () => {
+test("public configuration fixes the Pilot 10 contract, token and Base Sepolia", () => {
   const valid = {
     contractAddress: DEMO_V1_CONTRACT_ADDRESS,
     tokenAddress: DEMO_V1_TOKEN_ADDRESS,
@@ -241,7 +241,7 @@ test("public configuration accepts a configured pilot contract but fixes the tok
       contractAddress: "0x0000000000000000000000000000000000000001",
       tokenAddress: "0x0000000000000000000000000000000000000002",
     }),
-    ["unexpected-token"],
+    ["unexpected-contract", "unexpected-token"],
   );
   assert.deepEqual(validateDemoV1PublicConfig({ ...valid, chainId: "8453" }), ["invalid-chain-id"]);
 });

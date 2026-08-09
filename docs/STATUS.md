@@ -28,6 +28,14 @@ with its stable alias and the deployed 10-user Base Sepolia contract at
 Pool 1 at 0/10, and its manifest and Mini App metadata use the same stable host
 without the local fallback. Vercel Production remains untouched.
 
+The first Farcaster mobile approval test exposed a split configuration: public
+reads used the Pilot 10 address from Vercel while the transaction hook retained
+the previous 100-user contract as its approval spender. The mined test approval
+therefore granted exactly 33 dUSDC to the previous contract and granted nothing
+to Pilot 10; no Join occurred. The reviewed write-path address now matches the
+Pilot 10 deployment, and public configuration rejects a mismatched contract
+before enabling writes.
+
 The repository contains an evolving React frontend, historical local prototype
 layers, developer tooling, and an initial Base Sepolia integration. The local
 simulation is a development aid, not a separate target product model.

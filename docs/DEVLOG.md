@@ -73,6 +73,15 @@ domain signature in Farcaster Developer Tools.
 - Commit: `9d00a29cbe27af06d8eb86c11875a9d9aefa467c`
 - Message: `feat(demo): prepare 10-user Farcaster pilot`
 
+### Preview follow-up
+
+The pushed branch established a successful Git-triggered Vercel Preview while
+leaving Vercel Production unchanged. A follow-up makes `fc:miniapp` metadata
+and the generated unsigned `/.well-known/farcaster.json` use the actual Vercel
+deployment host rather than a guessed branch alias. This Preview is deployment
+evidence only: the 10-user contract address and signed Farcaster account
+association are still missing.
+
 ## 2026-08-08 - Manual checkpoint 5 verified
 
 ### At a glance

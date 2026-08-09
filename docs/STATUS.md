@@ -1,6 +1,6 @@
 # POP33 Development Status
 
-Last reviewed: 2026-08-08
+Last reviewed: 2026-08-09
 
 Branch reviewed: `codex/pop33-farcaster-pilot-10`
 
@@ -22,9 +22,11 @@ SDK, calls `sdk.actions.ready()` in a verified Mini App context, and adds the
 official Farcaster Wagmi connector while preserving the injected web wallet.
 It includes `fc:miniapp` metadata, opaque PNG assets, and an unsigned
 `/.well-known/farcaster.json`. The account association still requires Piotr's
-domain signature. This branch has not yet established a new Vercel Preview or
-deployed the 10-user contract on Base Sepolia; the original 100-user deployment
-and its Preview remain separate.
+domain signature. A Git-triggered Vercel Preview for this branch is successful,
+and its Farcaster URLs are generated from the deployment's actual Vercel host.
+Vercel Production remains untouched. The 10-user contract is not yet deployed
+on Base Sepolia, so the Preview environment must not be treated as a usable
+10-user pilot until that deployment address is configured and verified.
 
 The repository contains an evolving React frontend, historical local prototype
 layers, developer tooling, and an initial Base Sepolia integration. The local

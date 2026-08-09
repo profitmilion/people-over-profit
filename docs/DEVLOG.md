@@ -33,6 +33,46 @@ documentation.
   current overview of implementation, gaps, and risks.
 - Do not guess. Mark unclear facts as requiring later reconstruction.
 
+## 2026-08-09 - Public Pilot 10 and Farcaster runtime prepared
+
+### At a glance
+
+The product branch now supports a deployment-configured 10-user Base Sepolia
+pool profile and the existing React/Vite app has the minimal current Farcaster
+Mini App runtime. No public-chain transaction or Vercel deployment occurred in
+this milestone.
+
+### Completed
+
+- Pool capacity is configurable as the 10-user pilot or 100-user Basic V1
+  profile; prize accounting remains exactly funded across ten rounds.
+- A focused test confirms Pool 1 locks at 10/10 and Join 11 reaches Pool 2 at
+  1/10 through the existing oldest-qualifying-pool allocator.
+- The frontend uses the official Mini App SDK, calls `ready()` in Mini App
+  context, supports the official Farcaster Wagmi connector, retains injected
+  web wallets, and includes current `fc:miniapp` metadata and pilot images.
+
+### Verification
+
+- Contract compile and 94 focused contract/config tests passed.
+- Contract TypeScript, local deployment dry-run, 30 frontend tests, production
+  build, scoped lint, and `git diff --check` passed.
+- The official Farcaster schema accepts the prepared `miniapp` configuration;
+  the full manifest still requires Piotr's signed `accountAssociation`.
+
+### Limitations and next step
+
+The 10-user contract is not deployed because no Base Sepolia deployer key or
+private RPC was available at runtime. The next step is one controlled pilot
+contract deployment, followed by Preview environment configuration and the
+domain signature in Farcaster Developer Tools.
+
+### Git
+
+- Branch: `codex/pop33-farcaster-pilot-10`
+- Commit: `9d00a29cbe27af06d8eb86c11875a9d9aefa467c`
+- Message: `feat(demo): prepare 10-user Farcaster pilot`
+
 ## 2026-08-08 - Manual checkpoint 5 verified
 
 ### At a glance

@@ -16,13 +16,13 @@ contract Pop33BasicV1 is ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     uint256 public constant ENTRY_PRICE = 33_000_000;
-    uint256 public constant MAX_POSITIONS_PER_POOL = 100;
+    uint256 public immutable MAX_POSITIONS_PER_POOL;
     uint256 public constant MAX_ACTIVE_POSITIONS_PER_USER = 10;
     uint256 public constant MAX_OPEN_POOLS = 10;
     uint256 public constant MAX_PAGE_SIZE = 100;
     uint256 public constant DRAW_ROUNDS = 10;
-    uint256 public constant PRIZE_PER_ROUND = 330_000_000;
-    uint256 public constant TOTAL_PRIZE_AMOUNT = 3_300_000_000;
+    uint256 public immutable PRIZE_PER_ROUND;
+    uint256 public immutable TOTAL_PRIZE_AMOUNT;
 
     enum PoolStatus {
         Open,
@@ -81,6 +81,7 @@ contract Pop33BasicV1 is ReentrancyGuard {
     error PaymentTokenMetadataUnavailable(address token);
     error InvalidPaymentTokenDecimals(uint8 actualDecimals);
     error InvalidDrawInterval();
+    error InvalidPositionsPerPool(uint256 positionsPerPool);
     error MaxActivePositionsReached(address user);
     error NoQualifyingPool(address user);
     error PoolDoesNotExist(uint256 poolId);
@@ -197,7 +198,11 @@ contract Pop33BasicV1 is ReentrancyGuard {
     mapping(address user => uint256 count) public activePositionsByUser;
     mapping(address user => uint256 amount) public claimablePrizesByUser;
 
-    constructor(IERC20 paymentToken_, uint64 drawInterval_) {
+    constructor(
+        IERC20 paymentToken_,
+        uint64 drawInterval_,
+        uint256 positionsPerPool_
+    ) {
         address tokenAddress = address(paymentToken_);
         if (tokenAddress == address(0)) revert InvalidPaymentToken();
         if (tokenAddress.code.length == 0) revert PaymentTokenHasNoCode(tokenAddress);
@@ -208,9 +213,19 @@ contract Pop33BasicV1 is ReentrancyGuard {
             revert PaymentTokenMetadataUnavailable(tokenAddress);
         }
         if (drawInterval_ == 0) revert InvalidDrawInterval();
+        if (
+            positionsPerPool_ < DRAW_ROUNDS ||
+            positionsPerPool_ > MAX_PAGE_SIZE ||
+            positionsPerPool_ % DRAW_ROUNDS != 0
+        ) {
+            revert InvalidPositionsPerPool(positionsPerPool_);
+        }
 
         paymentToken = paymentToken_;
         DRAW_INTERVAL = drawInterval_;
+        MAX_POSITIONS_PER_POOL = positionsPerPool_;
+        TOTAL_PRIZE_AMOUNT = ENTRY_PRICE * positionsPerPool_;
+        PRIZE_PER_ROUND = TOTAL_PRIZE_AMOUNT / DRAW_ROUNDS;
         _createPool();
     }
 

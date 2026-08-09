@@ -133,6 +133,7 @@ describe("Pop33DemoUSDC compatibility", function () {
     const pop33 = (await ethers.deployContract("Pop33BasicV1", [
       await token.getAddress(),
       DRAW_INTERVAL,
+      100,
     ])) as DynamicHardhatValue;
     await pop33.waitForDeployment();
 

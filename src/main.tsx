@@ -9,6 +9,7 @@ import { config } from "./wagmi";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import "./index.css";
+import { signalFarcasterReady } from "./farcaster";
 
 // Tworzymy klienta dla react-query (wagmi v2 z niego korzysta)
 const queryClient = new QueryClient();
@@ -22,3 +23,5 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     </WagmiProvider>
   </React.StrictMode>
 );
+
+void signalFarcasterReady();

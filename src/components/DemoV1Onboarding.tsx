@@ -9,6 +9,7 @@ import {
 } from "../demo-v1/onboarding";
 import type { useDemoV1Actions } from "../hooks/useDemoV1Actions";
 import type { useDemoV1Data } from "../hooks/useDemoV1Data";
+import { useMiniAppEnvironment } from "../hooks/useMiniAppEnvironment";
 
 const BASE_SEPOLIA_FAUCETS_URL =
   "https://docs.base.org/base-chain/network-information/network-faucets";
@@ -61,18 +62,21 @@ export function DemoV1Onboarding({
     isPending: isSwitching,
     reset: resetSwitch,
   } = useSwitchChain();
+  const isMiniApp = useMiniAppEnvironment();
   const injectedConnector = connectors.find((connector) => connector.id === "injected");
+  const miniAppConnector = connectors.find((connector) => connector.id === "farcaster");
+  const walletConnector = isMiniApp ? miniAppConnector : injectedConnector;
   const [providerAvailable, setProviderAvailable] = useState<boolean | null>(null);
 
   useEffect(() => {
     let active = true;
-    if (!injectedConnector) {
+    if (!walletConnector) {
       setProviderAvailable(false);
       return () => {
         active = false;
       };
     }
-    void injectedConnector
+    void walletConnector
       .getProvider()
       .then((provider) => {
         if (active) setProviderAvailable(Boolean(provider));
@@ -83,7 +87,7 @@ export function DemoV1Onboarding({
     return () => {
       active = false;
     };
-  }, [injectedConnector]);
+  }, [walletConnector]);
 
   const hasWalletProvider = data.isConnected || providerAvailable !== false;
   const onboarding = useMemo(
@@ -136,10 +140,10 @@ export function DemoV1Onboarding({
         return (
           <Button
             className="min-h-11 w-full text-base"
-            disabled={isConnecting || !injectedConnector || providerAvailable === false}
+            disabled={isConnecting || !walletConnector || providerAvailable === false}
             onClick={() => {
               resetConnect();
-              if (injectedConnector) run(connectAsync({ connector: injectedConnector }));
+              if (walletConnector) run(connectAsync({ connector: walletConnector }));
             }}
           >
             {isConnecting ? "Łączenie z portfelem…" : "Connect wallet"}

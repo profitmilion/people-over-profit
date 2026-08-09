@@ -9,6 +9,7 @@ export const DEMO_V1_TOKEN_ADDRESS = getAddress(
 );
 export const DEMO_V1_ENTRY_PRICE = 33_000_000n;
 export const DEMO_V1_POOL_CAPACITY = 100n;
+export const DEMO_V1_PILOT_POOL_CAPACITY = 10n;
 export const DEMO_V1_DRAW_ROUNDS = 10n;
 export const DEMO_V1_PRIZE_PER_ROUND = 330_000_000n;
 export const DEMO_V1_DRAW_INTERVAL = 3_600n;
@@ -93,9 +94,6 @@ export function validateDemoV1PublicConfig(input: {
 
   if (!input.contractAddress) errors.push("missing-contract");
   else if (!contractAddress) errors.push("invalid-contract");
-  else if (!sameAddress(contractAddress, DEMO_V1_CONTRACT_ADDRESS)) {
-    errors.push("unexpected-contract");
-  }
 
   if (!input.tokenAddress) errors.push("missing-token");
   else if (!tokenAddress) errors.push("invalid-token");
@@ -142,6 +140,12 @@ export function validateDemoV1RuntimeIdentity(input: {
   dripCooldown?: bigint;
 }): DemoV1RuntimeIdentityError[] {
   const errors: DemoV1RuntimeIdentityError[] = [];
+  const supportedCapacity =
+    input.poolCapacity === DEMO_V1_POOL_CAPACITY ||
+    input.poolCapacity === DEMO_V1_PILOT_POOL_CAPACITY;
+  const expectedPrizePerRound = input.poolCapacity
+    ? (DEMO_V1_ENTRY_PRICE * input.poolCapacity) / DEMO_V1_DRAW_ROUNDS
+    : 0n;
   if (!input.contractHasBytecode) errors.push("contract-bytecode");
   if (!input.tokenHasBytecode) errors.push("token-bytecode");
   if (!sameAddress(input.paymentToken, DEMO_V1_TOKEN_ADDRESS)) {
@@ -151,9 +155,9 @@ export function validateDemoV1RuntimeIdentity(input: {
   if (input.tokenSymbol !== "dUSDC") errors.push("token-symbol");
   if (input.tokenDecimals !== 6) errors.push("token-decimals");
   if (input.entryPrice !== DEMO_V1_ENTRY_PRICE) errors.push("entry-price");
-  if (input.poolCapacity !== DEMO_V1_POOL_CAPACITY) errors.push("pool-capacity");
+  if (!supportedCapacity) errors.push("pool-capacity");
   if (input.drawRounds !== DEMO_V1_DRAW_ROUNDS) errors.push("draw-rounds");
-  if (input.prizePerRound !== DEMO_V1_PRIZE_PER_ROUND) errors.push("prize-per-round");
+  if (input.prizePerRound !== expectedPrizePerRound) errors.push("prize-per-round");
   if (input.drawInterval !== DEMO_V1_DRAW_INTERVAL) errors.push("draw-interval");
   if (input.dripAmount !== DEMO_V1_DRIP_AMOUNT) errors.push("drip-amount");
   if (input.dripCooldown !== DEMO_V1_DRIP_COOLDOWN) errors.push("drip-cooldown");
@@ -322,7 +326,8 @@ export function assertJoinPoolPreflight(input: {
     );
   }
   if (
-    input.poolCapacity !== DEMO_V1_POOL_CAPACITY ||
+    (input.poolCapacity !== DEMO_V1_POOL_CAPACITY &&
+      input.poolCapacity !== DEMO_V1_PILOT_POOL_CAPACITY) ||
     input.entryPrice !== DEMO_V1_ENTRY_PRICE
   ) {
     throw new DemoV1ActionError(
@@ -401,7 +406,8 @@ export function assertJoinPostReceipt(input: {
   const validLifecycle =
     input.eventPoolActiveCount > 0n &&
     input.eventPoolActiveCount <= input.poolCapacity &&
-    input.poolCapacity === DEMO_V1_POOL_CAPACITY &&
+    (input.poolCapacity === DEMO_V1_POOL_CAPACITY ||
+      input.poolCapacity === DEMO_V1_PILOT_POOL_CAPACITY) &&
     input.poolDrawRoundCount === DEMO_V1_DRAW_ROUNDS &&
     input.poolDrawInterval === DEMO_V1_DRAW_INTERVAL &&
     input.poolStatus === (lockingJoin ? 1 : 0) &&

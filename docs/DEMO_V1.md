@@ -32,6 +32,21 @@ payment asset. Its deployed Base Sepolia address is recorded below. The
 unrestricted `MockUSDC` remains a local test fixture and is not part of either
 public deployment path.
 
+## Public Pilot 10 profile
+
+The 9 August 2026 Public Pilot 10 is a separate Base Sepolia alpha profile,
+not a mutation of the deployed 100-position contract. Its prepared constructor
+configuration is capacity `10` with the existing 3,600-second draw interval and
+the existing deployed dUSDC token. It retains the 33 dUSDC entry and ten draw
+rounds; each round is therefore 33 dUSDC and the pool's total claim accounting
+is exactly 330 dUSDC. The same allocation algorithm locks Pool 1 on Join 10 and
+routes Join 11 to the oldest qualifying open pool or creates Pool 2 when needed.
+
+Status: **implemented and tested locally; Base Sepolia deployment not yet
+recorded**. Do not point a public frontend at a pilot address until its bytecode,
+token linkage, capacity, prize totals, initial Pool 1 state, and chain ID have
+all passed the deployment verifier and a deployment-register row is added.
+
 ## Demo V1 technical configuration
 
 All token amounts are stored in the smallest six-decimal token units.

@@ -110,6 +110,8 @@ The repository currently provides:
 - one public product flow at `#/demo-v1` and one public on-chain archive at
   `#/archive-v1`;
 - injected-wallet connection and Base Sepolia network support;
+- Farcaster Mini App SDK readiness plus the official Farcaster Wagmi connector,
+  while retaining the injected-wallet web path;
 - contract-backed Demo V1 reads, faucet, exact approval, join, eligible
   Open-pool withdrawal, draw, and claim controls;
 - one confirmed public reversible approval, join, and exact-refund flow;
@@ -121,6 +123,8 @@ The repository currently provides:
 - a getter-based draw and pool archive;
 - a local operator that exercises the complete Basic V1 lifecycle.
 
+The Public Pilot 10 profile is implemented and tested locally but still needs
+its separate Base Sepolia contract deployment and public Preview environment.
 The complete 100-position lifecycle has not been executed publicly on Base
 Sepolia. Current implementation coverage and limitations are tracked in
 `docs/STATUS.md`.
@@ -158,9 +162,10 @@ future mainnet USDC payment asset.
 The first controlled `Pop33BasicV1` testnet release is named POP33 Demo
 V1. Its explicitly non-production scope, test-token limitations, deployment
 status, and intended end-to-end demonstration are defined in `docs/DEMO_V1.md`.
-It is deployed on Base Sepolia, connected to the separate public Demo V1
-frontend, and source-verified in BaseScan. The current release remains on
-Vercel Preview; Production and Farcaster are separate, unfinished stages.
+The original 100-position Demo V1 is deployed on Base Sepolia, connected to the
+separate public Demo V1 frontend, and source-verified in BaseScan. A separate
+10-position pilot profile is prepared for a new Base Sepolia deployment. The
+current release remains on Vercel Preview; Production remains separate.
 
 The public frontend surface for this release consists of the landing page,
 `#/demo-v1`, and `#/archive-v1`. Preserved legacy contract components and the
@@ -223,7 +228,10 @@ discovered issues do not change approved rules by themselves.
 - Basic V1 uses the approved oldest-qualifying-pool algorithm with no more than
   10 simultaneously open pools; the deployed Demo V1 contract enforces it on-chain.
 - `TO DECIDE`: final user-facing name for a `position`.
-- `TO DECIDE`: detailed Farcaster Mini App scope.
+- The first Farcaster scope is the existing Vite product inside a Mini App:
+  SDK `ready()`, Farcaster Ethereum wallet connector, Base Sepolia-only manifest
+  metadata, and the same web fallback. Notifications, social login, and a new
+  application shell are outside the first pilot.
 - `TO DECIDE`: PMN, Auto-HODL, and DCA mechanics.
 - `TO DECIDE`: production rollout criteria.
 - `TO DECIDE`: legal, eligibility, and geographic requirements.

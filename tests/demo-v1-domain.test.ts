@@ -58,11 +58,11 @@ const onboardingReadyFixture: DemoOnboardingInput = {
   transactionBusy: false,
 };
 
-function joinPreflightFixture(activePositionCount: bigint) {
+function joinPreflightFixture(activePositionCount: bigint, poolCapacity = 100n) {
   return {
     poolStatus: 0,
     activePositionCount,
-    poolCapacity: 100n,
+    poolCapacity,
     escrowedAmount: activePositionCount * DEMO_V1_ENTRY_PRICE,
     entryPrice: DEMO_V1_ENTRY_PRICE,
     lockedAt: 0n,
@@ -74,9 +74,11 @@ function joinPostReceiptFixture(input: {
   activePositionCount: bigint;
   expectedPoolId?: bigint;
   actualPoolId?: bigint;
+  poolCapacity?: bigint;
 }) {
   const actualPoolId = input.actualPoolId ?? 1n;
-  const lockingJoin = input.activePositionCount === 100n;
+  const poolCapacity = input.poolCapacity ?? 100n;
+  const lockingJoin = input.activePositionCount === poolCapacity;
   const lockedAt = lockingJoin ? 2_000n : 0n;
   return {
     user: demoUser,
@@ -95,7 +97,7 @@ function joinPostReceiptFixture(input: {
     poolEscrow: input.activePositionCount * DEMO_V1_ENTRY_PRICE,
     poolLockedAt: lockedAt,
     poolDrawInterval: 3_600n,
-    poolCapacity: 100n,
+    poolCapacity,
     poolDrawRoundCount: 10n,
     drawRounds: lockingJoin
       ? Array.from({ length: 10 }, (_, index) => ({
@@ -225,7 +227,7 @@ test("claim eligibility requires the connected winner and an unclaimed finalized
   assert.equal(canClaim({ roundStatus: 1, claimed: true, winner, user: winner }), false);
 });
 
-test("public configuration accepts only the reviewed Demo V1 addresses and Base Sepolia", () => {
+test("public configuration accepts a configured pilot contract but fixes the token and Base Sepolia", () => {
   const valid = {
     contractAddress: DEMO_V1_CONTRACT_ADDRESS,
     tokenAddress: DEMO_V1_TOKEN_ADDRESS,
@@ -239,7 +241,7 @@ test("public configuration accepts only the reviewed Demo V1 addresses and Base 
       contractAddress: "0x0000000000000000000000000000000000000001",
       tokenAddress: "0x0000000000000000000000000000000000000002",
     }),
-    ["unexpected-contract", "unexpected-token"],
+    ["unexpected-token"],
   );
   assert.deepEqual(validateDemoV1PublicConfig({ ...valid, chainId: "8453" }), ["invalid-chain-id"]);
 });
@@ -261,6 +263,11 @@ test("runtime identity requires bytecode, payment-token linkage and fixed Demo V
     dripCooldown: 86_400n,
   };
   assert.deepEqual(validateDemoV1RuntimeIdentity(valid), []);
+  assert.deepEqual(validateDemoV1RuntimeIdentity({
+    ...valid,
+    poolCapacity: 10n,
+    prizePerRound: 33_000_000n,
+  }), []);
   assert.deepEqual(
     validateDemoV1RuntimeIdentity({
       ...valid,
@@ -387,6 +394,16 @@ test("join preflight allows 89 through 99 and rejects invalid pool state", () =>
     ...joinPreflightFixture(99n),
     activePositionId: 7n,
   }));
+});
+
+test("pilot join preflight and locking receipt use the configured 10-user capacity", () => {
+  assert.doesNotThrow(() => assertJoinPoolPreflight(joinPreflightFixture(9n, 10n)));
+  const result = assertJoinPostReceipt(joinPostReceiptFixture({
+    activePositionCount: 10n,
+    poolCapacity: 10n,
+  }));
+  assert.equal(result.lockingJoin, true);
+  assert.equal(10n * DEMO_V1_ENTRY_PRICE, 330_000_000n);
 });
 
 test("ordinary joins at 89, 90 and 98 end Open with exact count and escrow", () => {

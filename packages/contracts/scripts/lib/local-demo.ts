@@ -56,6 +56,7 @@ export async function deployLocalDemoV1(
     dripAmount: DEMO_V1_PARAMETERS.dripAmount,
     dripCooldownSeconds: DEMO_V1_PARAMETERS.dripCooldownSeconds,
     drawIntervalSeconds: DEMO_V1_PARAMETERS.drawIntervalSeconds,
+    positionsPerPool: DEMO_V1_PARAMETERS.positionsPerPool,
   };
 
   const summary = {
@@ -64,6 +65,7 @@ export async function deployLocalDemoV1(
     deployer: deployer.address,
     paymentTokenAddress,
     drawIntervalSeconds: DEMO_V1_PARAMETERS.drawIntervalSeconds,
+    positionsPerPool: DEMO_V1_PARAMETERS.positionsPerPool,
   };
   if (logOutput) {
     printDemoTokenPairDeploymentSummary(tokenSummary);
@@ -75,11 +77,13 @@ export async function deployLocalDemoV1(
     ethers,
     paymentTokenAddress,
     DEMO_V1_PARAMETERS.drawIntervalSeconds,
+    DEMO_V1_PARAMETERS.positionsPerPool,
   );
   await verifyPop33BasicV1Deployment(
     pop33,
     paymentTokenAddress,
     DEMO_V1_PARAMETERS.drawIntervalSeconds,
+    DEMO_V1_PARAMETERS.positionsPerPool,
   );
 
   if (logOutput) await printDeploymentResult(pop33, summary);

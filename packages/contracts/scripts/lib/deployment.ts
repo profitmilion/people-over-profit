@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 
 import { getAddress, parseEther } from "ethers";
 
-import { DEMO_V1_PARAMETERS } from "./demo-v1-config.js";
+import { DEMO_V1_PARAMETERS, getDemoPoolParameters } from "./demo-v1-config.js";
 
 // Hardhat exposes dynamic contract factories until project-wide TypeChain output is used.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -17,6 +17,7 @@ export interface DeploymentSummary {
   deployer: string;
   paymentTokenAddress: string;
   drawIntervalSeconds: bigint;
+  positionsPerPool: bigint;
 }
 
 export interface DemoTokenDeploymentSummary {
@@ -26,6 +27,7 @@ export interface DemoTokenDeploymentSummary {
   dripAmount: bigint;
   dripCooldownSeconds: bigint;
   drawIntervalSeconds: bigint;
+  positionsPerPool: bigint;
 }
 
 const MINIMUM_BASE_SEPOLIA_DEPLOYER_BALANCE = parseEther("0.01");
@@ -72,16 +74,17 @@ export async function requireEstimatedDeploymentBalance(
 }
 
 export function printDeploymentSummary(summary: DeploymentSummary): void {
+  const pool = getDemoPoolParameters(summary.positionsPerPool);
   console.log("POP33 Demo V1 deployment configuration");
   console.log(`  Network: ${summary.networkName}`);
   console.log(`  Chain ID: ${summary.chainId}`);
   console.log(`  Deployer: ${summary.deployer}`);
   console.log(`  Payment token: ${summary.paymentTokenAddress}`);
   console.log(`  Position price: ${DEMO_V1_PARAMETERS.entryPrice} token units`);
-  console.log(`  Positions per pool: ${DEMO_V1_PARAMETERS.positionsPerPool}`);
+  console.log(`  Positions per pool: ${pool.positionsPerPool}`);
   console.log(`  Draw rounds: ${DEMO_V1_PARAMETERS.drawRoundCount}`);
-  console.log(`  Prize per round: ${DEMO_V1_PARAMETERS.prizePerRound} token units`);
-  console.log(`  Total prizes: ${DEMO_V1_PARAMETERS.totalPrizeAmount} token units`);
+  console.log(`  Prize per round: ${pool.prizePerRound} token units`);
+  console.log(`  Total prizes: ${pool.totalPrizeAmount} token units`);
   console.log(`  Draw interval: ${summary.drawIntervalSeconds} seconds`);
   console.log("  Randomness: temporary and NOT production-safe");
   console.log("  Explorer verification: disabled (separate future command required)");
@@ -90,6 +93,7 @@ export function printDeploymentSummary(summary: DeploymentSummary): void {
 export function printDemoTokenPairDeploymentSummary(
   summary: DemoTokenDeploymentSummary,
 ): void {
+  const pool = getDemoPoolParameters(summary.positionsPerPool);
   console.log("POP33 Demo V1 two-contract deployment configuration");
   console.log(`  Network: ${summary.networkName}`);
   console.log(`  Chain ID: ${summary.chainId}`);
@@ -98,10 +102,10 @@ export function printDemoTokenPairDeploymentSummary(
   console.log(`  Drip amount: ${summary.dripAmount} token units`);
   console.log(`  Drip cooldown: ${summary.dripCooldownSeconds} seconds`);
   console.log(`  Position price: ${DEMO_V1_PARAMETERS.entryPrice} token units`);
-  console.log(`  Positions per pool: ${DEMO_V1_PARAMETERS.positionsPerPool}`);
+  console.log(`  Positions per pool: ${pool.positionsPerPool}`);
   console.log(`  Draw rounds: ${DEMO_V1_PARAMETERS.drawRoundCount}`);
-  console.log(`  Prize per round: ${DEMO_V1_PARAMETERS.prizePerRound} token units`);
-  console.log(`  Total prizes: ${DEMO_V1_PARAMETERS.totalPrizeAmount} token units`);
+  console.log(`  Prize per round: ${pool.prizePerRound} token units`);
+  console.log(`  Total prizes: ${pool.totalPrizeAmount} token units`);
   console.log(`  Draw interval: ${summary.drawIntervalSeconds} seconds`);
   console.log("  Randomness: temporary and NOT production-safe");
   console.log("  Explorer verification: disabled (separate future command required)");
@@ -158,10 +162,12 @@ export async function deployPop33BasicV1(
   ethers: HardhatEthersRuntime,
   paymentTokenAddress: string,
   drawIntervalSeconds: bigint,
+  positionsPerPool: bigint,
 ): Promise<DynamicContract> {
   const contract = await ethers.deployContract("Pop33BasicV1", [
     paymentTokenAddress,
     drawIntervalSeconds,
+    positionsPerPool,
   ]);
   await contract.waitForDeployment();
   return contract;
@@ -171,7 +177,9 @@ export async function verifyPop33BasicV1Deployment(
   pop33: DynamicContract,
   paymentTokenAddress: string,
   drawIntervalSeconds: bigint,
+  positionsPerPool: bigint,
 ): Promise<void> {
+  const poolParameters = getDemoPoolParameters(positionsPerPool);
   assert.equal(
     getAddress(await pop33.paymentToken()),
     getAddress(paymentTokenAddress),
@@ -181,13 +189,13 @@ export async function verifyPop33BasicV1Deployment(
   assert.equal(await pop33.ENTRY_PRICE(), DEMO_V1_PARAMETERS.entryPrice);
   assert.equal(
     await pop33.MAX_POSITIONS_PER_POOL(),
-    DEMO_V1_PARAMETERS.positionsPerPool,
+    poolParameters.positionsPerPool,
   );
   assert.equal(await pop33.DRAW_ROUNDS(), DEMO_V1_PARAMETERS.drawRoundCount);
-  assert.equal(await pop33.PRIZE_PER_ROUND(), DEMO_V1_PARAMETERS.prizePerRound);
+  assert.equal(await pop33.PRIZE_PER_ROUND(), poolParameters.prizePerRound);
   assert.equal(
     await pop33.TOTAL_PRIZE_AMOUNT(),
-    DEMO_V1_PARAMETERS.totalPrizeAmount,
+    poolParameters.totalPrizeAmount,
   );
 
   const pool = await pop33.getPool(1);
@@ -196,10 +204,10 @@ export async function verifyPop33BasicV1Deployment(
   assert.equal(pool.activePositionCount, 0n);
   assert.equal(pool.escrowedAmount, 0n);
   assert.equal(pool.entryPrice, DEMO_V1_PARAMETERS.entryPrice);
-  assert.equal(pool.positionsPerPool, DEMO_V1_PARAMETERS.positionsPerPool);
+  assert.equal(pool.positionsPerPool, poolParameters.positionsPerPool);
   assert.equal(pool.drawRoundCount, DEMO_V1_PARAMETERS.drawRoundCount);
-  assert.equal(pool.prizePerRound, DEMO_V1_PARAMETERS.prizePerRound);
-  assert.equal(pool.totalPrizeAmount, DEMO_V1_PARAMETERS.totalPrizeAmount);
+  assert.equal(pool.prizePerRound, poolParameters.prizePerRound);
+  assert.equal(pool.totalPrizeAmount, poolParameters.totalPrizeAmount);
   assert.equal(pool.drawInterval, drawIntervalSeconds);
 }
 

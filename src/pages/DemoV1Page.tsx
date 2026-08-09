@@ -69,8 +69,8 @@ export default function DemoV1Page() {
 
   const currentPool = useMemo(
     () =>
-      data.pools.find((pool) => pool.status === 1 || pool.status === 2 || pool.status === 3) ??
       data.pools.find((pool) => pool.status === 0) ??
+      data.pools.find((pool) => pool.status === 1 || pool.status === 2 || pool.status === 3) ??
       data.pools.at(-1),
     [data.pools],
   );
@@ -146,7 +146,7 @@ export default function DemoV1Page() {
             </div>
             <h1 className="mt-1 text-2xl font-semibold">POP33 Basic V1</h1>
             <p className="mt-2 max-w-2xl text-sm text-slate-400">
-              The public on-chain demo for the deployed 33 dUSDC pool lifecycle.
+              Public Alpha: 33 test dUSDC, 10-user pools, and the full on-chain lifecycle.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
@@ -237,11 +237,11 @@ export default function DemoV1Page() {
                 </div>
                 {qualifyingPoolFill.nextJoinLocks ? (
                   <div className="mt-1 font-semibold">
-                    This is the 100th position. A successful join will lock the pool and withdrawal will no longer be available.
+                    This is the final place. A successful join will lock the pool and withdrawal will no longer be available.
                   </div>
                 ) : (
                   <div className="mt-1 text-slate-400">
-                    A successful join adds one position. The pool remains Open until it reaches 100/100.
+                    A successful join adds one position. The pool remains Open until it reaches {qualifyingPool.positionsPerPool.toString()}/{qualifyingPool.positionsPerPool.toString()}.
                   </div>
                 )}
               </div>
@@ -319,7 +319,7 @@ export default function DemoV1Page() {
                 <div className="rounded-xl border border-slate-800 p-4">
                   <div className="text-sm font-semibold">Drawing is not available while the pool is Open.</div>
                   <div className="mt-1 text-sm text-slate-400">
-                    The pool must first reach 100/100 active positions and become Locked. Round schedules are created by that contract lifecycle transition.
+                    The pool must first reach {currentPool.positionsPerPool.toString()}/{currentPool.positionsPerPool.toString()} active positions and become Locked. Round schedules are created by that contract lifecycle transition. The next valid Join is then routed to the next available pool.
                   </div>
                 </div>
               ) : currentRound && currentRound.scheduledAt > 0n && currentPool.completedDrawRoundCount < currentPool.drawRoundCount ? (

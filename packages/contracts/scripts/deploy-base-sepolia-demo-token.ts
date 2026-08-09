@@ -41,6 +41,7 @@ const pairSummary = {
   dripAmount: deploymentConfig.dripAmount,
   dripCooldownSeconds: deploymentConfig.dripCooldownSeconds,
   drawIntervalSeconds: deploymentConfig.drawIntervalSeconds,
+  positionsPerPool: deploymentConfig.positionsPerPool,
 };
 printDemoTokenPairDeploymentSummary(pairSummary);
 console.log("First explicit confirmation validated. Deploying POP33 Demo USD.");
@@ -65,7 +66,7 @@ await requireEstimatedDeploymentBalance(
   ethers,
   deployer.address,
   "Pop33BasicV1",
-  [paymentTokenAddress, deploymentConfig.drawIntervalSeconds],
+  [paymentTokenAddress, deploymentConfig.drawIntervalSeconds, deploymentConfig.positionsPerPool],
 );
 
 const pop33Summary = {
@@ -74,6 +75,7 @@ const pop33Summary = {
   deployer: deployer.address,
   paymentTokenAddress,
   drawIntervalSeconds: deploymentConfig.drawIntervalSeconds,
+  positionsPerPool: deploymentConfig.positionsPerPool,
 };
 printDeploymentSummary(pop33Summary);
 console.log("Second explicit confirmation validated. Deploying Pop33BasicV1.");
@@ -82,11 +84,13 @@ const pop33 = await deployPop33BasicV1(
   ethers,
   paymentTokenAddress,
   deploymentConfig.drawIntervalSeconds,
+  deploymentConfig.positionsPerPool,
 );
 await verifyPop33BasicV1Deployment(
   pop33,
   paymentTokenAddress,
   deploymentConfig.drawIntervalSeconds,
+  deploymentConfig.positionsPerPool,
 );
 await printDeploymentResult(pop33, pop33Summary);
 console.log("Two-contract deployment completed and validated");

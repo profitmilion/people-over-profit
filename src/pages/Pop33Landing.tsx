@@ -17,13 +17,13 @@ const Pop33Landing: React.FC = () => {
 
                         <div className="space-y-4">
                             <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl md:text-5xl">
-                                One on-chain pool. Ten test rounds.
+                                Ten-user pools. Ten test rounds.
                             </h1>
 
                             <p className="mx-auto max-w-xl text-center text-sm leading-relaxed text-slate-300">
                                 Demo V1 is the current POP33 product flow on Base Sepolia:
                                 connect a wallet, use valueless test dUSDC to join a
-                                100-position pool, follow ten scheduled rounds and inspect
+                                10-position pool, follow ten scheduled rounds and inspect
                                 the results on-chain.
                             </p>
                         </div>
@@ -39,12 +39,12 @@ const Pop33Landing: React.FC = () => {
                             />
                             <InfoTile
                                 label="Pool"
-                                value="100 positions"
-                                note="A full test pool holds 3,300 dUSDC in on-chain escrow."
+                                value="10 positions"
+                                note="A full pilot pool holds 330 dUSDC in on-chain escrow."
                             />
                             <InfoTile
                                 label="Test rounds"
-                                value="10 × 330 dUSDC"
+                                value="10 × 33 dUSDC"
                                 note="One winner per round on a shortened hourly test schedule."
                             />
                         </div>
@@ -87,7 +87,7 @@ const Pop33Landing: React.FC = () => {
                                 />
                                 <StepRow
                                     title="Follow rounds and claims"
-                                    description="A full pool has ten scheduled test rounds. Winners claim 330 dUSDC, and the on-chain archive shows the recorded results."
+                                    description="A full pilot pool has ten scheduled test rounds. Winners claim 33 test dUSDC, and the on-chain archive shows the recorded results. The next Join moves to the next available pool."
                                 />
                             </div>
                         </div>

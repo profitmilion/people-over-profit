@@ -2,13 +2,29 @@
 
 Last reviewed: 2026-08-08
 
-Branch reviewed: `codex/pop33-recovery`
+Branch reviewed: `codex/pop33-farcaster-pilot-10`
 
 Recovery source baseline reviewed: `531051f61f4d541f9a55f47d61fb181fdf30bec3`
 
 Status: active development
 
 ## Summary
+
+The `codex/pop33-farcaster-pilot-10` branch now contains a locally verified
+Public Pilot 10 implementation. Pool capacity is a deployment parameter limited
+to the 10-user pilot or the 100-user Basic V1 profile. A 10-user pool keeps the
+33 dUSDC entry, ten sequential unique-winner rounds, and balanced 330 dUSDC
+escrow by assigning 33 dUSDC per round. A focused contract test confirms that
+the 10th Join locks Pool 1 and the 11th Join is routed to Pool 2 at 1/10.
+
+The existing React/Vite frontend now initializes the current Farcaster Mini App
+SDK, calls `sdk.actions.ready()` in a verified Mini App context, and adds the
+official Farcaster Wagmi connector while preserving the injected web wallet.
+It includes `fc:miniapp` metadata, opaque PNG assets, and an unsigned
+`/.well-known/farcaster.json`. The account association still requires Piotr's
+domain signature. This branch has not yet established a new Vercel Preview or
+deployed the 10-user contract on Base Sepolia; the original 100-user deployment
+and its Preview remain separate.
 
 The repository contains an evolving React frontend, historical local prototype
 layers, developer tooling, and an initial Base Sepolia integration. The local
@@ -342,8 +358,9 @@ gaps for that future test are recorded in
 authorization.
 
 Production remains separate and does not host the current Demo V1 checkpoint.
-Farcaster is not implemented and is not required by this standalone Web3
-runtime.
+The minimal Farcaster runtime is implemented locally for the pilot; public Mini
+App availability still depends on the pilot Preview, contract environment, and
+signed domain association.
 
 ## Business-rule implementation matrix
 
@@ -382,6 +399,13 @@ runtime.
 - Winners history and archive UI.
 - Injected wallet connection.
 - Base Sepolia wagmi configuration.
+- Farcaster Mini App SDK readiness and official Farcaster Wagmi connector, with
+  the injected connector retained for ordinary web use.
+- `fc:miniapp` sharing metadata, pilot icon/embed PNGs, and an unsigned
+  well-known manifest without notifications or webhooks.
+- Configurable 10/100 pool capacity with balanced ten-round prize accounting;
+  the 10-user profile routes the 11th successful Join into the next available
+  pool in focused tests.
 - Retained legacy `openNextAndJoin()` integration code, no longer exposed as an
   action on ordinary `#/demo`.
 - Basic legacy on-chain aggregate and per-wallet reads retained for historical
@@ -505,8 +529,9 @@ runtime.
   technical frontend runbooks in `docs/DEMO_V1.md`.
 - Separate `#/demo-v1` and `#/archive-v1` routes with isolated environment
   variables, ABI, data reads, guarded transaction actions, and domain tests.
-- The `#/demo-v1` write path now rejects any non-canonical contract, token, or
-  chain configuration and revalidates deployed bytecode, `paymentToken()`
+- The `#/demo-v1` write path accepts a configured 10/100 contract address,
+  rejects any non-canonical token or chain configuration, and revalidates
+  deployed bytecode, `paymentToken()`
   linkage, token identity, and fixed Demo V1 parameters before every wallet
   request.
 - A synchronous single-flight guard covers the complete public faucet,
@@ -558,7 +583,8 @@ runtime.
 - selection of an external test-token address remains open only for the
   preserved alternative deployment path;
 - unified cycle and position domain model;
-- Farcaster integration;
+- public Farcaster domain association, Developer Tools validation, and Mini App
+  preview against the deployed pilot URL;
 - production readiness.
 
 ## Not implemented

@@ -67,6 +67,14 @@ reaches `finished`.
 The Basic V1 target participant count is 100. Handling of stalled pools remains
 `TO DECIDE`.
 
+The Base Sepolia Public Pilot 10 is an explicitly approved alpha safety profile,
+not a replacement for Basic V1: it uses 10 positions per pool so real testers
+can exercise multi-pool routing and the lifecycle quickly. It preserves the
+33 dUSDC entry and ten unique-winner rounds; therefore each pilot round assigns
+33 dUSDC and the ten rounds reconcile exactly to the pilot pool's 330 dUSDC
+escrow. Returning to the Basic V1 profile is a deployment configuration change
+back to 100 positions, not a manual source-code constant edit.
+
 ### Basic V1 draws and prizes
 
 1. A full Basic V1 pool contains 100 positions funded with 33 USDC each, for a

@@ -14,6 +14,7 @@ const VALID_ENV: NodeJS.ProcessEnv = {
   BASE_SEPOLIA_DEPLOYER_PRIVATE_KEY: `0x${"1".repeat(64)}`,
   BASE_SEPOLIA_USDC_ADDRESS: "0x0000000000000000000000000000000000000001",
   POP33_DEMO_DRAW_INTERVAL_SECONDS: "3600",
+  POP33_DEMO_POOL_CAPACITY: "100",
   POP33_BASE_SEPOLIA_DEPLOY_CONFIRM: BASE_SEPOLIA_DEPLOY_CONFIRMATION,
 };
 
@@ -21,6 +22,7 @@ const VALID_DEMO_TOKEN_ENV: NodeJS.ProcessEnv = {
   BASE_SEPOLIA_RPC_URL: VALID_ENV.BASE_SEPOLIA_RPC_URL,
   BASE_SEPOLIA_DEPLOYER_PRIVATE_KEY: VALID_ENV.BASE_SEPOLIA_DEPLOYER_PRIVATE_KEY,
   POP33_DEMO_DRAW_INTERVAL_SECONDS: "3600",
+  POP33_DEMO_POOL_CAPACITY: "100",
   POP33_DEMO_DRIP_AMOUNT_UNITS: "330000000",
   POP33_DEMO_DRIP_COOLDOWN_SECONDS: "86400",
   POP33_BASE_SEPOLIA_TOKEN_DEPLOY_CONFIRM: BASE_SEPOLIA_DEMO_TOKEN_CONFIRMATION,
@@ -38,6 +40,7 @@ describe("Base Sepolia deployment configuration", function () {
     expect(config).to.deep.equal({
       paymentTokenAddress: "0x0000000000000000000000000000000000000001",
       drawIntervalSeconds: 3_600n,
+      positionsPerPool: 100n,
     });
     expect(config).not.to.have.property("privateKey");
     expect(config).not.to.have.property("rpcUrl");
@@ -126,6 +129,19 @@ describe("Base Sepolia deployment configuration", function () {
       ),
     ).to.throw(`must equal ${BASE_SEPOLIA_DEPLOY_CONFIRMATION}`);
   });
+
+  it("accepts the pilot capacity and rejects unsupported capacities", function () {
+    expect(
+      readBaseSepoliaDeploymentConfig(
+        withEnv({ POP33_DEMO_POOL_CAPACITY: "10" }),
+      ).positionsPerPool,
+    ).to.equal(10n);
+    expect(() =>
+      readBaseSepoliaDeploymentConfig(
+        withEnv({ POP33_DEMO_POOL_CAPACITY: "20" }),
+      ),
+    ).to.throw("must equal 10 for the public pilot or 100 for Basic V1");
+  });
 });
 
 describe("Base Sepolia demo-token pair deployment configuration", function () {
@@ -138,6 +154,7 @@ describe("Base Sepolia demo-token pair deployment configuration", function () {
 
     expect(config).to.deep.equal({
       drawIntervalSeconds: 3_600n,
+      positionsPerPool: 100n,
       dripAmount: 330_000_000n,
       dripCooldownSeconds: 86_400n,
     });

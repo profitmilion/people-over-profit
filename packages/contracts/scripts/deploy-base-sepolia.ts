@@ -35,7 +35,7 @@ await requireEstimatedDeploymentBalance(
   ethers,
   deployer.address,
   "Pop33BasicV1",
-  [deploymentConfig.paymentTokenAddress, deploymentConfig.drawIntervalSeconds],
+  [deploymentConfig.paymentTokenAddress, deploymentConfig.drawIntervalSeconds, deploymentConfig.positionsPerPool],
 );
 
 const summary = {
@@ -44,6 +44,7 @@ const summary = {
   deployer: deployer.address,
   paymentTokenAddress: deploymentConfig.paymentTokenAddress,
   drawIntervalSeconds: deploymentConfig.drawIntervalSeconds,
+  positionsPerPool: deploymentConfig.positionsPerPool,
 };
 
 printDeploymentSummary(summary);
@@ -54,10 +55,12 @@ const pop33 = await deployPop33BasicV1(
   ethers,
   deploymentConfig.paymentTokenAddress,
   deploymentConfig.drawIntervalSeconds,
+  deploymentConfig.positionsPerPool,
 );
 await verifyPop33BasicV1Deployment(
   pop33,
   deploymentConfig.paymentTokenAddress,
   deploymentConfig.drawIntervalSeconds,
+  deploymentConfig.positionsPerPool,
 );
 await printDeploymentResult(pop33, summary);

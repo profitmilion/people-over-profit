@@ -27,6 +27,7 @@ async function deployFixture() {
   const pop33 = (await ethers.deployContract("Pop33BasicV1", [
     await token.getAddress(),
     DRAW_INTERVAL,
+    MAX_POSITIONS,
   ])) as DynamicHardhatValue;
   await pop33.waitForDeployment();
 
@@ -40,6 +41,7 @@ async function deployHarnessFixture() {
   const pop33 = (await ethers.deployContract("Pop33BasicV1Harness", [
     await token.getAddress(),
     DRAW_INTERVAL,
+    MAX_POSITIONS,
   ])) as DynamicHardhatValue;
   await pop33.waitForDeployment();
   return { deployer, user, token, pop33 };
@@ -223,7 +225,7 @@ describe("Pop33BasicV1 deployment and constants", function () {
   it("rejects a zero payment-token address", async function () {
     const factory = await ethers.getContractFactory("Pop33BasicV1");
 
-    await expect(factory.deploy(ethers.ZeroAddress, DRAW_INTERVAL)).to.be.revertedWithCustomError(
+    await expect(factory.deploy(ethers.ZeroAddress, DRAW_INTERVAL, MAX_POSITIONS)).to.be.revertedWithCustomError(
       factory,
       "InvalidPaymentToken",
     );
@@ -233,7 +235,7 @@ describe("Pop33BasicV1 deployment and constants", function () {
     const [, user] = await ethers.getSigners();
     const factory = await ethers.getContractFactory("Pop33BasicV1");
 
-    await expect(factory.deploy(user.address, DRAW_INTERVAL))
+    await expect(factory.deploy(user.address, DRAW_INTERVAL, MAX_POSITIONS))
       .to.be.revertedWithCustomError(factory, "PaymentTokenHasNoCode")
       .withArgs(user.address);
   });
@@ -243,7 +245,7 @@ describe("Pop33BasicV1 deployment and constants", function () {
     await token.waitForDeployment();
     const factory = await ethers.getContractFactory("Pop33BasicV1");
 
-    await expect(factory.deploy(await token.getAddress(), DRAW_INTERVAL))
+    await expect(factory.deploy(await token.getAddress(), DRAW_INTERVAL, MAX_POSITIONS))
       .to.be.revertedWithCustomError(factory, "PaymentTokenMetadataUnavailable")
       .withArgs(await token.getAddress());
   });
@@ -253,7 +255,7 @@ describe("Pop33BasicV1 deployment and constants", function () {
     await token.waitForDeployment();
     const factory = await ethers.getContractFactory("Pop33BasicV1");
 
-    await expect(factory.deploy(await token.getAddress(), DRAW_INTERVAL))
+    await expect(factory.deploy(await token.getAddress(), DRAW_INTERVAL, MAX_POSITIONS))
       .to.be.revertedWithCustomError(factory, "InvalidPaymentTokenDecimals")
       .withArgs(18);
   });
@@ -268,10 +270,23 @@ describe("Pop33BasicV1 deployment and constants", function () {
     const { token } = await networkHelpers.loadFixture(deployFixture);
     const factory = await ethers.getContractFactory("Pop33BasicV1");
 
-    await expect(factory.deploy(await token.getAddress(), 0)).to.be.revertedWithCustomError(
+    await expect(factory.deploy(await token.getAddress(), 0, MAX_POSITIONS)).to.be.revertedWithCustomError(
       factory,
       "InvalidDrawInterval",
     );
+  });
+
+  it("rejects a capacity that cannot fund ten equal unique-winner rounds", async function () {
+    const { token } = await networkHelpers.loadFixture(deployFixture);
+    const factory = await ethers.getContractFactory("Pop33BasicV1");
+
+    for (const invalidCapacity of [0n, 9n, 11n, 101n]) {
+      await expect(
+        factory.deploy(await token.getAddress(), DRAW_INTERVAL, invalidCapacity),
+      )
+        .to.be.revertedWithCustomError(factory, "InvalidPositionsPerPool")
+        .withArgs(invalidCapacity);
+    }
   });
 });
 
@@ -599,6 +614,36 @@ describe("Bounded active-position set", function () {
 });
 
 describe("Pool capacity and locking", function () {
+  it("locks a configured 10-user pilot pool and routes the 11th join to pool 2", async function () {
+    const token = (await ethers.deployContract("MockUSDC")) as DynamicHardhatValue;
+    await token.waitForDeployment();
+    const pilot = (await ethers.deployContract("Pop33BasicV1", [
+      await token.getAddress(),
+      DRAW_INTERVAL,
+      10,
+    ])) as DynamicHardhatValue;
+    await pilot.waitForDeployment();
+
+    expect(await pilot.MAX_POSITIONS_PER_POOL()).to.equal(10n);
+    expect(await pilot.PRIZE_PER_ROUND()).to.equal(ENTRY_PRICE);
+    expect(await pilot.TOTAL_PRIZE_AMOUNT()).to.equal(ENTRY_PRICE * 10n);
+
+    for (let index = 0; index < 11; index += 1) {
+      const participant = await createFundedWallet(token, pilot);
+      await pilot.connect(participant).join();
+    }
+
+    const pool1 = await pilot.getPool(1);
+    const pool2 = await pilot.getPool(2);
+    expect(pool1.status).to.equal(1n);
+    expect(pool1.activePositionCount).to.equal(10n);
+    expect(pool1.escrowedAmount).to.equal(ENTRY_PRICE * 10n);
+    expect(pool2.status).to.equal(0n);
+    expect(pool2.activePositionCount).to.equal(1n);
+    expect(pool2.escrowedAmount).to.equal(ENTRY_PRICE);
+    expect(await pilot.getOpenPoolIds()).to.deep.equal([2n]);
+  });
+
   it("stays Open through 99 positions", async function () {
     const { pop33 } = await networkHelpers.loadFixture(ninetyNinePositionsFixture);
     const pool = await pop33.getPool(1);

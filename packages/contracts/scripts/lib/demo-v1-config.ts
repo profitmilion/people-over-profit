@@ -18,13 +18,29 @@ export const DEMO_V1_PARAMETERS = Object.freeze({
   dripCooldownSeconds: 86_400n,
 });
 
+export const PILOT_10_POOL_CAPACITY = 10n;
+
+export function getDemoPoolParameters(positionsPerPool: bigint) {
+  if (positionsPerPool !== PILOT_10_POOL_CAPACITY && positionsPerPool !== 100n) {
+    throw new Error("POP33_DEMO_POOL_CAPACITY must equal 10 for the public pilot or 100 for Basic V1.");
+  }
+  const totalPrizeAmount = DEMO_V1_PARAMETERS.entryPrice * positionsPerPool;
+  return Object.freeze({
+    positionsPerPool,
+    prizePerRound: totalPrizeAmount / DEMO_V1_PARAMETERS.drawRoundCount,
+    totalPrizeAmount,
+  });
+}
+
 export interface BaseSepoliaDeploymentConfig {
   paymentTokenAddress: string;
   drawIntervalSeconds: bigint;
+  positionsPerPool: bigint;
 }
 
 export interface BaseSepoliaDemoTokenDeploymentConfig {
   drawIntervalSeconds: bigint;
+  positionsPerPool: bigint;
   dripAmount: bigint;
   dripCooldownSeconds: bigint;
 }
@@ -101,6 +117,15 @@ function validateDrawInterval(value: string): bigint {
   return interval;
 }
 
+function validatePoolCapacity(value: string): bigint {
+  if (!/^\d+$/.test(value)) {
+    throw new Error("POP33_DEMO_POOL_CAPACITY must be a positive integer.");
+  }
+  const capacity = BigInt(value);
+  getDemoPoolParameters(capacity);
+  return capacity;
+}
+
 function validateExactUnsignedInteger(
   env: NodeJS.ProcessEnv,
   name: string,
@@ -140,6 +165,9 @@ export function readBaseSepoliaDeploymentConfig(
   env: NodeJS.ProcessEnv,
 ): BaseSepoliaDeploymentConfig {
   const drawIntervalSeconds = validateCommonBaseSepoliaEnvironment(env);
+  const positionsPerPool = validatePoolCapacity(
+    requireValue(env, "POP33_DEMO_POOL_CAPACITY"),
+  );
   const paymentTokenAddress = validatePaymentToken(
     requireValue(env, "BASE_SEPOLIA_USDC_ADDRESS"),
   );
@@ -149,7 +177,7 @@ export function readBaseSepoliaDeploymentConfig(
     BASE_SEPOLIA_DEPLOY_CONFIRMATION,
   );
 
-  return { paymentTokenAddress, drawIntervalSeconds };
+  return { paymentTokenAddress, drawIntervalSeconds, positionsPerPool };
 }
 
 export function assertDemoPop33DeploymentConfirmation(env: NodeJS.ProcessEnv): void {
@@ -164,6 +192,9 @@ export function readBaseSepoliaDemoTokenDeploymentConfig(
   env: NodeJS.ProcessEnv,
 ): BaseSepoliaDemoTokenDeploymentConfig {
   const drawIntervalSeconds = validateCommonBaseSepoliaEnvironment(env);
+  const positionsPerPool = validatePoolCapacity(
+    requireValue(env, "POP33_DEMO_POOL_CAPACITY"),
+  );
   const dripAmount = validateExactUnsignedInteger(
     env,
     "POP33_DEMO_DRIP_AMOUNT_UNITS",
@@ -181,5 +212,5 @@ export function readBaseSepoliaDemoTokenDeploymentConfig(
   );
   assertDemoPop33DeploymentConfirmation(env);
 
-  return { drawIntervalSeconds, dripAmount, dripCooldownSeconds };
+  return { drawIntervalSeconds, positionsPerPool, dripAmount, dripCooldownSeconds };
 }

@@ -1,5 +1,6 @@
 import { useAccount, useConnect, useDisconnect } from "wagmi";
 import { Button } from "./Button";
+import { useMiniAppEnvironment } from "../hooks/useMiniAppEnvironment";
 
 function shorten(addr: string) {
   return addr.slice(0, 6) + "..." + addr.slice(-4);
@@ -9,9 +10,12 @@ export function ConnectButton() {
   const { address, isConnected, isConnecting } = useAccount();
   const { connect, connectors, isPending, error } = useConnect();
   const { disconnect } = useDisconnect();
+  const isMiniApp = useMiniAppEnvironment();
 
   // Preferuj wstrzyknięty portfel (MetaMask/Rabby), w przeciwnym razie pierwszy dostępny
-  const injectedConnector = connectors.find((c) => c.id === "injected") ?? connectors[0];
+  const connector = isMiniApp
+    ? connectors.find((candidate) => candidate.id === "farcaster")
+    : connectors.find((candidate) => candidate.id === "injected");
 
   if (isConnected && address) {
     return (
@@ -25,8 +29,8 @@ export function ConnectButton() {
   return (
     <div className="flex items-center gap-2">
       <Button
-        onClick={() => connect({ connector: injectedConnector })}
-        disabled={isConnecting || isPending || !injectedConnector}
+        onClick={() => connector && connect({ connector })}
+        disabled={isConnecting || isPending || !connector}
       >
         {isConnecting || isPending ? "Connecting..." : "Connect Wallet"}
       </Button>

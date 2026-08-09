@@ -20,16 +20,13 @@ the 10th Join locks Pool 1 and the 11th Join is routed to Pool 2 at 1/10.
 The existing React/Vite frontend now initializes the current Farcaster Mini App
 SDK, calls `sdk.actions.ready()` in a verified Mini App context, and adds the
 official Farcaster Wagmi connector while preserving the injected web wallet.
-It includes `fc:miniapp` metadata, opaque PNG assets, and an unsigned
-`/.well-known/farcaster.json`. The account association still requires Piotr's
-domain signature. A Git-triggered Vercel Preview for this branch is successful,
-but the project's build does not currently expose `VERCEL_BRANCH_URL` or
-`VERCEL_URL`; its deployed metadata therefore still contains the local fallback
-and is not a valid public Mini App endpoint. The build accepts an explicit
-`VITE_POP33_PUBLIC_URL` override. Vercel Production remains untouched. The
-10-user contract is also not yet deployed on Base Sepolia, so the Preview must
-not be treated as a usable 10-user pilot until both URLs and the deployment
-address are configured and verified.
+It includes `fc:miniapp` metadata, opaque PNG assets, and the domain-specific
+Farcaster `accountAssociation` supplied by Piotr in the generated
+`/.well-known/farcaster.json`. The branch-specific Vercel Preview is configured
+with its stable alias and the deployed 10-user Base Sepolia contract at
+`0xc2fAA10d3E5FEeB88604dc3A1Ab33656fFeBCA98`. Its public Demo route renders
+Pool 1 at 0/10, and its manifest and Mini App metadata use the same stable host
+without the local fallback. Vercel Production remains untouched.
 
 The repository contains an evolving React frontend, historical local prototype
 layers, developer tooling, and an initial Base Sepolia integration. The local

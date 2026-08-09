@@ -9,6 +9,14 @@ const publicUrl =
   (vercelHost ? `https://${vercelHost}` : "http://localhost:5173");
 
 const farcasterManifest = {
+  accountAssociation: {
+    header:
+      "eyJmaWQiOjEzNzc1MjYsInR5cGUiOiJjdXN0b2R5Iiwia2V5IjoiMHg4QzM2NTcyNTI2OWI5NTMxYkQwNTI3NTE1OGU1NTg2N2QxNUE5NWE3In0",
+    payload:
+      "eyJkb21haW4iOiJwb3AzMy1kZW1vLWdpdC1jb2RleC1wb3AzMy1mYXJjYXMtYjU4MzgxLXByb2ZpdG1pbGlvbnMtcHJvamVjdHMudmVyY2VsLmFwcCJ9",
+    signature:
+      "oDrEkAoRyQy3uxpRBDXjwo0dUEpkPxenOlUvtEnEsWk52tNPGNWyt9lqF4fovTvwm0shfwmgbhql9/bLt0YPzBs=",
+  },
   miniapp: {
     version: "1",
     name: "POP33 Public Alpha",

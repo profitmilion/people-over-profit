@@ -144,6 +144,9 @@ class FakeWindowsAclAdapter implements WindowsAclAdapter {
   inspectCount = 0;
   readonly reparsePaths = new Set<string>();
 
+  async localAppDataDirectory(): Promise<string> { return resolve(tmpdir()); }
+  async driveType(): Promise<string> { return "Fixed"; }
+
   async currentUserSid(): Promise<string> { return "S-1-5-21-1000"; }
 
   async protectDirectory(): Promise<void> {

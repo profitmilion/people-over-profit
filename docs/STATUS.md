@@ -1,11 +1,11 @@
 # POP33 Development Status
 
-Last reviewed: 2026-08-08
+Last reviewed: 2026-08-09
 
 Branch reviewed: `codex/pop33-wallet-store-v2-ceremony-closure`
 
-Wallet Store v2 ceremony-closure source baseline:
-`654c89f972cc671438acd3a36e63cb6a9d2fe0f2`
+Wallet Store v2 local-root closure source baseline:
+`7d5a2094a70598d6f7b00704e8304a06b8564ca7`
 
 Status: active development
 
@@ -171,6 +171,14 @@ earlier backup verification instead of trusting cached objects. Windows policy
 rejects raw `.` and `..` segments before normalization or ACL work. Hidden TTY
 cleanup now covers raw-mode setup, `resume()`, listener registration, stream
 errors, EOF/close, and Ctrl+C with one settlement and buffer clearing.
+
+The Windows local-root closure no longer derives production trust from
+`process.env.LOCALAPPDATA` alone. Before any ceremony path or file-security
+object is created, the runtime resolves the Windows Known Folder Local AppData,
+requires the environment value to identify the same canonical path, rejects
+UNC and Windows device namespaces, and requires `DriveInfo.DriveType` to be
+exactly `Fixed`. Network/mapped, unknown, unavailable, spoofed, or otherwise
+unverifiable roots fail closed before password acquisition or key generation.
 
 Only deterministic `production-format-fixture` data and disposable temporary
 roots were used for closure tests. The production generator and real hidden

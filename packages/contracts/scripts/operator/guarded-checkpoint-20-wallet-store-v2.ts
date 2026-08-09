@@ -2792,12 +2792,11 @@ export async function runWalletStoreV2ProductionCeremonyRuntime(input: {
   if (input.authorization !== WALLET_STORE_V2_PRODUCTION_CEREMONY_AUTHORIZATION) {
     throw new Error("Production Wallet Store v2 ceremony authorization is required.");
   }
-  const localAppData = process.env.LOCALAPPDATA;
-  if (!localAppData) throw new Error("LOCALAPPDATA is required for production Wallet Store v2 ceremony.");
   const ceremony = await import("./wallet-store-v2-ceremony.js");
   const windowsSecurity = await import("./wallet-store-v2-windows-security.js");
+  const productionRootContext = await windowsSecurity.resolveDefaultWindowsWalletStoreV2ProductionRootContext();
   const paths = ceremony.walletStoreV2CeremonyPaths(
-    resolve(localAppData, "POP33", "operator", "checkpoint-20"),
+    productionRootContext.checkpointRoot,
   );
   const passwordProvider = ProductionTtyPasswordProvider.create(
     input.authorization,
@@ -2811,9 +2810,18 @@ export async function runWalletStoreV2ProductionCeremonyRuntime(input: {
     artifactClass: "production",
     runtimeCapability: productionCeremonyRuntimeCapability,
     paths,
-    activeSecurity: windowsSecurity.createDefaultWindowsWalletStoreV2ProductionSecurity(paths.activeRoot),
-    backupSecurity: windowsSecurity.createDefaultWindowsWalletStoreV2ProductionSecurity(paths.backupRoot),
-    identitySecurity: windowsSecurity.createDefaultWindowsWalletStoreV2ProductionSecurity(paths.identityRoot),
+    activeSecurity: windowsSecurity.createDefaultWindowsWalletStoreV2ProductionSecurity(
+      paths.activeRoot,
+      productionRootContext,
+    ),
+    backupSecurity: windowsSecurity.createDefaultWindowsWalletStoreV2ProductionSecurity(
+      paths.backupRoot,
+      productionRootContext,
+    ),
+    identitySecurity: windowsSecurity.createDefaultWindowsWalletStoreV2ProductionSecurity(
+      paths.identityRoot,
+      productionRootContext,
+    ),
     buildBundle: (createdAt, ceremonyId) => buildWalletStoreV2ProductionBundleForCeremony({
       passwordProvider,
       walletGenerator,

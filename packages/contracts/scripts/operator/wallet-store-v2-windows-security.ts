@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { lstat, mkdir, realpath } from "node:fs/promises";
-import { isAbsolute, parse, relative, resolve, sep } from "node:path";
+import { isAbsolute, parse, relative, resolve, sep, win32 } from "node:path";
 import { promisify } from "node:util";
 
 import { OPERATOR_WORKSPACE_ROOT } from "./checkpoint.js";
@@ -35,6 +35,8 @@ export interface WindowsAclSnapshot {
 
 export interface WindowsAclAdapter {
   readonly adapterClass: "windows-acl";
+  localAppDataDirectory(): Promise<string>;
+  driveType(path: string): Promise<string>;
   currentUserSid(): Promise<string>;
   protectDirectory(directory: string, allowedSids: readonly string[]): Promise<void>;
   inspect(path: string): Promise<WindowsAclSnapshot>;
@@ -42,9 +44,21 @@ export interface WindowsAclAdapter {
   canonicalPath(path: string): Promise<string>;
 }
 
+function isWindowsDriveAbsolute(value: string): boolean {
+  return /^[a-z]:[\\/]/iu.test(value);
+}
+
+function resolvePolicyPath(value: string, ...segments: string[]): string {
+  return isWindowsDriveAbsolute(value)
+    ? win32.resolve(value, ...segments)
+    : resolve(value, ...segments);
+}
+
 function normalizedPath(value: string): string {
-  const normalized = resolve(value);
-  return process.platform === "win32" ? normalized.toLowerCase() : normalized;
+  const normalized = resolvePolicyPath(value);
+  return process.platform === "win32" || isWindowsDriveAbsolute(value)
+    ? normalized.toLowerCase()
+    : normalized;
 }
 
 function isInside(candidate: string, parent: string): boolean {
@@ -54,11 +68,20 @@ function isInside(candidate: string, parent: string): boolean {
 }
 
 function requireAbsolute(value: string, label: string): string {
+  const windowsForm = value.replace(/\//gu, "\\");
+  if (
+    windowsForm.startsWith("\\\\") ||
+    /^\\(?:\?\?|device|globalroot)(?:\\|$)/iu.test(windowsForm)
+  ) {
+    throw new Error(`${label} must not use a Windows network or device namespace.`);
+  }
   if (value.split(/[\\/]+/u).some((segment) => segment === "." || segment === "..")) {
     throw new Error(`${label} must not contain raw dot segments.`);
   }
-  if (!isAbsolute(value)) throw new Error(`${label} must be absolute.`);
-  return resolve(value);
+  if (!isAbsolute(value) && !isWindowsDriveAbsolute(value)) {
+    throw new Error(`${label} must be absolute.`);
+  }
+  return resolvePolicyPath(value);
 }
 
 async function pathExists(path: string): Promise<boolean> {
@@ -76,6 +99,39 @@ export class PowerShellWindowsAclAdapter implements WindowsAclAdapter {
 
   constructor() {
     if (process.platform !== "win32") throw new Error("Windows ACL adapter requires Windows.");
+  }
+
+  async localAppDataDirectory(): Promise<string> {
+    const script = "[Environment]::GetFolderPath([Environment+SpecialFolder]::LocalApplicationData)";
+    const { stdout } = await execFileAsync(
+      "powershell.exe",
+      ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script],
+      { windowsHide: true, timeout: 10_000 },
+    );
+    const path = stdout.trim();
+    if (!path) throw new Error("Windows Known Folder Local AppData lookup returned an empty path.");
+    return path;
+  }
+
+  async driveType(path: string): Promise<string> {
+    const script = [
+      "$target = [Environment]::GetEnvironmentVariable('POP33_WALLET_STORE_V2_VOLUME_TARGET')",
+      "$root = [IO.Path]::GetPathRoot($target)",
+      "if ([string]::IsNullOrWhiteSpace($root)) { throw 'Volume root is unavailable.' }",
+      "([IO.DriveInfo]::new($root)).DriveType.ToString()",
+    ].join("; ");
+    const { stdout } = await execFileAsync(
+      "powershell.exe",
+      ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script],
+      {
+        windowsHide: true,
+        timeout: 10_000,
+        env: { ...process.env, POP33_WALLET_STORE_V2_VOLUME_TARGET: path },
+      },
+    );
+    const driveType = stdout.trim();
+    if (!driveType) throw new Error("Windows volume type lookup returned an empty result.");
+    return driveType;
   }
 
   async currentUserSid(): Promise<string> {
@@ -167,6 +223,57 @@ export interface WindowsProductionPathPolicyInput {
   adapter: WindowsAclAdapter;
   fixturePolicyCheckpointRoot?: string;
   fixtureAuthorization?: string;
+}
+
+export interface WindowsProductionRootContext {
+  readonly localAppDataDirectory: string;
+  readonly checkpointRoot: string;
+  readonly workspaceDirectory: string;
+  readonly synchronizedDirectories: readonly string[];
+  readonly adapter: WindowsAclAdapter;
+}
+
+export async function resolveWindowsWalletStoreV2ProductionRootContext(input: {
+  environmentLocalAppData: string | undefined;
+  workspaceDirectory?: string;
+  synchronizedDirectories?: readonly string[];
+  adapter: WindowsAclAdapter;
+}): Promise<WindowsProductionRootContext> {
+  if (!input.environmentLocalAppData) {
+    throw new Error("LOCALAPPDATA is required for production Wallet Store v2.");
+  }
+  const environmentLocalAppData = requireAbsolute(
+    input.environmentLocalAppData,
+    "LOCALAPPDATA environment root",
+  );
+  const knownLocalAppData = requireAbsolute(
+    await input.adapter.localAppDataDirectory(),
+    "Windows Known Folder Local AppData root",
+  );
+  if (normalizedPath(environmentLocalAppData) !== normalizedPath(knownLocalAppData)) {
+    throw new Error("LOCALAPPDATA does not match the Windows Known Folder Local AppData path.");
+  }
+  const canonicalLocalAppData = await input.adapter.canonicalPath(knownLocalAppData);
+  if (normalizedPath(canonicalLocalAppData) !== normalizedPath(knownLocalAppData)) {
+    throw new Error("Windows Known Folder Local AppData canonical path mismatch.");
+  }
+  const driveType = await input.adapter.driveType(canonicalLocalAppData);
+  if (driveType !== "Fixed") {
+    throw new Error("Production Wallet Store v2 requires a fixed local Windows volume.");
+  }
+  const workspaceDirectory = requireAbsolute(
+    input.workspaceDirectory ?? OPERATOR_WORKSPACE_ROOT,
+    "Workspace root",
+  );
+  const synchronizedDirectories = (input.synchronizedDirectories ?? []).map((path) =>
+    requireAbsolute(path, "Synchronized directory"));
+  return Object.freeze({
+    localAppDataDirectory: knownLocalAppData,
+    checkpointRoot: resolvePolicyPath(knownLocalAppData, "POP33", "operator", "checkpoint-20"),
+    workspaceDirectory,
+    synchronizedDirectories: Object.freeze([...synchronizedDirectories]),
+    adapter: input.adapter,
+  });
 }
 
 export class WindowsWalletStoreV2ProductionFileSecurity implements WalletStoreV2CeremonyFileSecurity {
@@ -377,20 +484,28 @@ export class WindowsWalletStoreV2ProductionFileSecurity implements WalletStoreV2
   }
 }
 
-export function createDefaultWindowsWalletStoreV2ProductionSecurity(
-  rootDirectory: string,
-): WindowsWalletStoreV2ProductionFileSecurity {
-  const localAppData = process.env.LOCALAPPDATA;
-  if (!localAppData) throw new Error("LOCALAPPDATA is required for production Wallet Store v2.");
+export async function resolveDefaultWindowsWalletStoreV2ProductionRootContext(): Promise<WindowsProductionRootContext> {
   const synchronizedDirectories = [
     process.env.OneDrive,
     process.env.OneDriveConsumer,
     process.env.OneDriveCommercial,
   ].filter((value): value is string => Boolean(value));
-  return new WindowsWalletStoreV2ProductionFileSecurity({
-    rootDirectory,
-    localAppDataDirectory: localAppData,
+  return resolveWindowsWalletStoreV2ProductionRootContext({
+    environmentLocalAppData: process.env.LOCALAPPDATA,
     synchronizedDirectories,
     adapter: new PowerShellWindowsAclAdapter(),
+  });
+}
+
+export function createDefaultWindowsWalletStoreV2ProductionSecurity(
+  rootDirectory: string,
+  context: WindowsProductionRootContext,
+): WindowsWalletStoreV2ProductionFileSecurity {
+  return new WindowsWalletStoreV2ProductionFileSecurity({
+    rootDirectory,
+    localAppDataDirectory: context.localAppDataDirectory,
+    workspaceDirectory: context.workspaceDirectory,
+    synchronizedDirectories: context.synchronizedDirectories,
+    adapter: context.adapter,
   });
 }

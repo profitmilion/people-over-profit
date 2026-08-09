@@ -4,7 +4,7 @@ import { EventEmitter, once } from "node:events";
 import { fork } from "node:child_process";
 import { mkdir, readFile, readdir, rm, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve, sep } from "node:path";
+import { join, resolve, sep, win32 } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -40,6 +40,7 @@ import {
 } from "../scripts/operator/wallet-store-v2-ceremony.js";
 import {
   WindowsWalletStoreV2ProductionFileSecurity,
+  resolveWindowsWalletStoreV2ProductionRootContext,
   type WindowsAclAdapter,
   type WindowsAclSnapshot,
 } from "../scripts/operator/wallet-store-v2-windows-security.js";
@@ -130,6 +131,18 @@ class PermissiveCeremonySecurity implements WalletStoreV2ProductionFormatFixture
 class FixtureAclAdapter implements WindowsAclAdapter {
   readonly adapterClass = "windows-acl" as const;
   protected = false;
+  knownLocalAppData = resolve(tmpdir());
+  driveTypeValue = "Fixed";
+  failKnownLocalAppData = false;
+  failDriveType = false;
+  async localAppDataDirectory(): Promise<string> {
+    if (this.failKnownLocalAppData) throw new Error("fixture Known Folder lookup failure");
+    return this.knownLocalAppData;
+  }
+  async driveType(): Promise<string> {
+    if (this.failDriveType) throw new Error("fixture volume lookup failure");
+    return this.driveTypeValue;
+  }
   async currentUserSid(): Promise<string> { return "S-1-5-21-1000"; }
   async protectDirectory(): Promise<void> { this.protected = true; }
   async inspect(): Promise<WindowsAclSnapshot> {
@@ -143,7 +156,9 @@ class FixtureAclAdapter implements WindowsAclAdapter {
     };
   }
   async isReparsePoint(): Promise<boolean> { return false; }
-  async canonicalPath(path: string): Promise<string> { return resolve(path); }
+  async canonicalPath(path: string): Promise<string> {
+    return /^[a-z]:[\\/]/iu.test(path) ? win32.resolve(path) : resolve(path);
+  }
 }
 
 class FakeTtyInput extends EventEmitter implements WalletStoreV2TtyInput {
@@ -607,6 +622,82 @@ describe("Wallet Store v2 ceremony hardening", function () {
       }), /raw dot segments/);
     }
     assert.equal(adapter.protected, false, "raw paths must fail before ACL mutation");
+  });
+
+  it("requires the real Windows Local AppData on a fixed local volume", async function () {
+    const localAppData = await temporaryRoot("verified-local-appdata");
+    const workspaceDirectory = resolve(localAppData, "unrelated-workspace");
+    const adapter = new FixtureAclAdapter();
+    adapter.knownLocalAppData = localAppData;
+    const context = await resolveWindowsWalletStoreV2ProductionRootContext({
+      environmentLocalAppData: localAppData,
+      workspaceDirectory,
+      adapter,
+    });
+    assert.equal(
+      context.checkpointRoot,
+      resolve(localAppData, "POP33", "operator", "checkpoint-20"),
+    );
+    assert.equal(context.localAppDataDirectory, localAppData);
+
+    for (const rawDot of [".", ".."]) {
+      await assert.rejects(resolveWindowsWalletStoreV2ProductionRootContext({
+        environmentLocalAppData: rawDot,
+        workspaceDirectory,
+        adapter,
+      }), /raw dot segments/);
+    }
+
+    for (const namespacePath of [
+      String.raw`\\server\share\Users\Piotr\AppData\Local`,
+      String.raw`\\?\UNC\server\share\Users\Piotr\AppData\Local`,
+      String.raw`\\.\C:\Users\Piotr\AppData\Local`,
+      String.raw`\Device\Mup\server\share\Users\Piotr\AppData\Local`,
+    ]) {
+      adapter.knownLocalAppData = namespacePath;
+      await assert.rejects(resolveWindowsWalletStoreV2ProductionRootContext({
+        environmentLocalAppData: namespacePath,
+        workspaceDirectory,
+        adapter,
+      }), /network or device namespace/);
+    }
+
+    adapter.knownLocalAppData = localAppData;
+    await assert.rejects(resolveWindowsWalletStoreV2ProductionRootContext({
+      environmentLocalAppData: resolve(localAppData, "spoofed"),
+      workspaceDirectory,
+      adapter,
+    }), /does not match the Windows Known Folder/);
+
+    const mappedLocalAppData = String.raw`Z:\Users\Piotr\AppData\Local`;
+    adapter.knownLocalAppData = mappedLocalAppData;
+    adapter.driveTypeValue = "Network";
+    await assert.rejects(resolveWindowsWalletStoreV2ProductionRootContext({
+      environmentLocalAppData: mappedLocalAppData,
+      workspaceDirectory,
+      adapter,
+    }), /fixed local Windows volume/);
+
+    adapter.driveTypeValue = "Unknown";
+    await assert.rejects(resolveWindowsWalletStoreV2ProductionRootContext({
+      environmentLocalAppData: mappedLocalAppData,
+      workspaceDirectory,
+      adapter,
+    }), /fixed local Windows volume/);
+
+    adapter.failDriveType = true;
+    await assert.rejects(resolveWindowsWalletStoreV2ProductionRootContext({
+      environmentLocalAppData: mappedLocalAppData,
+      workspaceDirectory,
+      adapter,
+    }), /volume lookup failure/);
+    adapter.failDriveType = false;
+    adapter.failKnownLocalAppData = true;
+    await assert.rejects(resolveWindowsWalletStoreV2ProductionRootContext({
+      environmentLocalAppData: localAppData,
+      workspaceDirectory,
+      adapter,
+    }), /Known Folder lookup failure/);
   });
 
   it("completes active store, independent identity, backup, final verification, and blocks regeneration", async function () {

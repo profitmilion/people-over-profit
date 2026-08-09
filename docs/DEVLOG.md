@@ -78,8 +78,12 @@ domain signature in Farcaster Developer Tools.
 The pushed branch established a successful Git-triggered Vercel Preview while
 leaving Vercel Production unchanged. A follow-up makes `fc:miniapp` metadata
 and the generated unsigned `/.well-known/farcaster.json` use the actual Vercel
-deployment host rather than a guessed branch alias. This Preview is deployment
-evidence only: the 10-user contract address and signed Farcaster account
+deployment host rather than a guessed branch alias, with
+`VITE_POP33_PUBLIC_URL` available as an explicit override. Public inspection
+then confirmed that this Vercel project does not expose either supported system
+URL to its build, so the deployed output uses the local fallback and is not yet
+a valid Mini App endpoint. This Preview is deployment evidence only: URL
+configuration, the 10-user contract address, and signed Farcaster account
 association are still missing.
 
 ## 2026-08-08 - Manual checkpoint 5 verified

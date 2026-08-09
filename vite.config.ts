@@ -3,7 +3,10 @@ import react from "@vitejs/plugin-react";
 import path from "path";
 
 const vercelHost = process.env.VERCEL_BRANCH_URL ?? process.env.VERCEL_URL;
-const publicUrl = vercelHost ? `https://${vercelHost}` : "http://localhost:5173";
+const configuredPublicUrl = process.env.VITE_POP33_PUBLIC_URL?.replace(/\/+$/, "");
+const publicUrl =
+  configuredPublicUrl ??
+  (vercelHost ? `https://${vercelHost}` : "http://localhost:5173");
 
 const farcasterManifest = {
   miniapp: {

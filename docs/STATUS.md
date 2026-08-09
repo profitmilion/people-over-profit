@@ -23,10 +23,13 @@ official Farcaster Wagmi connector while preserving the injected web wallet.
 It includes `fc:miniapp` metadata, opaque PNG assets, and an unsigned
 `/.well-known/farcaster.json`. The account association still requires Piotr's
 domain signature. A Git-triggered Vercel Preview for this branch is successful,
-and its Farcaster URLs are generated from the deployment's actual Vercel host.
-Vercel Production remains untouched. The 10-user contract is not yet deployed
-on Base Sepolia, so the Preview environment must not be treated as a usable
-10-user pilot until that deployment address is configured and verified.
+but the project's build does not currently expose `VERCEL_BRANCH_URL` or
+`VERCEL_URL`; its deployed metadata therefore still contains the local fallback
+and is not a valid public Mini App endpoint. The build accepts an explicit
+`VITE_POP33_PUBLIC_URL` override. Vercel Production remains untouched. The
+10-user contract is also not yet deployed on Base Sepolia, so the Preview must
+not be treated as a usable 10-user pilot until both URLs and the deployment
+address are configured and verified.
 
 The repository contains an evolving React frontend, historical local prototype
 layers, developer tooling, and an initial Base Sepolia integration. The local

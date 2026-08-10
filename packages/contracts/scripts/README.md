@@ -178,6 +178,32 @@ between simulation and mining cannot be fully bound to an expected pool with
 the current `join()` interface; solving that requires a future contract-level
 expected-pool/count guard and a separately reviewed deployment.
 
+## Pilot 10 public wallet inventory
+
+The Pilot 10 inventory inspector is separate from the historical 100-user
+operator. It is fixed to Base Sepolia chain `84532`, Pilot 10 at
+`0xc2fAA10d3E5FEeB88604dc3A1Ab33656fFeBCA98`, and dUSDC at
+`0xA7FA084b34c888061757d4b5FBb08a7B53fee786`. Its contract ABI contains only
+view functions, its provider has no signer, and it has no signing or broadcast
+path.
+
+Edit `config/pilot-10-wallets.json` to add public entries containing exactly a
+`label` and an EVM `address`, then run:
+
+```text
+npm run inventory:pilot-10 -- --format both
+```
+
+An alternative public-only JSON file can be selected with `--input`. The closed
+schema rejects unknown fields, duplicate labels, duplicate addresses, and any
+attempt to add wallet material alongside the public address. The report includes
+Base Sepolia ETH, dUSDC, allowance for Pilot 10, Pool 1 and Pool 2 membership,
+all active Pilot 10 positions, a `READY`, `NEEDS_ACTION`, or `ALREADY_IN_POOL`
+state, and every applicable `NEED_ETH`, `NEED_DUSDC`, or `NEED_APPROVE` issue.
+Funding issues are reported together; `NEED_APPROVE` is reported as the next
+step once both asset thresholds are met. An allowance of zero does not
+disqualify a wallet from later preparation.
+
 ## Guarded single-wallet Base Sepolia smoke harness
 
 The Base Sepolia smoke harness is deliberately separate from the multi-wallet

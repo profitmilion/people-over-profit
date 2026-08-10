@@ -24,9 +24,11 @@ It includes `fc:miniapp` metadata, opaque PNG assets, and the domain-specific
 Farcaster `accountAssociation` supplied by Piotr in the generated
 `/.well-known/farcaster.json`. The branch-specific Vercel Preview is configured
 with its stable alias and the deployed 10-user Base Sepolia contract at
-`0xc2fAA10d3E5FEeB88604dc3A1Ab33656fFeBCA98`. Its public Demo route renders
-Pool 1 at 0/10, and its manifest and Mini App metadata use the same stable host
-without the local fallback. Vercel Production remains untouched.
+`0xc2fAA10d3E5FEeB88604dc3A1Ab33656fFeBCA98`. A public read-only snapshot at
+Base Sepolia block `45301495` found Pool 1 Open at 1/10 and Pool 2 Open at 1/10;
+both active positions belong to the same public address. Its manifest and Mini
+App metadata use the same stable host without the local fallback. Vercel
+Production remains untouched.
 
 The first Farcaster mobile approval test exposed a split configuration: public
 reads used the Pilot 10 address from Vercel while the transaction hook retained
@@ -35,6 +37,13 @@ therefore granted exactly 33 dUSDC to the previous contract and granted nothing
 to Pilot 10; no Join occurred. The reviewed write-path address now matches the
 Pilot 10 deployment, and public configuration rejects a mismatched contract
 before enabling writes.
+
+A dedicated Pilot 10 wallet inventory inspector now accepts a closed JSON list
+containing only public labels and addresses. It verifies the Base Sepolia chain,
+Pilot 10 bytecode and dUSDC linkage before reading ETH, dUSDC, Pilot 10
+allowance, Pool 1/2 membership, and every active position. Its ABI contains only
+view functions and its provider has no signer or broadcast path. The older
+100-user operator remains unchanged and bound to its historical deployment.
 
 The repository contains an evolving React frontend, historical local prototype
 layers, developer tooling, and an initial Base Sepolia integration. The local

@@ -1,0 +1,12 @@
+{
+  "wallets": [
+    {
+      "label": "POP33 Sepolia Test / Account 2",
+      "address": "0xAbA0d03ebDee91c147bB2f0c3591e5f2c042bA9f"
+    },
+    {
+      "label": "POP33 Smoke Clean",
+      "address": "0xE9cA5cA3F9572B0d32573C77517c0E9bf5915F4a"
+    }
+  ]
+}

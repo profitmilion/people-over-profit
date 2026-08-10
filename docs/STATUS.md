@@ -16,12 +16,11 @@ Production promotion. Vercel Production builds now fail closed unless
 intended value for the current candidate is
 `https://pop33-demo.vercel.app`. Preview builds continue to derive their own
 branch URL, and local development continues to use `http://localhost:5173`.
-The Farcaster `accountAssociation` remains tied to the current Preview. The
-canonical Production bootstrap intentionally omits that domain-specific object
-while serving the canonical `miniapp` metadata, so the existing Preview
-signature cannot be presented as Production identity. Piotr must use the live
-canonical manifest to claim ownership, after which the newly signed canonical
-association will be added in a separate authorized step.
+Farcaster account associations are selected by exact hostname. The current
+Preview retains its own domain-specific association, while canonical Production
+uses the separately signed association for `pop33-demo.vercel.app`. Localhost
+and any unrecognized host omit the association, preventing either signature
+from being presented as the identity of a different domain.
 
 Vercel responses are prepared with a restrictive first-pass Content Security
 Policy, MIME sniffing protection, a cross-origin referrer policy, and a narrow

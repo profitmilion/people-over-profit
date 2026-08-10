@@ -51,11 +51,25 @@ const previewAccountAssociation = {
   signature:
     "oDrEkAoRyQy3uxpRBDXjwo0dUEpkPxenOlUvtEnEsWk52tNPGNWyt9lqF4fovTvwm0shfwmgbhql9/bLt0YPzBs=",
 };
+const canonicalAssociationDomain = "pop33-demo.vercel.app";
+const canonicalAccountAssociation = {
+  header:
+    "eyJmaWQiOjEzNzc1MjYsInR5cGUiOiJjdXN0b2R5Iiwia2V5IjoiMHg4QzM2NTcyNTI2OWI5NTMxYkQwNTI3NTE1OGU1NTg2N2QxNUE5NWE3In0",
+  payload: "eyJkb21haW4iOiJwb3AzMy1kZW1vLnZlcmNlbC5hcHAifQ",
+  signature:
+    "2dVDClSPp3AW2s+s0VseRyJEiM5iAC+65690sxDawEwc4J5eYeOyCAMRvyNV6Z95ur6A8JrKDaNT/p07i9izRBs=",
+};
+
+const publicHostname = new URL(publicUrl).hostname;
+const accountAssociation =
+  publicHostname === previewAssociationDomain
+    ? previewAccountAssociation
+    : publicHostname === canonicalAssociationDomain
+      ? canonicalAccountAssociation
+      : undefined;
 
 const farcasterManifest = {
-  ...(new URL(publicUrl).hostname === previewAssociationDomain
-    ? { accountAssociation: previewAccountAssociation }
-    : {}),
+  ...(accountAssociation ? { accountAssociation } : {}),
   miniapp: {
     version: "1",
     name: "POP33 Public Alpha",

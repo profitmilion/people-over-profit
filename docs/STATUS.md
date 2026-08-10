@@ -1,12 +1,33 @@
 # POP33 Development Status
 
-Last reviewed: 2026-08-09
+Last reviewed: 2026-08-10
 
 Branch reviewed: `codex/pop33-farcaster-pilot-10`
 
 Recovery source baseline reviewed: `531051f61f4d541f9a55f47d61fb181fdf30bec3`
 
 Status: active development
+
+## Pilot 10 production-candidate security boundary
+
+The Pilot 10 branch prepares, but does not perform, a controlled Vercel
+Production promotion. Vercel Production builds now fail closed unless
+`VITE_POP33_PUBLIC_URL` is explicitly configured as a valid origin. The
+intended value for the current candidate is
+`https://pop33-demo.vercel.app`. Preview builds continue to derive their own
+branch URL, and local development continues to use `http://localhost:5173`.
+The Farcaster `accountAssociation` remains tied to the current Preview and must
+be regenerated for the canonical domain in a separate authorized step before
+Production promotion.
+
+Vercel responses are prepared with a restrictive first-pass Content Security
+Policy, MIME sniffing protection, a cross-origin referrer policy, and a narrow
+Permissions Policy. Framing restrictions are intentionally not set at the
+response level because Farcaster clients must be able to host the Mini App;
+this compatibility boundary must be rechecked during the controlled
+Production smoke. The dependency baseline was narrowed with compatible
+React Router, Viem, and Wagmi updates; remaining audit findings require
+runtime-relevance review rather than an unsafe forced major migration.
 
 ## Summary
 

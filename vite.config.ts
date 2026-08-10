@@ -2,11 +2,44 @@ import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
 
-const vercelHost = process.env.VERCEL_BRANCH_URL ?? process.env.VERCEL_URL;
-const configuredPublicUrl = process.env.VITE_POP33_PUBLIC_URL?.replace(/\/+$/, "");
+function parseConfiguredPublicOrigin(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+
+  const url = new URL(value);
+  const isLocalHttp =
+    url.protocol === "http:" && ["localhost", "127.0.0.1"].includes(url.hostname);
+  if (
+    (url.protocol !== "https:" && !isLocalHttp) ||
+    url.username ||
+    url.password ||
+    url.search ||
+    url.hash ||
+    (url.pathname !== "/" && url.pathname !== "")
+  ) {
+    throw new Error(
+      "VITE_POP33_PUBLIC_URL must be an HTTPS origin without credentials, path, query, or hash.",
+    );
+  }
+
+  return url.origin;
+}
+
+const configuredPublicOrigin = parseConfiguredPublicOrigin(
+  process.env.VITE_POP33_PUBLIC_URL,
+);
+if (process.env.VERCEL_ENV === "production" && !configuredPublicOrigin) {
+  throw new Error(
+    "VITE_POP33_PUBLIC_URL is required for Vercel Production builds.",
+  );
+}
+
+const vercelPreviewHost =
+  process.env.VERCEL_BRANCH_URL ?? process.env.VERCEL_URL;
 const publicUrl =
-  configuredPublicUrl ??
-  (vercelHost ? `https://${vercelHost}` : "http://localhost:5173");
+  configuredPublicOrigin ??
+  (vercelPreviewHost
+    ? `https://${vercelPreviewHost}`
+    : "http://localhost:5173");
 
 const farcasterManifest = {
   accountAssociation: {

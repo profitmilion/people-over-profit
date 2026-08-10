@@ -7,16 +7,22 @@ not a production-ready product.
 
 ## Current checkpoint
 
-The current Demo V1 runs as a standalone Web3 application on Base Sepolia. A
-public Vercel Preview is available at:
+The current public Demo V1 is a Public Alpha running on Base Sepolia. Its
+canonical public URL is:
 
-https://pop33-demo-git-codex-pop33-recovery-profitmilions-projects.vercel.app
+[https://pop33-demo.vercel.app](https://pop33-demo.vercel.app)
 
 The current public routes are:
 
-- `/#/demo-v1` — wallet connection, contract state, faucet, exact approval,
-  join, eligible Open-pool withdrawal, draw, and claim controls;
-- `/#/archive-v1` — getter-based pool and round archive.
+- [Demo V1](https://pop33-demo.vercel.app/#/demo-v1) — wallet connection,
+  contract state, faucet, exact approval, join, eligible Open-pool withdrawal,
+  draw, and claim controls;
+- [Archive](https://pop33-demo.vercel.app/#/archive-v1) — getter-based pool and
+  round archive.
+
+The current public Pilot 10 has a capacity of 10 positions per pool. The same
+application also runs as a Farcaster Mini App, with its
+[canonical manifest](https://pop33-demo.vercel.app/.well-known/farcaster.json).
 
 [First public tester guide](docs/FIRST_PUBLIC_TESTER_GUIDE.md)
 
@@ -28,9 +34,6 @@ has not been executed publicly on Base Sepolia.
 The deployed Demo V1 sources are verified in BaseScan and published in
 Sourcify. Source verification is not a security audit. The current testnet draw
 randomness is manipulable and must not be used for production.
-
-Vercel Production does not contain the current Demo V1 checkpoint. Farcaster
-is not implemented and is not required by the standalone Preview.
 
 ## Sources of truth
 
@@ -69,8 +72,9 @@ The contracts workspace and its commands are documented in
 - Never use mainnet funds or production credentials with this checkpoint.
 - Never commit private keys, API keys, wallet material, or credential-bearing
   RPC URLs.
-- Do not treat the public Preview, source verification, or local lifecycle
-  tests as evidence of production readiness.
+- This Public Alpha is a testnet checkpoint, not a production product for real
+  funds. Do not treat its canonical deployment, source verification, or local
+  lifecycle tests as evidence of production readiness.
 
 ## License
 

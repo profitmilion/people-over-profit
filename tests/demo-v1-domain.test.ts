@@ -19,6 +19,8 @@ import {
   DemoV1ActionError,
   DemoV1SingleFlightGuard,
   assertDemoV1WriteChain,
+  assertClaimPostReceipt,
+  assertClaimPreflight,
   assertExactApprovalObserved,
   assertFaucetPostReceipt,
   assertJoinPoolPreflight,
@@ -222,9 +224,91 @@ test("draw eligibility requires a due pending round in a locked or drawing pool"
 
 test("claim eligibility requires the connected winner and an unclaimed finalized round", () => {
   const winner = "0xCaeb6D19d6d85349a08172e0efb9bb8541E4BeFB";
-  assert.equal(canClaim({ roundStatus: 1, claimed: false, winner, user: winner.toLowerCase() }), true);
-  assert.equal(canClaim({ roundStatus: 0, claimed: false, winner, user: winner }), false);
-  assert.equal(canClaim({ roundStatus: 1, claimed: true, winner, user: winner }), false);
+  const valid = {
+    configured: true,
+    connected: true,
+    correctChain: true,
+    roundStatus: 1,
+    claimed: false,
+    prizeAmount: 33_000_000n,
+    winner,
+    user: winner.toLowerCase(),
+  };
+  assert.equal(canClaim(valid), true);
+  assert.equal(canClaim({ ...valid, roundStatus: 0 }), false);
+  assert.equal(canClaim({ ...valid, claimed: true }), false);
+  assert.equal(canClaim({ ...valid, correctChain: false }), false);
+  assert.equal(canClaim({ ...valid, configured: false }), false);
+  assert.equal(canClaim({ ...valid, prizeAmount: 0n }), false);
+  assert.equal(canClaim({ ...valid, user: "0x0000000000000000000000000000000000000001" }), false);
+});
+
+test("claim preflight accepts only the finalized unclaimed prize owned by the sender", () => {
+  const winner = "0xDb4D1C84EC00dE2387261b1406B5A0A872fa24d7";
+  const valid = {
+    user: winner,
+    poolId: 1n,
+    roundNumber: 1n,
+    poolStatus: 2,
+    poolDrawRoundCount: 10n,
+    poolCompletedDrawRoundCount: 1n,
+    poolEscrow: 330_000_000n,
+    roundNumberOnchain: 1n,
+    roundStatus: 1,
+    roundWinner: winner,
+    winningPositionId: 21n,
+    prizeAmount: 33_000_000n,
+    claimed: false,
+    claimableAmount: 33_000_000n,
+  };
+  assert.doesNotThrow(() => assertClaimPreflight(valid));
+  assert.throws(
+    () => assertClaimPreflight({ ...valid, user: demoUser }),
+    (error) => error instanceof DemoV1ActionError && error.phase === "verification-failed",
+  );
+  assert.throws(
+    () => assertClaimPreflight({ ...valid, claimed: true }),
+    (error) => error instanceof DemoV1ActionError && error.phase === "verification-failed",
+  );
+});
+
+test("claim post-receipt verifies the event, exact transfer and all Claim counters", () => {
+  const winner = "0xDb4D1C84EC00dE2387261b1406B5A0A872fa24d7";
+  const valid = {
+    user: winner,
+    poolId: 1n,
+    roundNumber: 1n,
+    eventPoolId: 1n,
+    eventRoundNumber: 1n,
+    eventPositionId: 21n,
+    eventWinner: winner,
+    eventPrizeAmount: 33_000_000n,
+    winningPositionId: 21n,
+    roundWinner: winner,
+    roundStatus: 1,
+    roundClaimed: true,
+    roundPrizeAmount: 33_000_000n,
+    poolStatusBefore: 2,
+    poolStatusAfter: 2,
+    poolDrawRoundCount: 10n,
+    poolCompletedDrawRoundCountBefore: 1n,
+    poolCompletedDrawRoundCountAfter: 1n,
+    poolClaimedPrizeCountBefore: 0n,
+    poolClaimedPrizeCountAfter: 1n,
+    poolClaimedPrizeAmountBefore: 0n,
+    poolClaimedPrizeAmountAfter: 33_000_000n,
+    poolEscrowBefore: 330_000_000n,
+    poolEscrowAfter: 297_000_000n,
+    tokenBalanceBefore: 231_000_000n,
+    tokenBalanceAfter: 264_000_000n,
+    claimableBefore: 33_000_000n,
+    claimableAfter: 0n,
+  };
+  assert.doesNotThrow(() => assertClaimPostReceipt(valid));
+  assert.throws(
+    () => assertClaimPostReceipt({ ...valid, poolEscrowAfter: 330_000_000n }),
+    (error) => error instanceof DemoV1ActionError && error.phase === "verification-failed",
+  );
 });
 
 test("public configuration fixes the Pilot 10 contract, token and Base Sepolia", () => {
@@ -375,6 +459,10 @@ test("wallet rejection and receipt timeout produce safe terminal messages", () =
     classifyDemoV1TransactionError({ name: "WaitForTransactionReceiptTimeoutError", message: "timed out" }).phase,
     "manual-review",
   );
+  assert.deepEqual(classifyDemoV1TransactionError({ message: "execution reverted" }), {
+    phase: "reverted",
+    message: "Simulation or transaction failed. No retry was sent; refresh on-chain reads before deciding what to do next.",
+  });
 });
 
 test("join preflight allows 89 through 99 and rejects invalid pool state", () => {
@@ -590,14 +678,14 @@ test("onboarding handles faucet cooldown, unsafe allowance and busy transaction 
 test("wallet request errors distinguish rejection, missing provider and generic failure", () => {
   assert.match(
     getWalletRequestErrorMessage({ code: 4001 }, "connect") ?? "",
-    /odrzucone/i,
+    /rejected/i,
   );
   assert.match(
     getWalletRequestErrorMessage(
       { message: "Provider not found" },
       "connect",
     ) ?? "",
-    /nie znaleziono dostawcy/i,
+    /wallet provider/i,
   );
   assert.match(
     getWalletRequestErrorMessage(new Error("transport stopped"), "network") ?? "",

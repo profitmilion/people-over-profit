@@ -1,6 +1,6 @@
 # POP33 Development Status
 
-Last reviewed: 2026-08-10
+Last reviewed: 2026-08-11
 
 Branch reviewed: `codex/pop33-farcaster-pilot-10`
 
@@ -32,6 +32,28 @@ React Router, Viem, and Wagmi updates; remaining audit findings require
 runtime-relevance review rather than an unsafe forced major migration.
 
 ## Summary
+
+The active public `#/demo-v1` interface now exposes pull-based Claim directly
+to the connected on-chain winner, including wins from pools other than the
+currently Open pool. A mobile-first winner card shows the prize, pool, round,
+and winning position; only the exact winner on Base Sepolia can enable the
+Claim button. The write path re-reads the pool, round, winner, claimable amount,
+and escrow before wallet submission, simulates the exact ABI call, then verifies
+the `PrizeClaimed` event, exact dUSDC transfer, pool counters, escrow, and round
+state after the receipt before refreshing all public reads. Rejections,
+reverts, timeouts, and semantic verification failures are terminal and are not
+automatically retried. Public onboarding and Claim copy are English-only.
+
+For Pilot 10 Pool 1, Draw #1 finalized position `21` for
+`0xDb4D1C84EC00dE2387261b1406B5A0A872fa24d7` with a `33 dUSDC` unclaimed
+prize at the implementation checkpoint. The UI derives this state dynamically;
+the address and amount are not hard-coded. No Claim transaction was sent while
+implementing this coverage.
+
+`TODO`: the guarded Draw executor's successful-run audit file can be
+overwritten by cleanup/finalization output after the broadcast record. This is
+a known operator-tooling audit issue and is intentionally not changed as part
+of the public Claim UI work.
 
 The `codex/pop33-farcaster-pilot-10` branch now contains a locally verified
 Public Pilot 10 implementation. Pool capacity is a deployment parameter limited

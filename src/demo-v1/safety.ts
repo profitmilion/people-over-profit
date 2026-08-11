@@ -313,6 +313,106 @@ export function assertSafeExistingAllowance(allowance: bigint, entryPrice: bigin
   }
 }
 
+export function assertClaimPreflight(input: {
+  user: string;
+  poolId: bigint;
+  roundNumber: bigint;
+  poolStatus: number;
+  poolDrawRoundCount: bigint;
+  poolCompletedDrawRoundCount: bigint;
+  poolEscrow: bigint;
+  roundNumberOnchain: bigint;
+  roundStatus: number;
+  roundWinner: string;
+  winningPositionId: bigint;
+  prizeAmount: bigint;
+  claimed: boolean;
+  claimableAmount: bigint;
+}): void {
+  const valid =
+    input.poolId > 0n &&
+    input.roundNumber > 0n &&
+    input.roundNumber <= input.poolDrawRoundCount &&
+    (input.poolStatus === 2 || input.poolStatus === 3) &&
+    input.poolCompletedDrawRoundCount >= input.roundNumber &&
+    input.roundNumberOnchain === input.roundNumber &&
+    input.roundStatus === 1 &&
+    sameAddress(input.roundWinner, input.user) &&
+    input.winningPositionId > 0n &&
+    input.prizeAmount > 0n &&
+    !input.claimed &&
+    input.poolEscrow >= input.prizeAmount &&
+    input.claimableAmount >= input.prizeAmount;
+
+  if (!valid) {
+    throw new DemoV1ActionError(
+      "verification-failed",
+      "This prize is no longer claimable by the connected wallet. No transaction was sent; refresh the on-chain reads.",
+    );
+  }
+}
+
+export function assertClaimPostReceipt(input: {
+  user: string;
+  poolId: bigint;
+  roundNumber: bigint;
+  eventPoolId: bigint;
+  eventRoundNumber: bigint;
+  eventPositionId: bigint;
+  eventWinner: string;
+  eventPrizeAmount: bigint;
+  winningPositionId: bigint;
+  roundWinner: string;
+  roundStatus: number;
+  roundClaimed: boolean;
+  roundPrizeAmount: bigint;
+  poolStatusBefore: number;
+  poolStatusAfter: number;
+  poolDrawRoundCount: bigint;
+  poolCompletedDrawRoundCountBefore: bigint;
+  poolCompletedDrawRoundCountAfter: bigint;
+  poolClaimedPrizeCountBefore: bigint;
+  poolClaimedPrizeCountAfter: bigint;
+  poolClaimedPrizeAmountBefore: bigint;
+  poolClaimedPrizeAmountAfter: bigint;
+  poolEscrowBefore: bigint;
+  poolEscrowAfter: bigint;
+  tokenBalanceBefore: bigint;
+  tokenBalanceAfter: bigint;
+  claimableBefore: bigint;
+  claimableAfter: bigint;
+}): void {
+  const finalClaim =
+    input.poolClaimedPrizeCountBefore + 1n === input.poolDrawRoundCount;
+  const expectedPoolStatus = finalClaim ? 4 : input.poolStatusBefore;
+  const valid =
+    input.eventPoolId === input.poolId &&
+    input.eventRoundNumber === input.roundNumber &&
+    input.eventPositionId === input.winningPositionId &&
+    sameAddress(input.eventWinner, input.user) &&
+    sameAddress(input.roundWinner, input.user) &&
+    input.eventPrizeAmount === input.roundPrizeAmount &&
+    input.roundStatus === 1 &&
+    input.roundClaimed &&
+    input.poolStatusAfter === expectedPoolStatus &&
+    input.poolCompletedDrawRoundCountAfter ===
+      input.poolCompletedDrawRoundCountBefore &&
+    input.poolClaimedPrizeCountAfter ===
+      input.poolClaimedPrizeCountBefore + 1n &&
+    input.poolClaimedPrizeAmountAfter ===
+      input.poolClaimedPrizeAmountBefore + input.roundPrizeAmount &&
+    input.poolEscrowAfter === input.poolEscrowBefore - input.roundPrizeAmount &&
+    input.tokenBalanceAfter === input.tokenBalanceBefore + input.roundPrizeAmount &&
+    input.claimableAfter === input.claimableBefore - input.roundPrizeAmount;
+
+  if (!valid) {
+    throw new DemoV1ActionError(
+      "verification-failed",
+      "The Claim receipt was mined, but the expected prize transfer or on-chain Claim state was not verified. Do not retry; inspect the transaction and refresh reads.",
+    );
+  }
+}
+
 export function assertJoinPoolPreflight(input: {
   poolStatus: number;
   activePositionCount: bigint;

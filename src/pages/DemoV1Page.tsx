@@ -3,10 +3,10 @@ import { Link } from "react-router-dom";
 import { formatEther } from "viem";
 import { Button } from "../components/Button";
 import { Card } from "../components/Card";
+import { ClaimPrizeCard } from "../components/ClaimPrizeCard";
 import { ConnectButton } from "../components/ConnectButton";
 import { DemoV1Onboarding } from "../components/DemoV1Onboarding";
 import {
-  canClaim,
   canExecuteDraw,
   canJoin,
   canWithdraw,
@@ -108,6 +108,36 @@ export default function DemoV1Page() {
       })
     : undefined;
 
+  const winnerRounds = useMemo(() => {
+    const connectedAddress = data.address?.toLowerCase();
+    if (!connectedAddress) return [];
+    return data.rounds
+      .filter(
+        (item) =>
+          item.data?.status === 1 &&
+          item.data.prizeAmount > 0n &&
+          item.data.winner.toLowerCase() === connectedAddress,
+      )
+      .sort((left, right) => {
+        if (left.data!.claimed !== right.data!.claimed) {
+          return left.data!.claimed ? 1 : -1;
+        }
+        if (left.poolId !== right.poolId) return left.poolId > right.poolId ? -1 : 1;
+        return left.round > right.round ? -1 : 1;
+      });
+  }, [data.address, data.rounds]);
+  const latestFinalizedRound = useMemo(
+    () =>
+      data.rounds
+        .filter((item) => item.data?.status === 1 && item.data.prizeAmount > 0n)
+        .sort((left, right) => {
+          const leftExecutedAt = left.data?.executedAt ?? 0n;
+          const rightExecutedAt = right.data?.executedAt ?? 0n;
+          return leftExecutedAt > rightExecutedAt ? -1 : leftExecutedAt < rightExecutedAt ? 1 : 0;
+        })[0],
+    [data.rounds],
+  );
+
   const faucetReady = isFaucetAvailable(data.nextDripAt, now);
   const hasGas = data.nativeBalance > 0n;
   const maximumActivePositionsReached =
@@ -159,6 +189,46 @@ export default function DemoV1Page() {
         <div className="rounded-xl border border-amber-700/60 bg-amber-950/40 p-4 text-sm text-amber-100">
           <strong>Testnet warning:</strong> dUSDC has no monetary value. This prototype has no KYC and uses temporary, permissionless test draw randomness. Every wallet write still spends Base Sepolia ETH for gas. Do not use mainnet funds.
         </div>
+
+        {winnerRounds.length > 0 ? (
+          <div className="space-y-4">
+            {winnerRounds.map(({ poolId, round, data: draw }) =>
+              draw ? (
+                <ClaimPrizeCard
+                  key={`${poolId}-${round}`}
+                  poolId={poolId}
+                  roundNumber={round}
+                  winner={draw.winner}
+                  winningPositionId={draw.winningPositionId}
+                  prizeAmount={draw.prizeAmount}
+                  claimed={draw.claimed}
+                  roundStatus={draw.status}
+                  connectedAddress={data.address}
+                  connected={data.isConnected}
+                  correctChain={data.isCorrectChain}
+                  runtimeReady={data.runtimeIdentityVerified && !data.isLoading && !data.error}
+                  hasGas={hasGas}
+                  busy={actions.isBusy}
+                  txState={actions.txState}
+                  onClaim={() => actions.claim(poolId, round)}
+                />
+              ) : null,
+            )}
+          </div>
+        ) : latestFinalizedRound?.data ? (
+          <section className="rounded-2xl border border-slate-700 bg-slate-900/90 p-4 sm:p-5">
+            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+              Winner selected
+            </div>
+            <div className="mt-2 text-lg font-semibold text-slate-100">
+              Pool #{latestFinalizedRound.poolId.toString()} · Round #{latestFinalizedRound.round.toString()}
+            </div>
+            <p className="mt-2 text-sm text-slate-400">
+              This prize belongs to another wallet: {shortenAddress(latestFinalizedRound.data.winner)}.
+              Connect the winning wallet to see the Claim action.
+            </p>
+          </section>
+        ) : null}
 
         <DemoV1Onboarding
           data={data}
@@ -398,15 +468,11 @@ export default function DemoV1Page() {
                       <td className="p-2">{shortenAddress(draw?.winner)}</td>
                       <td className="p-2">{formatDUsdc(draw?.prizeAmount ?? 0n)} dUSDC</td>
                       <td className="p-2">
-                        {draw?.claimed ? "Claimed" : (
-                          <Button
-                            variant="ghost"
-                            disabled={!data.runtimeIdentityVerified || !draw || !canClaim({ roundStatus: draw.status, claimed: draw.claimed, winner: draw.winner, user: data.address }) || !hasGas || actions.isBusy}
-                            onClick={() => handle(actions.claim(currentPool.id, round))}
-                          >
-                            Claim
-                          </Button>
-                        )}
+                        {draw?.claimed
+                          ? "Claimed"
+                          : draw?.winner.toLowerCase() === data.address?.toLowerCase()
+                            ? "Available above"
+                            : "Another wallet"}
                       </td>
                     </tr>
                   ))}

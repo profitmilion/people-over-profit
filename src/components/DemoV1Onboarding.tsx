@@ -146,7 +146,7 @@ export function DemoV1Onboarding({
               if (walletConnector) run(connectAsync({ connector: walletConnector }));
             }}
           >
-            {isConnecting ? "Łączenie z portfelem…" : "Connect wallet"}
+            {isConnecting ? "Connecting wallet..." : "Connect wallet"}
           </Button>
         );
       case "switch-network":
@@ -159,7 +159,7 @@ export function DemoV1Onboarding({
               run(switchChainAsync({ chainId: BASE_SEPOLIA_CHAIN_ID }));
             }}
           >
-            {isSwitching ? "Dodawanie lub przełączanie…" : "Switch to Base Sepolia"}
+            {isSwitching ? "Adding or switching network..." : "Switch to Base Sepolia"}
           </Button>
         );
       case "get-test-eth":
@@ -170,7 +170,7 @@ export function DemoV1Onboarding({
             target="_blank"
             rel="noreferrer"
           >
-            Get test ETH · oficjalna lista Base
+            Get test ETH · official Base list
           </a>
         );
       case "get-dusdc":
@@ -213,21 +213,20 @@ export function DemoV1Onboarding({
       case "review-allowance":
         return (
           <Button className="min-h-11 w-full text-base" disabled>
-            Join zablokowany — sprawdź allowance
+            Join blocked — review allowance
           </Button>
         );
       case "open-wallet-browser":
         return (
           <div className="rounded-xl border border-sky-800 bg-sky-950/40 p-3 text-sm leading-relaxed text-sky-100">
-            Skopiuj adres tej strony i otwórz go w zakładce przeglądarki wewnątrz
-            MetaMask lub kompatybilnego portfela. Nie wpisuj nigdzie seed phrase ani
-            private key.
+            Copy this page address and open it inside MetaMask or another compatible
+            wallet browser. Never enter a seed phrase or private key here.
           </div>
         );
       case "wait":
         return (
           <Button className="min-h-11 w-full text-base" disabled>
-            {actions.isBusy ? "Operacja w toku…" : "Czekamy na bezpieczne odczyty…"}
+            {actions.isBusy ? "Action in progress..." : "Waiting for safe reads..."}
           </Button>
         );
     }
@@ -241,15 +240,15 @@ export function DemoV1Onboarding({
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-400">
-            Pierwsze kroki
+            First steps
           </div>
           <h2 id="demo-readiness-title" className="mt-1 text-xl font-semibold">
-            Przygotowanie do Demo
+            Demo readiness
           </h2>
         </div>
         <div className="rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-2 text-xs leading-relaxed text-slate-300 sm:max-w-xs">
-          Base Sepolia ETH płaci tylko za gas. dUSDC służy tylko do testowania
-          POP33. Oba aktywa są testowe i nie mają rzeczywistej wartości.
+          Base Sepolia ETH pays only for gas. dUSDC is used only to test POP33.
+          Both assets are test tokens with no real value.
         </div>
       </div>
 
@@ -282,7 +281,7 @@ export function DemoV1Onboarding({
 
       <div className="mt-4 rounded-xl border border-amber-700/70 bg-amber-950/30 p-3 sm:p-4">
         <div className="text-xs font-semibold uppercase tracking-wide text-amber-300">
-          Najważniejsza następna czynność
+          Most important next action
         </div>
         <div className="mt-1 text-base font-semibold text-amber-50">{onboarding.title}</div>
         <p className="mt-1 text-sm leading-relaxed text-amber-100/80">

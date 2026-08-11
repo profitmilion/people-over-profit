@@ -16,6 +16,8 @@ import {
   DEMO_V1_TOKEN_ADDRESS,
   DemoV1ActionError,
   DemoV1SingleFlightGuard,
+  assertClaimPostReceipt,
+  assertClaimPreflight,
   assertDemoV1WriteChain,
   assertExactApprovalObserved,
   assertFaucetPostReceipt,
@@ -166,6 +168,26 @@ function getWithdrawnEvent(receipt: TransactionReceipt, positionId: bigint) {
     strict: true,
   });
   return events.find((event) => event.args.positionId === positionId);
+}
+
+function getClaimedEvent(
+  receipt: TransactionReceipt,
+  poolId: bigint,
+  roundNumber: bigint,
+  user: string,
+) {
+  const events = parseEventLogs({
+    abi: demoV1Abi,
+    eventName: "PrizeClaimed",
+    logs: receipt.logs,
+    strict: true,
+  });
+  return events.find(
+    (event) =>
+      event.args.poolId === poolId &&
+      event.args.roundNumber === roundNumber &&
+      event.args.winner.toLowerCase() === user.toLowerCase(),
+  );
 }
 
 export function useDemoV1Actions(onConfirmed: () => Promise<unknown> | unknown) {
@@ -574,12 +596,129 @@ export function useDemoV1Actions(onConfirmed: () => Promise<unknown> | unknown) 
     ), [runExclusive, runTransaction, sendWrite]);
 
   const claim = useCallback((poolId: bigint, roundNumber: bigint) =>
-    runExclusive(`Claim pool #${poolId} round #${roundNumber}`, () =>
-      runTransaction(
+    runExclusive(`Claim pool #${poolId} round #${roundNumber}`, async () => {
+      const ready = await assertReady();
+      const [poolBefore, roundBefore, tokenBalanceBefore, claimableBefore] =
+        await Promise.all([
+          ready.publicClient.readContract({
+            address: DEMO_V1_CONTRACT_ADDRESS,
+            abi: demoV1Abi,
+            functionName: "getPool",
+            args: [poolId],
+          }),
+          ready.publicClient.readContract({
+            address: DEMO_V1_CONTRACT_ADDRESS,
+            abi: demoV1Abi,
+            functionName: "getDrawRound",
+            args: [poolId, roundNumber],
+          }),
+          ready.publicClient.readContract({
+            address: DEMO_V1_TOKEN_ADDRESS,
+            abi: demoV1TokenAbi,
+            functionName: "balanceOf",
+            args: [ready.address],
+          }),
+          ready.publicClient.readContract({
+            address: DEMO_V1_CONTRACT_ADDRESS,
+            abi: demoV1Abi,
+            functionName: "claimablePrizesByUser",
+            args: [ready.address],
+          }),
+        ]);
+      assertClaimPreflight({
+        user: ready.address,
+        poolId,
+        roundNumber,
+        poolStatus: poolBefore.status,
+        poolDrawRoundCount: poolBefore.drawRoundCount,
+        poolCompletedDrawRoundCount: poolBefore.completedDrawRoundCount,
+        poolEscrow: poolBefore.escrowedAmount,
+        roundNumberOnchain: roundBefore.number,
+        roundStatus: roundBefore.status,
+        roundWinner: roundBefore.winner,
+        winningPositionId: roundBefore.winningPositionId,
+        prizeAmount: roundBefore.prizeAmount,
+        claimed: roundBefore.claimed,
+        claimableAmount: claimableBefore,
+      });
+
+      return runTransaction(
         `Claim pool #${poolId} round #${roundNumber}`,
         () => sendWrite(demoV1Abi, DEMO_V1_CONTRACT_ADDRESS, "claim", [poolId, roundNumber]),
-      ),
-    ), [runExclusive, runTransaction, sendWrite]);
+        async (receipt) => runBoundedDemoV1ReadVerification(async () => {
+          const event = getClaimedEvent(
+            receipt,
+            poolId,
+            roundNumber,
+            ready.address,
+          );
+          if (!event) {
+            throw new DemoV1ActionError(
+              "verification-failed",
+              "Claim receipt has no matching PrizeClaimed event. Do not retry.",
+            );
+          }
+          const [poolAfter, roundAfter, tokenBalanceAfter, claimableAfter] =
+            await Promise.all([
+              ready.publicClient.readContract({
+                address: DEMO_V1_CONTRACT_ADDRESS,
+                abi: demoV1Abi,
+                functionName: "getPool",
+                args: [poolId],
+              }),
+              ready.publicClient.readContract({
+                address: DEMO_V1_CONTRACT_ADDRESS,
+                abi: demoV1Abi,
+                functionName: "getDrawRound",
+                args: [poolId, roundNumber],
+              }),
+              ready.publicClient.readContract({
+                address: DEMO_V1_TOKEN_ADDRESS,
+                abi: demoV1TokenAbi,
+                functionName: "balanceOf",
+                args: [ready.address],
+              }),
+              ready.publicClient.readContract({
+                address: DEMO_V1_CONTRACT_ADDRESS,
+                abi: demoV1Abi,
+                functionName: "claimablePrizesByUser",
+                args: [ready.address],
+              }),
+            ]);
+          assertClaimPostReceipt({
+            user: ready.address,
+            poolId,
+            roundNumber,
+            eventPoolId: event.args.poolId,
+            eventRoundNumber: event.args.roundNumber,
+            eventPositionId: event.args.positionId,
+            eventWinner: event.args.winner,
+            eventPrizeAmount: event.args.prizeAmount,
+            winningPositionId: roundAfter.winningPositionId,
+            roundWinner: roundAfter.winner,
+            roundStatus: roundAfter.status,
+            roundClaimed: roundAfter.claimed,
+            roundPrizeAmount: roundAfter.prizeAmount,
+            poolStatusBefore: poolBefore.status,
+            poolStatusAfter: poolAfter.status,
+            poolDrawRoundCount: poolBefore.drawRoundCount,
+            poolCompletedDrawRoundCountBefore: poolBefore.completedDrawRoundCount,
+            poolCompletedDrawRoundCountAfter: poolAfter.completedDrawRoundCount,
+            poolClaimedPrizeCountBefore: poolBefore.claimedPrizeCount,
+            poolClaimedPrizeCountAfter: poolAfter.claimedPrizeCount,
+            poolClaimedPrizeAmountBefore: poolBefore.claimedPrizeAmount,
+            poolClaimedPrizeAmountAfter: poolAfter.claimedPrizeAmount,
+            poolEscrowBefore: poolBefore.escrowedAmount,
+            poolEscrowAfter: poolAfter.escrowedAmount,
+            tokenBalanceBefore,
+            tokenBalanceAfter,
+            claimableBefore,
+            claimableAfter,
+          });
+          return `Prize claimed: ${roundAfter.prizeAmount / 1_000_000n} dUSDC transferred and verified on-chain.`;
+        }, (delayMs) => new Promise((resolve) => window.setTimeout(resolve, delayMs))),
+      );
+    }), [assertReady, runExclusive, runTransaction, sendWrite]);
 
   const busyPhases: DemoV1TxPhase[] = [
     "awaiting-signature",

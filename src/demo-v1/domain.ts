@@ -117,14 +117,22 @@ export function canExecuteDraw(input: {
 }
 
 export function canClaim(input: {
+  configured: boolean;
+  connected: boolean;
+  correctChain: boolean;
   roundStatus: number;
   claimed: boolean;
+  prizeAmount: bigint;
   winner?: string;
   user?: string;
 }): boolean {
   return (
+    input.configured &&
+    input.connected &&
+    input.correctChain &&
     input.roundStatus === 1 &&
     !input.claimed &&
+    input.prizeAmount > 0n &&
     Boolean(input.user) &&
     input.winner?.toLowerCase() === input.user?.toLowerCase()
   );

@@ -78,133 +78,133 @@ export function getDemoOnboardingState(
 
   if (!input.hasWalletProvider) {
     nextAction = "open-wallet-browser";
-    title = "Otwórz Demo w portfelu Web3";
+    title = "Open the Demo in a Web3 wallet";
     description =
-      "Na telefonie otwórz ten link we wbudowanej przeglądarce MetaMask lub innego kompatybilnego portfela.";
+      "On mobile, open this link in MetaMask's built-in browser or another compatible wallet browser.";
   } else if (!input.isConnected) {
     nextAction = "connect-wallet";
-    title = "Połącz portfel testowy";
+    title = "Connect a test wallet";
     description =
-      "Połączenie portfela nic nie kosztuje. Wybierz osobne konto bez prawdziwych środków.";
+      "Connecting is free. Use a separate test account without real funds.";
   } else if (!correctChain) {
     nextAction = "switch-network";
     title = input.isNetworkPending
-      ? "Przełączanie lub dodawanie Base Sepolia"
-      : "Przełącz sieć na Base Sepolia";
+      ? "Adding or switching to Base Sepolia"
+      : "Switch to Base Sepolia";
     description = input.isNetworkPending
-      ? "Potwierdź w portfelu dodanie Base Sepolia, jeśli zostaniesz o to poproszony, a następnie zmianę sieci."
-      : `Demo działa wyłącznie na Base Sepolia (chain ID ${BASE_SEPOLIA_CHAIN_ID}).`;
+      ? "Confirm adding Base Sepolia in your wallet if prompted, then confirm the network switch."
+      : `This Demo works only on Base Sepolia (chain ID ${BASE_SEPOLIA_CHAIN_ID}).`;
   } else if (input.transactionBusy) {
     nextAction = "wait";
-    title = "Poczekaj na zakończenie operacji";
+    title = "Wait for the current action";
     description =
-      "Nie wysyłaj kolejnej transakcji, dopóki bieżąca operacja nie zostanie potwierdzona i sprawdzona.";
+      "Do not send another transaction until the current action is confirmed and verified.";
   } else if (!hasRecommendedEth) {
     nextAction = "get-test-eth";
     title = input.nativeBalance === 0n
-      ? "Pobierz testowy Base Sepolia ETH"
-      : "Uzupełnij testowy Base Sepolia ETH";
+      ? "Get test Base Sepolia ETH"
+      : "Top up test Base Sepolia ETH";
     description =
-      "ETH służy tylko do opłat sieciowych. Zalecane minimum dla pierwszego testu to 0.00005 testowego ETH.";
+      "ETH is used only for network fees. The recommended minimum for the first test is 0.00005 test ETH.";
   } else if (!input.runtimeReady) {
     nextAction = "wait";
-    title = "Sprawdzamy kontrakt Demo";
+    title = "Checking the Demo contract";
     description =
-      "Czekamy na bezpieczne odczyty Base Sepolia i potwierdzenie parametrów wdrożonego Demo V1.";
+      "Waiting for safe Base Sepolia reads and verification of the deployed Demo V1 parameters.";
   } else if (!hasDUsdc) {
     if (input.faucetAvailable) {
       nextAction = "get-dusdc";
-      title = "Pobierz testowy dUSDC";
+      title = "Get test dUSDC";
       description =
-        "dUSDC służy wyłącznie do testowania POP33. Transakcja faucetu również zużyje niewielką ilość testowego ETH.";
+        "dUSDC is only for testing POP33. The faucet transaction also uses a small amount of test ETH.";
     } else {
       nextAction = "wait-for-faucet";
-      title = "Poczekaj na ponowne otwarcie faucetu dUSDC";
+      title = "Wait for the dUSDC faucet cooldown";
       description =
-        "Ten portfel jest jeszcze w okresie cooldownu i nie ma 33 dUSDC potrzebnych do wejścia.";
+        "This wallet is still in its faucet cooldown and does not have the 33 dUSDC required to enter.";
     }
   } else if (!input.positionCapacityAvailable) {
     nextAction = "wait";
-    title = "Osiągnięto limit aktywnych pozycji";
+    title = "Active position limit reached";
     description =
-      "Ten portfel ma już maksymalną liczbę aktywnych pozycji. Nie wykonuj kolejnego approval ani Join.";
+      "This wallet already has the maximum number of active positions. Do not send another approval or Join.";
   } else if (!safeAllowance) {
     nextAction = "review-allowance";
-    title = "Zatrzymaj się i sprawdź allowance";
+    title = "Stop and review the allowance";
     description =
-      "Allowance jest wyższy niż dokładne 33 dUSDC. POP33 nie wykona automatycznego revoke ani Join — zgłoś ten stan do sprawdzenia.";
+      "The allowance is higher than exactly 33 dUSDC. POP33 will not automatically revoke it or Join; report this state for review.";
   } else if (!exactAllowance) {
     nextAction = "approve";
-    title = "Zatwierdź dokładnie 33 dUSDC";
+    title = "Approve exactly 33 dUSDC";
     description =
-      "Portfel poprosi o jedną transakcję approval. Po jej potwierdzeniu wróć do checklisty, aby wykonać osobny Join.";
+      "Your wallet will ask for one approval transaction. After it confirms, return to the checklist for the separate Join transaction.";
   } else if (!input.joinEligible) {
     nextAction = "wait";
-    title = "Odświeżamy gotowość do Join";
+    title = "Refreshing Join readiness";
     description =
-      "Join pozostaje zablokowany, dopóki wszystkie odczyty kontraktu i warunki bezpieczeństwa nie będą poprawne.";
+      "Join remains blocked until all contract reads and safety conditions are valid.";
   } else {
     nextAction = "join";
-    title = "Portfel jest gotowy do Join";
+    title = "Your wallet is ready to Join";
     description =
-      "Sprawdź w portfelu sieć Base Sepolia i adres kontraktu, a następnie potwierdź jedną transakcję Join.";
+      "Check Base Sepolia and the contract address in your wallet, then confirm one Join transaction.";
   }
 
   const checks: DemoOnboardingCheck[] = [
     {
       id: "wallet",
-      label: "Portfel Web3",
+      label: "Web3 wallet",
       detail: input.isConnected
-        ? "Portfel testowy jest połączony."
+        ? "A test wallet is connected."
         : input.hasWalletProvider
-          ? "Portfel jest dostępny, ale jeszcze niepołączony."
-          : "Nie wykryto portfela w tej przeglądarce.",
+          ? "A wallet is available but not connected yet."
+          : "No wallet was detected in this browser.",
       status: checkStatus(input.isConnected, nextAction === "connect-wallet" || nextAction === "open-wallet-browser"),
     },
     {
       id: "network",
       label: "Base Sepolia · 84532",
       detail: correctChain
-        ? "Aktywna sieć jest poprawna."
+        ? "The active network is correct."
         : input.isConnected
-          ? `Aktywny chain ID: ${input.chainId ?? "nieznany"}.`
-          : "Sieć sprawdzimy po połączeniu portfela.",
+          ? `Active chain ID: ${input.chainId ?? "unknown"}.`
+          : "The network will be checked after the wallet connects.",
       status: checkStatus(correctChain, nextAction === "switch-network"),
     },
     {
       id: "eth",
-      label: "Testowy ETH na opłaty",
+      label: "Test ETH for gas",
       detail: hasRecommendedEth
-        ? "Saldo osiąga zalecane minimum 0.00005 ETH."
+        ? "The balance meets the recommended 0.00005 ETH minimum."
         : input.nativeBalance > 0n
-          ? "Saldo jest niezerowe, ale niższe od zalecanego minimum."
-          : "Brak Base Sepolia ETH.",
+          ? "The balance is non-zero but below the recommended minimum."
+          : "No Base Sepolia ETH is available.",
       status: checkStatus(hasRecommendedEth, nextAction === "get-test-eth"),
     },
     {
       id: "dusdc",
-      label: "Minimum 33 testowe dUSDC",
+      label: "At least 33 test dUSDC",
       detail: hasDUsdc
-        ? "Saldo wystarcza na jedną pozycję."
-        : "Pobierz dUSDC z faucetu POP33.",
+        ? "The balance is sufficient for one position."
+        : "Get dUSDC from the POP33 faucet.",
       status: checkStatus(hasDUsdc, nextAction === "get-dusdc" || nextAction === "wait-for-faucet"),
     },
     {
       id: "allowance",
-      label: "Bezpieczny allowance",
+      label: "Safe allowance",
       detail: !safeAllowance
-        ? "Allowance przekracza dokładne 33 dUSDC."
+        ? "The allowance is higher than exactly 33 dUSDC."
         : exactAllowance
-          ? "Allowance wynosi dokładnie 33 dUSDC."
-          : "Allowance jest bezpieczny; przed Join potrzebny jest dokładny approval.",
+          ? "The allowance is exactly 33 dUSDC."
+          : "The allowance is safe; an exact approval is required before Join.",
       status: checkStatus(safeAllowance && exactAllowance, nextAction === "approve" || nextAction === "review-allowance"),
     },
     {
       id: "join",
-      label: "Gotowość do Join",
+      label: "Ready to Join",
       detail: readyToJoin
-        ? "Wszystkie warunki są spełnione."
-        : "Join odblokuje się po wykonaniu wcześniejszych kroków.",
+        ? "All conditions are satisfied."
+        : "Join will unlock after the earlier steps are complete.",
       status: checkStatus(readyToJoin, nextAction === "join" || nextAction === "wait"),
     },
   ];
@@ -223,21 +223,21 @@ export function getWalletRequestErrorMessage(
     message?: string;
     shortMessage?: string;
   };
-  const text = `${candidate.name ?? ""} ${candidate.shortMessage ?? ""} ${candidate.message ?? ""}`.toLowerCase();
+  const errorText = `${candidate.name ?? ""} ${candidate.shortMessage ?? ""} ${candidate.message ?? ""}`.toLowerCase();
   const rejected =
     candidate.code === 4001 ||
-    text.includes("user rejected") ||
-    text.includes("user denied") ||
-    text.includes("rejected request");
+    errorText.includes("user rejected") ||
+    errorText.includes("user denied") ||
+    errorText.includes("rejected request");
   if (rejected) {
     return action === "connect"
-      ? "Połączenie zostało odrzucone w portfelu. Możesz spróbować ponownie, gdy wybierzesz właściwe konto testowe."
-      : "Zmiana lub dodanie Base Sepolia zostało odrzucone w portfelu. Żadna transakcja nie została wysłana.";
+      ? "The wallet connection was rejected. Try again when you have selected the correct test account."
+      : "Adding or switching to Base Sepolia was rejected in the wallet. No transaction was sent.";
   }
-  if (text.includes("provider") && (text.includes("not found") || text.includes("unavailable"))) {
-    return "Nie znaleziono dostawcy portfela. Na telefonie otwórz stronę we wbudowanej przeglądarce MetaMask lub kompatybilnego portfela.";
+  if (errorText.includes("provider") && (errorText.includes("not found") || errorText.includes("unavailable"))) {
+    return "No wallet provider was found. On mobile, open this page in MetaMask's built-in browser or another compatible wallet browser.";
   }
   return action === "connect"
-    ? "Nie udało się połączyć portfela. Sprawdź, czy strona jest otwarta w przeglądarce portfela i spróbuj ponownie."
-    : "Nie udało się przełączyć ani dodać Base Sepolia. Sprawdź w portfelu chain ID 84532 i spróbuj ponownie.";
+    ? "The wallet could not connect. Check that this page is open in a wallet browser and try again."
+    : "Base Sepolia could not be added or selected. Check chain ID 84532 in your wallet and try again.";
 }

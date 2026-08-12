@@ -74,6 +74,14 @@ export default function DemoV1Page() {
       data.pools.at(-1),
     [data.pools],
   );
+  const drawPool = useMemo(
+    () =>
+      data.pools
+        .filter((pool) => pool.status >= 1 && pool.status <= 4)
+        .sort((left, right) => (left.id > right.id ? -1 : left.id < right.id ? 1 : 0))[0] ??
+      currentPool,
+    [currentPool, data.pools],
+  );
   const currentRoundNumber = currentPool
     ? currentPool.completedDrawRoundCount + 1n
     : 1n;
@@ -452,20 +460,23 @@ export default function DemoV1Page() {
         </Card>
 
         <Card>
-          <h2 className="text-lg font-semibold">Draw rounds and claims</h2>
-          {!currentPool ? null : (
+          <h2 className="text-lg font-semibold">
+            Draw rounds and claims{drawPool ? ` - Pool ${drawPool.id.toString()}` : ""}
+          </h2>
+          {!drawPool ? null : (
             <div className="mt-3 overflow-x-auto">
               <table className="w-full min-w-[760px] text-left text-sm">
                 <thead className="text-xs uppercase text-slate-500">
-                  <tr><th className="p-2">Round</th><th className="p-2">Status</th><th className="p-2">Scheduled</th><th className="p-2">Winner</th><th className="p-2">Prize</th><th className="p-2">Claim</th></tr>
+                  <tr><th className="p-2">Round</th><th className="p-2">Status</th><th className="p-2">Scheduled</th><th className="p-2">Winner</th><th className="p-2">Position</th><th className="p-2">Prize</th><th className="p-2">Claim</th></tr>
                 </thead>
                 <tbody>
-                  {data.rounds.filter((item) => item.poolId === currentPool.id).map(({ round, data: draw }) => (
+                  {data.rounds.filter((item) => item.poolId === drawPool.id).map(({ round, data: draw }) => (
                     <tr key={round.toString()} className="border-t border-slate-800">
                       <td className="p-2">#{round.toString()}</td>
                       <td className="p-2">{draw?.status === 1 ? "Finalized" : "Pending"}</td>
                       <td className="p-2">{formatTimestamp(draw?.scheduledAt ?? 0n)}</td>
                       <td className="p-2">{shortenAddress(draw?.winner)}</td>
+                      <td className="p-2">{draw?.winningPositionId ? `#${draw.winningPositionId}` : "—"}</td>
                       <td className="p-2">{formatDUsdc(draw?.prizeAmount ?? 0n)} dUSDC</td>
                       <td className="p-2">
                         {draw?.claimed

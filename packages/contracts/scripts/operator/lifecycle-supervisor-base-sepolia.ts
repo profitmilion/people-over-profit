@@ -26,6 +26,10 @@ import {
   withReadOnlyRpcRetry,
   type ReadOnlyRpcRetryOptions,
 } from "./read-only-rpc-retry.js";
+import {
+  GuardedDrawReadOnlyRpcFailover,
+  type GuardedDrawRpcTelemetry,
+} from "./guarded-draw-rpc-failover.js";
 
 export const LIFECYCLE_SUPERVISOR_BASE_SEPOLIA_CHAIN_ID = BigInt(DEMO_V1_CHAIN_ID);
 export const LIFECYCLE_SUPERVISOR_CANONICAL_CONTRACT_ADDRESS =
@@ -290,6 +294,80 @@ implements LifecycleSupervisorPublicClient {
       args: [input.args?.[0] ?? 0n, input.args?.[1] ?? 0n],
       blockNumber: input.blockNumber,
     });
+  }
+}
+
+export class ResilientViemLifecycleSupervisorPublicClient
+implements LifecycleSupervisorPublicClient {
+  readonly #failover: GuardedDrawReadOnlyRpcFailover<
+    ViemLifecycleSupervisorPublicClient
+  >;
+
+  constructor(
+    rpcUrls: readonly string[],
+    timeoutMs = LIFECYCLE_SUPERVISOR_DEFAULT_TIMEOUT_MS,
+  ) {
+    const uniqueUrls = [...new Set(rpcUrls.map(validateLifecycleSupervisorRpcUrl))];
+    const clients = uniqueUrls.map((rpcUrl, index) => ({
+      name: index === 0 ? "primary" : `fallback-${index}`,
+      maskedEndpoint: redactLifecycleSupervisorRpcUrl(rpcUrl),
+      client: new ViemLifecycleSupervisorPublicClient(rpcUrl, timeoutMs),
+    }));
+    this.#failover = new GuardedDrawReadOnlyRpcFailover({
+      endpoints: clients,
+      expectedChainId: LIFECYCLE_SUPERVISOR_BASE_SEPOLIA_CHAIN_ID,
+      async healthCheck(client) {
+        const chainId = BigInt(await client.getChainId());
+        const blockNumber = await client.getBlockNumber();
+        const bytecode = await client.getBytecode({
+          address: LIFECYCLE_SUPERVISOR_CANONICAL_CONTRACT_ADDRESS,
+          blockNumber,
+        });
+        return {
+          chainId,
+          contractBytecodePresent: Boolean(bytecode && bytecode !== "0x"),
+        };
+      },
+    });
+  }
+
+  getChainId(): Promise<number> {
+    return this.#failover.read("eth_chainId", (client) => client.getChainId());
+  }
+
+  getBlockNumber(): Promise<bigint> {
+    return this.#failover.read("eth_blockNumber", (client) =>
+      client.getBlockNumber());
+  }
+
+  getBlock(input: {
+    blockNumber: bigint;
+  }): Promise<{ number: bigint; timestamp: bigint } | null> {
+    return this.#failover.read("eth_getBlockByNumber", (client) =>
+      client.getBlock(input));
+  }
+
+  getBytecode(input: {
+    address: Address;
+    blockNumber: bigint;
+  }): Promise<Hex | undefined> {
+    return this.#failover.read("eth_getCode", (client) =>
+      client.getBytecode(input));
+  }
+
+  readContract(input: {
+    address: Address;
+    abi: typeof demoV1Abi;
+    functionName: LifecycleSupervisorReadMethod;
+    args?: readonly bigint[];
+    blockNumber: bigint;
+  }): Promise<unknown> {
+    return this.#failover.read(`eth_call:${input.functionName}`, (client) =>
+      client.readContract(input));
+  }
+
+  telemetry(): GuardedDrawRpcTelemetry {
+    return this.#failover.telemetry();
   }
 }
 

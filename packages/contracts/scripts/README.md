@@ -9,7 +9,11 @@
   contract through a provider-only viem client, pins every state read to one
   block, and feeds that snapshot into the same engine. Use
   `BASE_SEPOLIA_SUPERVISOR_RPC_URL` only to override the credential-free
-  default public endpoint.
+  default public endpoint. Optionally set
+  `BASE_SEPOLIA_SUPERVISOR_RPC_URL_FALLBACK` to an independently operated
+  endpoint for bounded read-only failover. Each endpoint must report chain
+  `84532` and canonical POP33 bytecode. Failover never resends a transaction
+  and never treats a contract revert as an RPC fault.
 - `npm run supervisor -- --source base-sepolia --pool 2 --create-plan
   lifecycle-plan.json` saves a versioned, fingerprinted read-only action plan
   for one pool. Existing files require the explicit `--overwrite-plan` flag.

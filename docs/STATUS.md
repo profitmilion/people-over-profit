@@ -56,6 +56,14 @@ hash and explicitly mark the transaction as broadcast. Once a receipt is known,
 its status and block remain authoritative even if the read-only post-check
 fails; only that post-check may be retried, never the transaction.
 
+Guarded Draw read-only operations can now use one optional independent Base
+Sepolia fallback configured with `BASE_SEPOLIA_SUPERVISOR_RPC_URL_FALLBACK`.
+Every endpoint must report chain `84532` and canonical Pilot 10 bytecode before
+use. Only transient infrastructure failures can trigger bounded retry/failover;
+contract reverts remain terminal. The selected provider and retry/failover
+counts are included in operator outcomes without exposing RPC URLs. Transaction
+broadcast itself remains single-provider and is never failed over or retried.
+
 The `codex/pop33-farcaster-pilot-10` branch now contains a locally verified
 Public Pilot 10 implementation. Pool capacity is a deployment parameter limited
 to the 10-user pilot or the 100-user Basic V1 profile. A 10-user pool keeps the

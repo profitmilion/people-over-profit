@@ -23,6 +23,7 @@ import {
   BaseSepoliaLifecycleSnapshotAdapter,
   ViemLifecycleSupervisorPublicClient,
   redactLifecycleSupervisorRpcUrl,
+  type LifecycleSupervisorPublicClient,
   validateLifecycleSupervisorRpcUrl,
   validateLifecycleSupervisorTimeout,
 } from "./lifecycle-supervisor-base-sepolia.js";
@@ -31,12 +32,16 @@ import {
   type GuardedDrawDependencies,
   type GuardedDrawExecutionClient,
 } from "./guarded-single-draw.js";
+import {
+  GuardedDrawReadOnlyRpcFailover,
+} from "./guarded-draw-rpc-failover.js";
 
 const PRIVATE_KEY = /^0x[0-9a-fA-F]{64}$/;
 const AUDIT_SUFFIX = ".guarded-draw-audit.json";
 
 export interface BaseSepoliaGuardedDrawOptions {
   rpcUrl: string;
+  fallbackRpcUrl?: string;
   poolId: bigint;
   timeoutMs?: number;
   operatorAddress?: string;
@@ -107,17 +112,57 @@ export function createBaseSepoliaGuardedDrawDependencies(
   options: BaseSepoliaGuardedDrawOptions,
 ): GuardedDrawDependencies {
   const rpcUrl = validateLifecycleSupervisorRpcUrl(options.rpcUrl);
+  const rpcUrls = [...new Set([
+    rpcUrl,
+    ...(options.fallbackRpcUrl
+      ? [validateLifecycleSupervisorRpcUrl(options.fallbackRpcUrl)]
+      : []),
+  ])];
   const timeoutMs = validateLifecycleSupervisorTimeout(
     options.timeoutMs ?? LIFECYCLE_SUPERVISOR_DEFAULT_TIMEOUT_MS,
   );
-  const publicClient = createPublicClient({
-    chain: baseSepolia,
-    transport: http(rpcUrl, { retryCount: 0, timeout: timeoutMs }),
+  const rpcClients = rpcUrls.map((url, index) => ({
+    name: index === 0 ? "primary" : `fallback-${index}`,
+    maskedEndpoint: redactLifecycleSupervisorRpcUrl(url),
+    client: {
+      rpcUrl: url,
+      publicClient: createPublicClient({
+        chain: baseSepolia,
+        transport: http(url, { retryCount: 0, timeout: timeoutMs }),
+      }),
+      snapshotClient: new ViemLifecycleSupervisorPublicClient(url, timeoutMs),
+    },
+  }));
+  const rpcFailover = new GuardedDrawReadOnlyRpcFailover({
+    endpoints: rpcClients,
+    expectedChainId: BigInt(DEMO_V1_CHAIN_ID),
+    async healthCheck(client) {
+      const chainId = BigInt(await client.publicClient.getChainId());
+      const blockNumber = await client.publicClient.getBlockNumber();
+      const bytecode = await client.publicClient.getBytecode({
+        address: DEMO_V1_CONTRACT_ADDRESS,
+        blockNumber,
+      });
+      return {
+        chainId,
+        contractBytecodePresent: Boolean(bytecode && bytecode !== "0x"),
+      };
+    },
   });
-  const snapshotClient = new ViemLifecycleSupervisorPublicClient(
-    rpcUrl,
-    timeoutMs,
-  );
+  const snapshotClient: LifecycleSupervisorPublicClient = {
+    getChainId: () => rpcFailover.read("eth_chainId", (client) =>
+      client.snapshotClient.getChainId()),
+    getBlockNumber: () => rpcFailover.read("eth_blockNumber", (client) =>
+      client.snapshotClient.getBlockNumber()),
+    getBlock: (input) => rpcFailover.read("eth_getBlockByNumber", (client) =>
+      client.snapshotClient.getBlock(input)),
+    getBytecode: (input) => rpcFailover.read("eth_getCode", (client) =>
+      client.snapshotClient.getBytecode(input)),
+    readContract: (input) => rpcFailover.read(
+      `eth_call:${input.functionName}`,
+      (client) => client.snapshotClient.readContract(input),
+    ),
+  };
   const publicOperator = options.operatorAddress
     ? requirePublicOperatorAddress(options.operatorAddress)
     : undefined;
@@ -128,7 +173,9 @@ export function createBaseSepoliaGuardedDrawDependencies(
   const readSnapshot = async (blockNumber?: bigint) =>
     new BaseSepoliaLifecycleSnapshotAdapter({
       client: snapshotClient,
-      rpcHost: redactLifecycleSupervisorRpcUrl(rpcUrl),
+      rpcHost: rpcUrls.length > 1
+        ? "base-sepolia-rpc-failover"
+        : redactLifecycleSupervisorRpcUrl(rpcUrl),
       contractAddress: DEMO_V1_CONTRACT_ADDRESS,
       blockNumber,
       poolRange: { fromPoolId: options.poolId, toPoolId: options.poolId },
@@ -136,15 +183,19 @@ export function createBaseSepoliaGuardedDrawDependencies(
 
   return {
     readSnapshot,
-    getLatestBlockNumber: () => publicClient.getBlockNumber(),
+    getLatestBlockNumber: () => rpcFailover.read("eth_blockNumber", (client) =>
+      client.publicClient.getBlockNumber()),
     async readPublicIdentity(blockNumber) {
-      const [chainId, bytecode] = await Promise.all([
-        publicClient.getChainId(),
-        publicClient.getBytecode({
-          address: DEMO_V1_CONTRACT_ADDRESS,
-          blockNumber,
+      const { chainId, bytecode } = await rpcFailover.read(
+        "public identity",
+        async (client) => ({
+          chainId: await client.publicClient.getChainId(),
+          bytecode: await client.publicClient.getBytecode({
+            address: DEMO_V1_CONTRACT_ADDRESS,
+            blockNumber,
+          }),
         }),
-      ]);
+      );
       return {
         chainId: BigInt(chainId),
         contractAddress: DEMO_V1_CONTRACT_ADDRESS,
@@ -152,27 +203,28 @@ export function createBaseSepoliaGuardedDrawDependencies(
       };
     },
     async simulateDraw(input) {
-      const simulation = await publicClient.simulateContract({
-        account: input.account,
-        address: input.address,
-        abi: demoV1Abi,
-        functionName: "executeDraw",
-        args: input.args,
-        blockNumber: input.blockNumber,
-      });
-      let gasEstimate: bigint | null = null;
-      try {
-        gasEstimate = await publicClient.estimateContractGas({
-          account: input.account,
-          address: input.address,
-          abi: demoV1Abi,
-          functionName: "executeDraw",
-          args: input.args,
-          blockNumber: input.blockNumber,
-        });
-      } catch {
-        // A successful simulation remains useful when an RPC omits gas estimation.
-      }
+      const { simulation, gasEstimate } = await rpcFailover.read(
+        "Draw simulation and gas estimate",
+        async (client) => {
+          const simulation = await client.publicClient.simulateContract({
+            account: input.account,
+            address: input.address,
+            abi: demoV1Abi,
+            functionName: "executeDraw",
+            args: input.args,
+            blockNumber: input.blockNumber,
+          });
+          const gasEstimate = await client.publicClient.estimateContractGas({
+            account: input.account,
+            address: input.address,
+            abi: demoV1Abi,
+            functionName: "executeDraw",
+            args: input.args,
+            blockNumber: input.blockNumber,
+          });
+          return { simulation, gasEstimate };
+        },
+      );
       return {
         result: typeof simulation.result === "bigint"
           ? simulation.result
@@ -180,27 +232,31 @@ export function createBaseSepoliaGuardedDrawDependencies(
         gasEstimate,
       };
     },
-    estimateDraw: (input) => publicClient.estimateContractGas({
-      account: input.account,
-      address: input.address,
-      abi: input.abi,
-      functionName: input.functionName,
-      args: input.args,
-    }),
+    estimateDraw: (input) => rpcFailover.read("runtime gas estimate", (client) =>
+      client.publicClient.estimateContractGas({
+        account: input.account,
+        address: input.address,
+        abi: input.abi,
+        functionName: input.functionName,
+        args: input.args,
+      })),
     async loadExecutionClient(): Promise<GuardedDrawExecutionClient> {
       const expectedAddress = requirePublicOperatorAddress(publicOperator);
       const account = loadPrivateKey(
         options.privateKeyEnvironment ?? process.env,
         expectedAddress,
       );
+      const activeProvider = await rpcFailover.activeProvider();
       const wallet = createWalletClient({
         account,
         chain: baseSepolia,
-        transport: http(rpcUrl, { retryCount: 0, timeout: timeoutMs }),
+        transport: http(activeProvider.client.rpcUrl, {
+          retryCount: 0,
+          timeout: timeoutMs,
+        }),
       });
-      const chainId = BigInt(await wallet.getChainId());
       return {
-        chainId,
+        chainId: BigInt(DEMO_V1_CHAIN_ID),
         account: account.address,
         contractAddress: DEMO_V1_CONTRACT_ADDRESS,
         async prepareDraw(input) {
@@ -221,17 +277,21 @@ export function createBaseSepoliaGuardedDrawDependencies(
       };
     },
     async waitForReceipt(transactionHash) {
-      const receipt = await publicClient.waitForTransactionReceipt({
-        hash: transactionHash,
-        confirmations: 1,
-        timeout: 180_000,
-      });
+      const receipt = await rpcFailover.read(
+        "transaction receipt lookup",
+        (client) => client.publicClient.waitForTransactionReceipt({
+          hash: transactionHash,
+          confirmations: 1,
+          timeout: 180_000,
+        }),
+      );
       return {
         transactionHash,
         status: receipt.status,
         blockNumber: receipt.blockNumber,
       };
     },
+    getRpcTelemetry: () => rpcFailover.telemetry(),
     writeAudit: auditFile
       ? (record) => auditFile.write(record)
       : undefined,

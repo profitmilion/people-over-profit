@@ -25,6 +25,7 @@ import {
   type SupervisorReport,
   type SystemSnapshot,
 } from "./lifecycle-supervisor.js";
+import type { GuardedDrawRpcTelemetry } from "./guarded-draw-rpc-failover.js";
 
 export const GUARDED_DRAW_EXIT_CODES = Object.freeze({
   INSPECT_VALID: 0,
@@ -124,6 +125,7 @@ export interface GuardedDrawDependencies {
   loadExecutionClient?(): Promise<GuardedDrawExecutionClient>;
   waitForReceipt?(transactionHash: Hex): Promise<GuardedDrawReceipt>;
   writeAudit?(record: GuardedDrawAuditRecord): Promise<void>;
+  getRpcTelemetry?(): GuardedDrawRpcTelemetry;
 }
 
 export interface GuardedDrawConfirmation {
@@ -174,6 +176,7 @@ export interface GuardedDrawAuditRecord {
   receiptStatus: "success" | "reverted" | null;
   receiptBlockNumber: string | null;
   postCheckStatus: GuardedDrawPostCheckStatus;
+  rpc: GuardedDrawRpcTelemetry | null;
   postCheck: GuardedDrawPostCheck | null;
   message: string;
 }
@@ -198,6 +201,7 @@ export interface GuardedDrawOutcome {
   transactionHash: Hex | null;
   receipt: GuardedDrawReceipt | null;
   postCheckStatus: GuardedDrawPostCheckStatus;
+  rpc: GuardedDrawRpcTelemetry | null;
   postCheck: GuardedDrawPostCheck | null;
 }
 
@@ -394,6 +398,7 @@ function baseOutcome(
     transactionHash,
     receipt,
     postCheckStatus: partial.postCheckStatus ?? "NOT_STARTED",
+    rpc: partial.rpc ?? null,
     postCheck: partial.postCheck ?? null,
   };
 }
@@ -430,6 +435,7 @@ function auditRecord(outcome: GuardedDrawOutcome): GuardedDrawAuditRecord {
     receiptStatus: outcome.receipt?.status ?? null,
     receiptBlockNumber: outcome.receipt?.blockNumber.toString() ?? null,
     postCheckStatus: outcome.postCheckStatus,
+    rpc: outcome.rpc,
     postCheck: outcome.postCheck,
     message: outcome.message,
   };
@@ -439,7 +445,10 @@ async function audit(
   dependencies: GuardedDrawDependencies,
   outcome: GuardedDrawOutcome,
 ): Promise<void> {
-  await dependencies.writeAudit?.(auditRecord(outcome));
+  await dependencies.writeAudit?.(auditRecord({
+    ...outcome,
+    rpc: dependencies.getRpcTelemetry?.() ?? outcome.rpc,
+  }));
 }
 
 async function inspectInternal(
@@ -846,6 +855,10 @@ async function runGuarded(
       );
     }
   }
+  outcome = {
+    ...outcome,
+    rpc: dependencies.getRpcTelemetry?.() ?? outcome.rpc,
+  };
   try {
     await audit(dependencies, outcome);
   } catch (error) {
@@ -904,6 +917,11 @@ export function renderGuardedDrawText(outcome: GuardedDrawOutcome): string {
     `TRANSACTION SUCCEEDED: ${outcome.transactionSucceeded === null ? "UNKNOWN" : outcome.transactionSucceeded ? "YES" : "NO"}`,
     `TX HASH: ${outcome.transactionHash ?? "-"}`,
     `POST-CHECK STATUS: ${outcome.postCheckStatus}`,
+    `RPC PROVIDER: ${outcome.rpc
+      ? `${outcome.rpc.providerName ?? "-"} (index ${outcome.rpc.providerIndex ?? "-"})`
+      : "-"}`,
+    `READ-ONLY RPC RETRIES: ${outcome.rpc?.readOnlyRetries ?? 0}`,
+    `RPC FAILOVER: ${outcome.rpc?.failoverOccurred ? "YES" : "NO"}`,
     `RESULT: ${outcome.status}`,
     outcome.message,
   ].join("\n");

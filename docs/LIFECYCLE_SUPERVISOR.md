@@ -205,6 +205,7 @@ Optional configuration:
 
 ```text
 BASE_SEPOLIA_SUPERVISOR_RPC_URL=https://provider.example/base-sepolia
+BASE_SEPOLIA_SUPERVISOR_RPC_URL_FALLBACK=https://other-provider.example/base-sepolia
 BASE_SEPOLIA_SUPERVISOR_CONTRACT_ADDRESS=0x...
 ```
 
@@ -212,6 +213,15 @@ The RPC URL must use HTTPS and cannot contain URL username/password
 credentials. Reports include only its host; paths, query strings, fragments,
 and possible provider tokens are never included. Avoid placing provider URLs
 in shell history, screenshots, issues, logs, or committed files.
+
+The existing RPC variable remains the primary endpoint. The optional fallback
+must be independently operated. Both endpoints are checked read-only for chain
+ID `84532` and canonical POP33 bytecode before use. HTTP 502/503/504, timeouts,
+connection resets, provider lag, and rate limits can trigger bounded retry and
+then read-only failover. Contract reverts and logical errors never trigger
+provider switching. Transaction broadcast is not retried or failed over; after
+a hash is known, fallback is limited to receipt, event, and state verification.
+Operator output reports only provider name/index and retry/failover counts.
 
 The contract override is read-only and must be a valid non-zero address. The
 default remains the reviewed Demo V1 address.

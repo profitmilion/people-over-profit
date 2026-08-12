@@ -15,7 +15,7 @@ import {
   LIFECYCLE_SUPERVISOR_DEFAULT_RPC_URL,
   LIFECYCLE_SUPERVISOR_DEFAULT_TIMEOUT_MS,
   LifecycleSupervisorAdapterError,
-  ViemLifecycleSupervisorPublicClient,
+  ResilientViemLifecycleSupervisorPublicClient,
   redactLifecycleSupervisorRpcUrl,
   validateLifecycleSupervisorRpcUrl,
   validateLifecycleSupervisorTimeout,
@@ -74,6 +74,19 @@ function readUnsignedBigInt(name: string, value: string | undefined): bigint | u
   return BigInt(value);
 }
 
+function supervisorRpcUrls(): string[] {
+  const primary = validateLifecycleSupervisorRpcUrl(
+    process.env.BASE_SEPOLIA_SUPERVISOR_RPC_URL?.trim() ??
+      LIFECYCLE_SUPERVISOR_DEFAULT_RPC_URL,
+  );
+  const fallbackValue =
+    process.env.BASE_SEPOLIA_SUPERVISOR_RPC_URL_FALLBACK?.trim();
+  const urls = fallbackValue
+    ? [primary, validateLifecycleSupervisorRpcUrl(fallbackValue)]
+    : [primary];
+  return [...new Set(urls)];
+}
+
 async function runGuardedDraw(mode: GuardedDrawMode, planPath: string): Promise<void> {
   const file = await readLifecyclePlanFile(planPath);
   let poolId = 1n;
@@ -89,16 +102,14 @@ async function runGuardedDraw(mode: GuardedDrawMode, planPath: string): Promise<
   } catch {
     // The guarded core returns INVALID_PLAN without touching the network.
   }
-  const rpcUrl = validateLifecycleSupervisorRpcUrl(
-    process.env.BASE_SEPOLIA_SUPERVISOR_RPC_URL?.trim() ??
-      LIFECYCLE_SUPERVISOR_DEFAULT_RPC_URL,
-  );
+  const rpcUrls = supervisorRpcUrls();
   const rawTimeout = process.env.POP33_INTERNAL_SUPERVISOR_TIMEOUT_MS?.trim();
   const timeoutMs = validateLifecycleSupervisorTimeout(
     rawTimeout ? Number(rawTimeout) : LIFECYCLE_SUPERVISOR_DEFAULT_TIMEOUT_MS,
   );
   const dependencies = createBaseSepoliaGuardedDrawDependencies({
-    rpcUrl,
+    rpcUrl: rpcUrls[0],
+    fallbackRpcUrl: rpcUrls[1],
     timeoutMs,
     poolId,
     operatorAddress:
@@ -227,10 +238,7 @@ async function runExact99Readiness(): Promise<void> {
   const manifestJson = manifestPath
     ? (await readExact99PublicManifestFile(manifestPath)).json
     : undefined;
-  const rpcUrl = validateLifecycleSupervisorRpcUrl(
-    process.env.BASE_SEPOLIA_SUPERVISOR_RPC_URL?.trim() ??
-      LIFECYCLE_SUPERVISOR_DEFAULT_RPC_URL,
-  );
+  const rpcUrls = supervisorRpcUrls();
   const rawTimeout = process.env.POP33_INTERNAL_SUPERVISOR_TIMEOUT_MS?.trim();
   const timeoutMs = validateLifecycleSupervisorTimeout(
     rawTimeout ? Number(rawTimeout) : LIFECYCLE_SUPERVISOR_DEFAULT_TIMEOUT_MS,
@@ -241,8 +249,10 @@ async function runExact99Readiness(): Promise<void> {
   );
   if (blockNumber === 0n) throw new Error("Block number must be positive.");
   const snapshot = await new BaseSepoliaLifecycleSnapshotAdapter({
-    client: new ViemLifecycleSupervisorPublicClient(rpcUrl, timeoutMs),
-    rpcHost: redactLifecycleSupervisorRpcUrl(rpcUrl),
+    client: new ResilientViemLifecycleSupervisorPublicClient(rpcUrls, timeoutMs),
+    rpcHost: rpcUrls.length > 1
+      ? "base-sepolia-rpc-failover"
+      : redactLifecycleSupervisorRpcUrl(rpcUrls[0]),
     contractAddress:
       process.env.POP33_INTERNAL_SUPERVISOR_CONTRACT_ADDRESS?.trim() ||
       process.env.BASE_SEPOLIA_SUPERVISOR_CONTRACT_ADDRESS?.trim() ||
@@ -428,10 +438,7 @@ async function main(): Promise<void> {
     adapter = new FixtureLifecycleSnapshotAdapter(loadLifecycleFixture(fixtureName));
     sourceReference = fixtureName;
   } else {
-    const rpcUrl = validateLifecycleSupervisorRpcUrl(
-      process.env.BASE_SEPOLIA_SUPERVISOR_RPC_URL?.trim() ??
-        LIFECYCLE_SUPERVISOR_DEFAULT_RPC_URL,
-    );
+    const rpcUrls = supervisorRpcUrls();
     const rawTimeout = process.env.POP33_INTERNAL_SUPERVISOR_TIMEOUT_MS?.trim();
     const timeoutMs = validateLifecycleSupervisorTimeout(
       rawTimeout ? Number(rawTimeout) : LIFECYCLE_SUPERVISOR_DEFAULT_TIMEOUT_MS,
@@ -442,8 +449,10 @@ async function main(): Promise<void> {
       savedPlan?.identity.contractAddress ||
       undefined;
     adapter = new BaseSepoliaLifecycleSnapshotAdapter({
-      client: new ViemLifecycleSupervisorPublicClient(rpcUrl, timeoutMs),
-      rpcHost: redactLifecycleSupervisorRpcUrl(rpcUrl),
+      client: new ResilientViemLifecycleSupervisorPublicClient(rpcUrls, timeoutMs),
+      rpcHost: rpcUrls.length > 1
+        ? "base-sepolia-rpc-failover"
+        : redactLifecycleSupervisorRpcUrl(rpcUrls[0]),
       contractAddress: contractOverride,
       blockNumber,
       poolRange: poolId !== undefined

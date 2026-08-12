@@ -180,6 +180,13 @@ export function createBaseSepoliaGuardedDrawDependencies(
         gasEstimate,
       };
     },
+    estimateDraw: (input) => publicClient.estimateContractGas({
+      account: input.account,
+      address: input.address,
+      abi: input.abi,
+      functionName: input.functionName,
+      args: input.args,
+    }),
     async loadExecutionClient(): Promise<GuardedDrawExecutionClient> {
       const expectedAddress = requirePublicOperatorAddress(publicOperator);
       const account = loadPrivateKey(
@@ -196,14 +203,21 @@ export function createBaseSepoliaGuardedDrawDependencies(
         chainId,
         account: account.address,
         contractAddress: DEMO_V1_CONTRACT_ADDRESS,
-        sendDraw: (input) => wallet.writeContract({
-          account,
-          chain: baseSepolia,
-          address: input.address,
-          abi: input.abi,
-          functionName: input.functionName,
-          args: input.args,
-        }),
+        async prepareDraw(input) {
+          const gasLimit = input.gasLimit;
+          return {
+            gasLimit,
+            broadcast: () => wallet.writeContract({
+              account,
+              chain: baseSepolia,
+              address: input.address,
+              abi: input.abi,
+              functionName: input.functionName,
+              args: input.args,
+              gas: gasLimit,
+            }),
+          };
+        },
       };
     },
     async waitForReceipt(transactionHash) {

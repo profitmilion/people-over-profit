@@ -41,6 +41,9 @@ export const GUARDED_DRAW_EXIT_CODES = Object.freeze({
   RPC_FAILURE: 30,
 });
 
+export const GUARDED_DRAW_GAS_BUFFER_BPS = 2_500n;
+const BASIS_POINTS = 10_000n;
+
 export type GuardedDrawMode = "inspect" | "simulate" | "execute";
 export type GuardedDrawOutcomeStatus =
   | "INSPECT_VALID"
@@ -77,12 +80,16 @@ export interface GuardedDrawExecutionClient {
   chainId: bigint;
   account: Address;
   contractAddress: Address;
-  sendDraw(input: {
+  prepareDraw(input: {
     address: Address;
     abi: typeof demoV1Abi;
     functionName: "executeDraw";
     args: readonly [bigint, bigint];
-  }): Promise<Hex>;
+    gasLimit: bigint;
+  }): Promise<{
+    gasLimit: bigint;
+    broadcast(): Promise<Hex>;
+  }>;
 }
 
 export interface GuardedDrawDependencies {
@@ -97,6 +104,13 @@ export interface GuardedDrawDependencies {
     args: readonly [bigint, bigint];
     blockNumber: bigint;
   }): Promise<GuardedDrawSimulation>;
+  estimateDraw(input: {
+    account: Address;
+    address: Address;
+    abi: typeof demoV1Abi;
+    functionName: "executeDraw";
+    args: readonly [bigint, bigint];
+  }): Promise<bigint>;
   loadExecutionClient?(): Promise<GuardedDrawExecutionClient>;
   waitForReceipt?(transactionHash: Hex): Promise<GuardedDrawReceipt>;
   writeAudit?(record: GuardedDrawAuditRecord): Promise<void>;
@@ -140,6 +154,9 @@ export interface GuardedDrawAuditRecord {
   simulation: "not-run" | "passed" | "failed";
   calldata: Hex | null;
   gasEstimate: string | null;
+  runtimeGasEstimate: string | null;
+  requiredGasEstimate: string | null;
+  gasLimit: string | null;
   transactionHash: Hex | null;
   receiptStatus: "success" | "reverted" | null;
   receiptBlockNumber: string | null;
@@ -158,6 +175,9 @@ export interface GuardedDrawOutcome {
   report: SupervisorReport | null;
   calldata: Hex | null;
   simulation: GuardedDrawSimulation | null;
+  runtimeGasEstimate: bigint | null;
+  requiredGasEstimate: bigint | null;
+  gasLimit: bigint | null;
   transactionHash: Hex | null;
   receipt: GuardedDrawReceipt | null;
   postCheck: GuardedDrawPostCheck | null;
@@ -173,6 +193,34 @@ class GuardedDrawStop extends Error {
   ) {
     super(message);
   }
+}
+
+export interface GuardedDrawGasPlan {
+  preflightEstimate: bigint;
+  runtimeEstimate: bigint;
+  requiredEstimate: bigint;
+  gasLimit: bigint;
+}
+
+export function calculateGuardedDrawGasPlan(
+  preflightEstimate: bigint,
+  runtimeEstimate: bigint,
+): GuardedDrawGasPlan {
+  if (preflightEstimate <= 0n || runtimeEstimate <= 0n) {
+    throw new Error("Guarded Draw gas estimates must be positive.");
+  }
+  const requiredEstimate = preflightEstimate > runtimeEstimate
+    ? preflightEstimate
+    : runtimeEstimate;
+  const bufferedNumerator =
+    requiredEstimate * (BASIS_POINTS + GUARDED_DRAW_GAS_BUFFER_BPS);
+  const gasLimit = (bufferedNumerator + BASIS_POINTS - 1n) / BASIS_POINTS;
+  return {
+    preflightEstimate,
+    runtimeEstimate,
+    requiredEstimate,
+    gasLimit,
+  };
 }
 
 function statusFromRevalidation(
@@ -314,6 +362,9 @@ function baseOutcome(
     report: partial.report ?? null,
     calldata: partial.calldata ?? null,
     simulation: partial.simulation ?? null,
+    runtimeGasEstimate: partial.runtimeGasEstimate ?? null,
+    requiredGasEstimate: partial.requiredGasEstimate ?? null,
+    gasLimit: partial.gasLimit ?? null,
     transactionHash: partial.transactionHash ?? null,
     receipt: partial.receipt ?? null,
     postCheck: partial.postCheck ?? null,
@@ -342,6 +393,9 @@ function auditRecord(outcome: GuardedDrawOutcome): GuardedDrawAuditRecord {
         : "not-run",
     calldata: outcome.calldata,
     gasEstimate: outcome.simulation?.gasEstimate?.toString() ?? null,
+    runtimeGasEstimate: outcome.runtimeGasEstimate?.toString() ?? null,
+    requiredGasEstimate: outcome.requiredGasEstimate?.toString() ?? null,
+    gasLimit: outcome.gasLimit?.toString() ?? null,
     transactionHash: outcome.transactionHash,
     receiptStatus: outcome.receipt?.status ?? null,
     receiptBlockNumber: outcome.receipt?.blockNumber.toString() ?? null,
@@ -559,8 +613,49 @@ export async function executeGuardedSingleDraw(
         current,
       );
     }
-    const execution = await dependencies.loadExecutionClient();
     const operatorAddress = requireOperatorAddress(options.operatorAddress);
+    const preflightEstimate = current.simulation?.gasEstimate;
+    if (preflightEstimate === null || preflightEstimate === undefined) {
+      throw new GuardedDrawStop(
+        "SIMULATION_FAILED",
+        "Draw execution requires a positive preflight gas estimate.",
+        current,
+      );
+    }
+    let runtimeEstimate: bigint;
+    try {
+      runtimeEstimate = await dependencies.estimateDraw({
+        account: operatorAddress,
+        address: DEMO_V1_CONTRACT_ADDRESS,
+        abi: demoV1Abi,
+        functionName: "executeDraw",
+        args: argsFor(plan),
+      });
+    } catch (error) {
+      throw new GuardedDrawStop(
+        "SIMULATION_FAILED",
+        `Final gas estimation failed: ${sanitizeGuardedDrawError(error)}`,
+        current,
+      );
+    }
+    let gasPlan: GuardedDrawGasPlan;
+    try {
+      gasPlan = calculateGuardedDrawGasPlan(preflightEstimate, runtimeEstimate);
+    } catch (error) {
+      throw new GuardedDrawStop(
+        "SIMULATION_FAILED",
+        `Invalid Draw gas estimate: ${sanitizeGuardedDrawError(error)}`,
+        current,
+      );
+    }
+    current = {
+      ...current,
+      runtimeGasEstimate: gasPlan.runtimeEstimate,
+      requiredGasEstimate: gasPlan.requiredEstimate,
+      gasLimit: gasPlan.gasLimit,
+    };
+
+    const execution = await dependencies.loadExecutionClient();
     if (
       execution.chainId !== BigInt(DEMO_V1_CHAIN_ID) ||
       execution.account !== operatorAddress ||
@@ -573,12 +668,22 @@ export async function executeGuardedSingleDraw(
       );
     }
 
-    const transactionHash = await execution.sendDraw({
+    const prepared = await execution.prepareDraw({
       address: DEMO_V1_CONTRACT_ADDRESS,
       abi: demoV1Abi,
       functionName: "executeDraw",
       args: argsFor(plan),
+      gasLimit: gasPlan.gasLimit,
     });
+    if (prepared.gasLimit < gasPlan.gasLimit) {
+      throw new GuardedDrawStop(
+        "BLOCKED",
+        `Final gas limit ${prepared.gasLimit} is below the required buffered limit ${gasPlan.gasLimit}; transaction was not signed or broadcast.`,
+        { ...current, gasLimit: prepared.gasLimit },
+      );
+    }
+    current = { ...current, gasLimit: prepared.gasLimit };
+    const transactionHash = await prepared.broadcast();
     current = {
       ...current,
       status: "TRANSACTION_SUBMITTED",
@@ -708,6 +813,9 @@ export function renderGuardedDrawText(outcome: GuardedDrawOutcome): string {
     `REVALIDATION BLOCK: ${outcome.revalidation.freshBlockNumber ?? "-"}`,
     `SIMULATION: ${outcome.simulation ? "PASSED (not a guarantee)" : "NOT PASSED"}`,
     `GAS ESTIMATE: ${outcome.simulation?.gasEstimate?.toString() ?? "-"}`,
+    `RUNTIME GAS ESTIMATE: ${outcome.runtimeGasEstimate?.toString() ?? "-"}`,
+    `REQUIRED GAS ESTIMATE: ${outcome.requiredGasEstimate?.toString() ?? "-"}`,
+    `FINAL GAS LIMIT: ${outcome.gasLimit?.toString() ?? "-"}`,
     `TX HASH: ${outcome.transactionHash ?? "-"}`,
     `RESULT: ${outcome.status}`,
     outcome.message,

@@ -16,6 +16,7 @@ import {
 } from "../scripts/operator/guarded-single-draw-base-sepolia.js";
 import {
   GUARDED_DRAW_EXIT_CODES,
+  calculateGuardedDrawGasPlan,
   executeGuardedSingleDraw,
   inspectGuardedSingleDraw,
   renderGuardedDrawJson,
@@ -111,12 +112,15 @@ interface Counters {
   reads: number;
   identities: number;
   simulations: number;
+  estimates: number;
   loads: number;
+  prepares: number;
   sends: number;
   waits: number;
   audits: GuardedDrawAuditRecord[];
   simulatedArgs: Array<readonly [bigint, bigint]>;
   sentArgs: Array<readonly [bigint, bigint]>;
+  preparedGasLimits: bigint[];
 }
 
 function dependencies(input: {
@@ -126,6 +130,10 @@ function dependencies(input: {
   contractAddress?: string;
   hasBytecode?: boolean;
   simulationError?: Error;
+  simulationGasEstimate?: bigint | null;
+  runtimeEstimate?: bigint;
+  runtimeEstimateError?: Error;
+  preparedGasLimit?: bigint;
   loadError?: Error;
   receiptError?: Error;
   receiptStatus?: "success" | "reverted";
@@ -135,12 +143,15 @@ function dependencies(input: {
     reads: 0,
     identities: 0,
     simulations: 0,
+    estimates: 0,
     loads: 0,
+    prepares: 0,
     sends: 0,
     waits: 0,
     audits: [],
     simulatedArgs: [],
     sentArgs: [],
+    preparedGasLimits: [],
   };
   const deps: GuardedDrawDependencies = {
     async readSnapshot(blockNumber) {
@@ -169,7 +180,17 @@ function dependencies(input: {
       counters.simulations += 1;
       counters.simulatedArgs.push(call.args);
       if (input.simulationError) throw input.simulationError;
-      return { result: 7n, gasEstimate: 123_456n };
+      return {
+        result: 7n,
+        gasEstimate: input.simulationGasEstimate === undefined
+          ? 123_456n
+          : input.simulationGasEstimate,
+      };
+    },
+    async estimateDraw() {
+      counters.estimates += 1;
+      if (input.runtimeEstimateError) throw input.runtimeEstimateError;
+      return input.runtimeEstimate ?? 123_456n;
     },
     async loadExecutionClient() {
       counters.loads += 1;
@@ -179,10 +200,17 @@ function dependencies(input: {
         account: OPERATOR,
         contractAddress:
           LIFECYCLE_SUPERVISOR_CANONICAL_CONTRACT_ADDRESS as Address,
-        async sendDraw(call) {
-          counters.sends += 1;
-          counters.sentArgs.push(call.args);
-          return HASH;
+        async prepareDraw(call) {
+          counters.prepares += 1;
+          counters.preparedGasLimits.push(call.gasLimit);
+          return {
+            gasLimit: input.preparedGasLimit ?? call.gasLimit,
+            async broadcast() {
+              counters.sends += 1;
+              counters.sentArgs.push(call.args);
+              return HASH;
+            },
+          };
         },
       };
     },
@@ -659,6 +687,62 @@ describe("guarded single-Draw operator", function () {
       { ...common(), confirmation: confirmation() },
       mock.dependencies,
     );
+    assert.equal(mock.counters.sends, 1);
+    assert.equal(mock.counters.waits, 1);
+  });
+
+  it("46. adds a 25 percent buffer to the failed Round 3 estimate", function () {
+    const gas = calculateGuardedDrawGasPlan(247_699n, 247_699n);
+    assert.equal(gas.requiredEstimate, 247_699n);
+    assert.equal(gas.gasLimit, 309_624n);
+    assert.ok(gas.gasLimit > gas.preflightEstimate);
+  });
+
+  it("47. never lets a lower runtime estimate reduce the accepted estimate", async function () {
+    const mock = dependencies({
+      snapshots: [dueSnapshot(), dueSnapshot(), completedSnapshot()],
+      simulationGasEstimate: 247_699n,
+      runtimeEstimate: 236_849n,
+    });
+    const result = await executeGuardedSingleDraw(
+      { ...common(), confirmation: confirmation() },
+      mock.dependencies,
+    );
+    assert.equal(result.requiredGasEstimate, 247_699n);
+    assert.equal(result.gasLimit, 309_624n);
+    assert.deepEqual(mock.counters.preparedGasLimits, [309_624n]);
+    assert.equal(mock.counters.sends, 1);
+  });
+
+  it("48. aborts before broadcast if preparation lowers the gas limit", async function () {
+    const mock = dependencies({
+      snapshots: [dueSnapshot(), dueSnapshot()],
+      preparedGasLimit: 123_455n,
+    });
+    const result = await executeGuardedSingleDraw(
+      { ...common(), confirmation: confirmation() },
+      mock.dependencies,
+    );
+    assert.equal(result.status, "BLOCKED");
+    assert.match(result.message, /not signed or broadcast/);
+    assert.equal(mock.counters.prepares, 1);
+    assert.equal(mock.counters.sends, 0);
+    assert.equal(result.transactionHash, null);
+  });
+
+  it("49. preserves existing guarded Draw behavior with a valid gas plan", async function () {
+    const mock = dependencies({
+      snapshots: [dueSnapshot(), dueSnapshot(), completedSnapshot()],
+      simulationGasEstimate: 120_000n,
+      runtimeEstimate: 140_000n,
+    });
+    const result = await executeGuardedSingleDraw(
+      { ...common(), confirmation: confirmation() },
+      mock.dependencies,
+    );
+    assert.equal(result.status, "TRANSACTION_SUBMITTED");
+    assert.equal(result.requiredGasEstimate, 140_000n);
+    assert.equal(result.gasLimit, 175_000n);
     assert.equal(mock.counters.sends, 1);
     assert.equal(mock.counters.waits, 1);
   });

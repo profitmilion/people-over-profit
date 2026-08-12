@@ -134,6 +134,7 @@ function dependencies(input: {
   runtimeEstimate?: bigint;
   runtimeEstimateError?: Error;
   preparedGasLimit?: bigint;
+  postSnapshotError?: Error;
   loadError?: Error;
   receiptError?: Error;
   receiptStatus?: "success" | "reverted";
@@ -155,6 +156,10 @@ function dependencies(input: {
   };
   const deps: GuardedDrawDependencies = {
     async readSnapshot(blockNumber) {
+      if (input.postSnapshotError && counters.reads >= 2) {
+        counters.reads += 1;
+        throw input.postSnapshotError;
+      }
       const candidate = snapshots[Math.min(counters.reads, snapshots.length - 1)];
       counters.reads += 1;
       const copy = structuredClone(candidate);
@@ -745,5 +750,98 @@ describe("guarded single-Draw operator", function () {
     assert.equal(result.gasLimit, 175_000n);
     assert.equal(mock.counters.sends, 1);
     assert.equal(mock.counters.waits, 1);
+  });
+
+  it("50. preserves broadcast evidence when receipt lookup fails", async function () {
+    const mock = dependencies({
+      snapshots: [dueSnapshot(), dueSnapshot()],
+      receiptError: new Error("HTTP 502 during receipt lookup"),
+    });
+    const result = await executeGuardedSingleDraw(
+      { ...common(), confirmation: confirmation() },
+      mock.dependencies,
+    );
+    assert.equal(result.transactionHash, HASH);
+    assert.equal(result.lifecyclePhase, "BROADCASTED");
+    assert.equal(result.broadcastOccurred, true);
+    assert.equal(result.transactionSucceeded, null);
+    assert.match(result.message, /do not retry/);
+    assert.equal(mock.counters.sends, 1);
+  });
+
+  it("51. preserves a successful receipt when the post-check RPC fails", async function () {
+    const mock = dependencies({
+      snapshots: [dueSnapshot(), dueSnapshot()],
+      postSnapshotError: new Error("HTTP 502 during post-receipt snapshot"),
+    });
+    const result = await executeGuardedSingleDraw(
+      { ...common(), confirmation: confirmation() },
+      mock.dependencies,
+    );
+    assert.equal(result.status, "POST_CHECK_FAILED");
+    assert.equal(result.transactionHash, HASH);
+    assert.equal(result.receipt?.status, "success");
+    assert.equal(result.receipt?.blockNumber, 12_346n);
+    assert.equal(result.simulation?.gasEstimate, 123_456n);
+    assert.equal(result.runtimeGasEstimate, 123_456n);
+    assert.equal(result.requiredGasEstimate, 123_456n);
+    assert.equal(result.gasLimit, 154_320n);
+    assert.equal(result.lifecyclePhase, "RECEIPT_KNOWN");
+    assert.equal(result.broadcastOccurred, true);
+    assert.equal(result.transactionSucceeded, true);
+    assert.equal(result.postCheckStatus, "INCOMPLETE");
+    assert.match(result.message, /retry only the read-only post-check/);
+    assert.equal(mock.counters.sends, 1);
+  });
+
+  it("52. reports no broadcast evidence for a pre-broadcast failure", async function () {
+    const mock = dependencies({
+      runtimeEstimateError: new Error("HTTP 502 during gas estimation"),
+    });
+    const result = await executeGuardedSingleDraw(
+      { ...common(), confirmation: confirmation() },
+      mock.dependencies,
+    );
+    assert.equal(result.status, "SIMULATION_FAILED");
+    assert.equal(result.transactionHash, null);
+    assert.equal(result.lifecyclePhase, "PRE_BROADCAST");
+    assert.equal(result.broadcastOccurred, false);
+    assert.equal(result.transactionSucceeded, null);
+    assert.equal(mock.counters.prepares, 0);
+    assert.equal(mock.counters.sends, 0);
+  });
+
+  it("53. completes all lifecycle evidence on the normal success path", async function () {
+    const mock = dependencies({
+      snapshots: [dueSnapshot(), dueSnapshot(), completedSnapshot()],
+    });
+    const result = await executeGuardedSingleDraw(
+      { ...common(), confirmation: confirmation() },
+      mock.dependencies,
+    );
+    assert.equal(result.status, "TRANSACTION_SUBMITTED");
+    assert.equal(result.lifecyclePhase, "POSTCHECK_COMPLETE");
+    assert.equal(result.broadcastOccurred, true);
+    assert.equal(result.transactionSucceeded, true);
+    assert.equal(result.postCheckStatus, "PASSED");
+    assert.equal(result.postCheck?.passed, true);
+  });
+
+  it("54. never lets the generic catch or final audit erase a known hash", async function () {
+    const mock = dependencies({
+      snapshots: [dueSnapshot(), dueSnapshot()],
+      postSnapshotError: new Error("post-check transport failed"),
+    });
+    const result = await executeGuardedSingleDraw(
+      { ...common(), confirmation: confirmation() },
+      mock.dependencies,
+    );
+    const finalAudit = mock.counters.audits.at(-1);
+    assert.equal(result.transactionHash, HASH);
+    assert.equal(finalAudit?.transactionHash, HASH);
+    assert.equal(finalAudit?.receiptStatus, "success");
+    assert.equal(finalAudit?.broadcastOccurred, true);
+    assert.equal(finalAudit?.transactionSucceeded, true);
+    assert.equal(finalAudit?.postCheckStatus, "INCOMPLETE");
   });
 });

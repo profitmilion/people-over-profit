@@ -45,6 +45,16 @@ export const GUARDED_DRAW_GAS_BUFFER_BPS = 2_500n;
 const BASIS_POINTS = 10_000n;
 
 export type GuardedDrawMode = "inspect" | "simulate" | "execute";
+export type GuardedDrawLifecyclePhase =
+  | "PRE_BROADCAST"
+  | "BROADCASTED"
+  | "RECEIPT_KNOWN"
+  | "POSTCHECK_COMPLETE";
+export type GuardedDrawPostCheckStatus =
+  | "NOT_STARTED"
+  | "INCOMPLETE"
+  | "PASSED"
+  | "FAILED";
 export type GuardedDrawOutcomeStatus =
   | "INSPECT_VALID"
   | "STALE"
@@ -157,9 +167,13 @@ export interface GuardedDrawAuditRecord {
   runtimeGasEstimate: string | null;
   requiredGasEstimate: string | null;
   gasLimit: string | null;
+  lifecyclePhase: GuardedDrawLifecyclePhase;
+  broadcastOccurred: boolean;
+  transactionSucceeded: boolean | null;
   transactionHash: Hex | null;
   receiptStatus: "success" | "reverted" | null;
   receiptBlockNumber: string | null;
+  postCheckStatus: GuardedDrawPostCheckStatus;
   postCheck: GuardedDrawPostCheck | null;
   message: string;
 }
@@ -178,8 +192,12 @@ export interface GuardedDrawOutcome {
   runtimeGasEstimate: bigint | null;
   requiredGasEstimate: bigint | null;
   gasLimit: bigint | null;
+  lifecyclePhase: GuardedDrawLifecyclePhase;
+  broadcastOccurred: boolean;
+  transactionSucceeded: boolean | null;
   transactionHash: Hex | null;
   receipt: GuardedDrawReceipt | null;
+  postCheckStatus: GuardedDrawPostCheckStatus;
   postCheck: GuardedDrawPostCheck | null;
 }
 
@@ -350,6 +368,8 @@ function baseOutcome(
   message: string,
   partial: Partial<GuardedDrawOutcome> = {},
 ): GuardedDrawOutcome {
+  const transactionHash = partial.transactionHash ?? null;
+  const receipt = partial.receipt ?? null;
   return {
     ...partial,
     mode,
@@ -365,8 +385,15 @@ function baseOutcome(
     runtimeGasEstimate: partial.runtimeGasEstimate ?? null,
     requiredGasEstimate: partial.requiredGasEstimate ?? null,
     gasLimit: partial.gasLimit ?? null,
-    transactionHash: partial.transactionHash ?? null,
-    receipt: partial.receipt ?? null,
+    lifecyclePhase: partial.lifecyclePhase ?? "PRE_BROADCAST",
+    broadcastOccurred:
+      partial.broadcastOccurred ?? transactionHash !== null,
+    transactionSucceeded: partial.transactionSucceeded ?? (
+      receipt ? receipt.status === "success" : null
+    ),
+    transactionHash,
+    receipt,
+    postCheckStatus: partial.postCheckStatus ?? "NOT_STARTED",
     postCheck: partial.postCheck ?? null,
   };
 }
@@ -396,9 +423,13 @@ function auditRecord(outcome: GuardedDrawOutcome): GuardedDrawAuditRecord {
     runtimeGasEstimate: outcome.runtimeGasEstimate?.toString() ?? null,
     requiredGasEstimate: outcome.requiredGasEstimate?.toString() ?? null,
     gasLimit: outcome.gasLimit?.toString() ?? null,
+    lifecyclePhase: outcome.lifecyclePhase,
+    broadcastOccurred: outcome.broadcastOccurred,
+    transactionSucceeded: outcome.transactionSucceeded,
     transactionHash: outcome.transactionHash,
     receiptStatus: outcome.receipt?.status ?? null,
     receiptBlockNumber: outcome.receipt?.blockNumber.toString() ?? null,
+    postCheckStatus: outcome.postCheckStatus,
     postCheck: outcome.postCheck,
     message: outcome.message,
   };
@@ -566,7 +597,7 @@ export async function executeGuardedSingleDraw(
   options: GuardedDrawRunOptions,
   dependencies: GuardedDrawDependencies,
 ): Promise<GuardedDrawOutcome> {
-  return runGuarded("execute", async () => {
+  return runGuarded("execute", async (preserveEvidence) => {
     const first = await inspectInternal("execute", options, dependencies);
     if (first.status !== "INSPECT_VALID") return first;
     const plan = first.plan as LifecycleActionPlan;
@@ -688,10 +719,13 @@ export async function executeGuardedSingleDraw(
       ...current,
       status: "TRANSACTION_SUBMITTED",
       exitCode: GUARDED_DRAW_EXIT_CODES.TRANSACTION_SUBMITTED,
+      lifecyclePhase: "BROADCASTED",
+      broadcastOccurred: true,
       transactionHash,
       message:
         "One Draw transaction was submitted. It will never be resent automatically.",
     };
+    preserveEvidence(current);
     try {
       await audit(dependencies, current);
     } catch (error) {
@@ -709,10 +743,16 @@ export async function executeGuardedSingleDraw(
       return {
         ...current,
         message:
-          `Receipt wait stopped; preserve the hash and verify manually: ${sanitizeGuardedDrawError(error)}`,
+          `Receipt lookup failed after broadcast; transaction outcome is unknown. Preserve the hash, do not retry, and verify it manually: ${sanitizeGuardedDrawError(error)}`,
       };
     }
-    current = { ...current, receipt };
+    current = {
+      ...current,
+      lifecyclePhase: "RECEIPT_KNOWN",
+      transactionSucceeded: receipt.status === "success",
+      receipt,
+    };
+    preserveEvidence(current);
     if (receipt.status !== "success") {
       return {
         ...current,
@@ -735,6 +775,8 @@ export async function executeGuardedSingleDraw(
       snapshot: postSnapshot,
       report: postReport,
       postCheck,
+      lifecyclePhase: "POSTCHECK_COMPLETE",
+      postCheckStatus: postCheck.passed ? "PASSED" : "FAILED",
       status: postCheck.passed ? "TRANSACTION_SUBMITTED" : "POST_CHECK_FAILED",
       exitCode: postCheck.passed
         ? GUARDED_DRAW_EXIT_CODES.TRANSACTION_SUBMITTED
@@ -746,14 +788,55 @@ export async function executeGuardedSingleDraw(
 
 async function runGuarded(
   mode: GuardedDrawMode,
-  operation: () => Promise<GuardedDrawOutcome>,
+  operation: (
+    preserveEvidence: (outcome: GuardedDrawOutcome) => void,
+  ) => Promise<GuardedDrawOutcome>,
   dependencies: GuardedDrawDependencies,
 ): Promise<GuardedDrawOutcome> {
   let outcome: GuardedDrawOutcome;
+  let preservedEvidence: GuardedDrawOutcome | null = null;
   try {
-    outcome = await operation();
+    outcome = await operation((current) => {
+      preservedEvidence = current;
+    });
   } catch (error) {
-    if (error instanceof GuardedDrawStop) {
+    const evidence = preservedEvidence as GuardedDrawOutcome | null;
+    if (evidence?.transactionHash) {
+      if (evidence.receipt?.status === "success") {
+        outcome = baseOutcome(
+          mode,
+          "POST_CHECK_FAILED",
+          `Transaction succeeded, but the read-only post-check is incomplete: ${sanitizeGuardedDrawError(error)} Do not retry the transaction; retry only the read-only post-check.`,
+          {
+            ...evidence,
+            lifecyclePhase: "RECEIPT_KNOWN",
+            broadcastOccurred: true,
+            transactionSucceeded: true,
+            postCheckStatus: "INCOMPLETE",
+          },
+        );
+      } else if (evidence.receipt?.status === "reverted") {
+        outcome = baseOutcome(
+          mode,
+          "RECEIPT_REVERTED",
+          "Draw receipt is reverted. No resend is allowed.",
+          evidence,
+        );
+      } else {
+        outcome = baseOutcome(
+          mode,
+          "TRANSACTION_SUBMITTED",
+          `Transaction was broadcast, but its receipt is unknown: ${sanitizeGuardedDrawError(error)} Preserve the hash and do not retry the transaction.`,
+          {
+            ...evidence,
+            lifecyclePhase: "BROADCASTED",
+            broadcastOccurred: true,
+            transactionSucceeded: null,
+            postCheckStatus: "NOT_STARTED",
+          },
+        );
+      }
+    } else if (error instanceof GuardedDrawStop) {
       outcome = baseOutcome(mode, error.status, error.message, error.outcome);
     } else {
       outcome = baseOutcome(
@@ -816,7 +899,11 @@ export function renderGuardedDrawText(outcome: GuardedDrawOutcome): string {
     `RUNTIME GAS ESTIMATE: ${outcome.runtimeGasEstimate?.toString() ?? "-"}`,
     `REQUIRED GAS ESTIMATE: ${outcome.requiredGasEstimate?.toString() ?? "-"}`,
     `FINAL GAS LIMIT: ${outcome.gasLimit?.toString() ?? "-"}`,
+    `LIFECYCLE PHASE: ${outcome.lifecyclePhase}`,
+    `BROADCAST OCCURRED: ${outcome.broadcastOccurred ? "YES" : "NO"}`,
+    `TRANSACTION SUCCEEDED: ${outcome.transactionSucceeded === null ? "UNKNOWN" : outcome.transactionSucceeded ? "YES" : "NO"}`,
     `TX HASH: ${outcome.transactionHash ?? "-"}`,
+    `POST-CHECK STATUS: ${outcome.postCheckStatus}`,
     `RESULT: ${outcome.status}`,
     outcome.message,
   ].join("\n");

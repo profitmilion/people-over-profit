@@ -1,6 +1,6 @@
 # POP33 Development Status
 
-Last reviewed: 2026-08-11
+Last reviewed: 2026-08-12
 
 Branch reviewed: `codex/pop33-farcaster-pilot-10`
 
@@ -50,10 +50,11 @@ prize at the implementation checkpoint. The UI derives this state dynamically;
 the address and amount are not hard-coded. No Claim transaction was sent while
 implementing this coverage.
 
-`TODO`: the guarded Draw executor's successful-run audit file can be
-overwritten by cleanup/finalization output after the broadcast record. This is
-a known operator-tooling audit issue and is intentionally not changed as part
-of the public Claim UI work.
+The guarded Draw executor now preserves transaction evidence across later RPC
+failures. Once broadcast returns a hash, outcomes and audit records retain that
+hash and explicitly mark the transaction as broadcast. Once a receipt is known,
+its status and block remain authoritative even if the read-only post-check
+fails; only that post-check may be retried, never the transaction.
 
 The `codex/pop33-farcaster-pilot-10` branch now contains a locally verified
 Public Pilot 10 implementation. Pool capacity is a deployment parameter limited

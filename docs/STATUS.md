@@ -1,6 +1,6 @@
 # POP33 Development Status
 
-Last reviewed: 2026-08-12
+Last reviewed: 2026-08-13
 
 Branch reviewed: `codex/pop33-farcaster-pilot-10`
 
@@ -83,6 +83,44 @@ Base Sepolia block `45301495` found Pool 1 Open at 1/10 and Pool 2 Open at 1/10;
 both active positions belong to the same public address. Its manifest and Mini
 App metadata use the same stable host without the local fallback. Vercel
 Production remains untouched.
+
+## Pilot 10 Pool 1 operational closure (2026-08-13)
+
+Pilot 10 Pool 1 on Base Sepolia (`84532`), at
+`0xc2fAA10d3E5FEeB88604dc3A1Ab33656fFeBCA98`, completed its full public
+testnet lifecycle. Draws #4 through #10 were completed manually after the
+three earlier rounds. The final read-only supervisor snapshot after Draw #10
+reported `Claimable`, `completedDrawRoundCount=10`, `missingDrawCount=0`, two
+claimed prizes, eight missing claims, and `264000000` base units escrowed. The
+eight remaining winners then claimed manually through the branch Vercel
+Preview UI, completing all ten claims and the pool lifecycle.
+
+The controlled Draw operations also validated the optional independent
+Alchemy Base Sepolia fallback in a real failover during Draw #6, with both
+endpoints independently confirming chain `84532` and the canonical Pilot 10
+bytecode. The guarded gas buffer was sufficient. No failed transaction was
+automatically resent.
+
+Successful Draw transactions could still end with `POST_CHECK_FAILED` when
+the next overdue round immediately became critical, or when a post-receipt
+`eth_getBlockByNumber` read temporarily failed. In the latter case the
+operator correctly preserved the successful transaction evidence and warned
+against resending. Automatic Draw Runner V1 should distinguish a confirmed
+write from an incomplete or policy-failing post-check so these outcomes do
+not present as transaction failures.
+
+The occupied pool slot remained active throughout `Claimable` and was released
+only when the final claim moved the pool to `Finished`. This matches the
+current approved Basic V1 rule. `TO DECIDE`: whether a future product version
+should instead release pool slots after all ten Draws complete, independently
+of outstanding winner claims.
+
+The next planned operator milestone is Automatic Draw Runner V1. The next
+public-product target remains one Farcaster Mini App on one stable short URL;
+this is a target, not evidence of Production promotion or Farcaster support.
+A POP33-operated Base Sepolia faucet is also planned, with its scope, safety
+limits, and operating model `TO DECIDE`. No private RPC URL or infrastructure
+credential is recorded here.
 
 The first Farcaster mobile approval test exposed a split configuration: public
 reads used the Pilot 10 address from Vercel while the transaction hook retained

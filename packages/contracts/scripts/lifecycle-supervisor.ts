@@ -50,6 +50,15 @@ import {
   createBaseSepoliaGuardedDrawDependencies,
 } from "./operator/guarded-single-draw-base-sepolia.js";
 import {
+  createGuardedDrawDurableRuntimeConsumer,
+  readAutomaticDrawDurableRuntimeConfig,
+} from "./operator/automatic-draw-runner-v1-runtime.js";
+import {
+  DEMO_V1_CHAIN_ID,
+  DEMO_V1_CONTRACT_ADDRESS,
+  DEMO_V1_TOKEN_ADDRESS,
+} from "../../../src/demo-v1/safety.js";
+import {
   EXACT_99_READINESS_SAFETY,
   Exact99ReadinessInputError,
   ViemExact99ReadinessPublicClient,
@@ -107,6 +116,15 @@ async function runGuardedDraw(mode: GuardedDrawMode, planPath: string): Promise<
   const timeoutMs = validateLifecycleSupervisorTimeout(
     rawTimeout ? Number(rawTimeout) : LIFECYCLE_SUPERVISOR_DEFAULT_TIMEOUT_MS,
   );
+  const durableConsumer = mode === "execute"
+    ? createGuardedDrawDurableRuntimeConsumer(
+        readAutomaticDrawDurableRuntimeConfig(process.env, {
+          chainId: BigInt(DEMO_V1_CHAIN_ID),
+          contractAddress: DEMO_V1_CONTRACT_ADDRESS,
+          tokenAddress: DEMO_V1_TOKEN_ADDRESS,
+        }),
+      )
+    : undefined;
   const dependencies = createBaseSepoliaGuardedDrawDependencies({
     rpcUrl: rpcUrls[0],
     fallbackRpcUrl: rpcUrls[1],
@@ -116,6 +134,7 @@ async function runGuardedDraw(mode: GuardedDrawMode, planPath: string): Promise<
       process.env.BASE_SEPOLIA_DRAW_OPERATOR_ADDRESS?.trim() || undefined,
     auditPath:
       process.env.POP33_INTERNAL_GUARDED_DRAW_AUDIT_PATH?.trim() || undefined,
+    consumePreparedDrawIntent: durableConsumer,
   });
   const common = {
     planJson: file.json,

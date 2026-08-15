@@ -263,7 +263,7 @@ async function runExact99Readiness(): Promise<void> {
   const plan = await createLiveExact99ReadinessPlan({
     snapshot,
     report,
-    publicClient: new ViemExact99ReadinessPublicClient(rpcUrl, timeoutMs),
+    publicClient: new ViemExact99ReadinessPublicClient(rpcUrls[0], timeoutMs),
     poolId,
     sourceReference: "base-sepolia",
     manifestJson,

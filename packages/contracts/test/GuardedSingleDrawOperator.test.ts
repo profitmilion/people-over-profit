@@ -24,6 +24,7 @@ import {
   type GuardedDrawAuditRecord,
   type GuardedDrawDependencies,
 } from "../scripts/operator/guarded-single-draw.js";
+import type { DrawPreSignerConsumerResult } from "../scripts/operator/draw-pre-signer-consumer.js";
 import {
   FIXTURE_DRAW_INTERVAL,
   FIXTURE_OBSERVED_AT,
@@ -113,6 +114,7 @@ interface Counters {
   identities: number;
   simulations: number;
   estimates: number;
+  consumers: number;
   loads: number;
   prepares: number;
   sends: number;
@@ -121,6 +123,44 @@ interface Counters {
   simulatedArgs: Array<readonly [bigint, bigint]>;
   sentArgs: Array<readonly [bigint, bigint]>;
   preparedGasLimits: bigint[];
+  executionOrder: string[];
+}
+
+function readyConsumerResult(logicalKey: string): DrawPreSignerConsumerResult {
+  const timestamp = "2026-08-15T10:00:00.000Z";
+  return {
+    status: "CONSUMER_READY",
+    logicalDrawKey: logicalKey,
+    journalRevision: 1,
+    operation: {
+      operationId: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      idempotencyKey: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      runId: "123e4567-e89b-42d3-a456-426614174000",
+      action: "draw",
+      scope: logicalKey,
+      walletAddress: OPERATOR,
+      chainId: "84532",
+      contractAddress: LIFECYCLE_SUPERVISOR_CANONICAL_CONTRACT_ADDRESS,
+      tokenAddress: null,
+      poolId: "1",
+      round: 1,
+      nonce: null,
+      transactionHash: null,
+      parameterDigest: "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      status: "prepared",
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      receipt: null,
+      error: null,
+    },
+    existingIntentRequired: true,
+    intentCreated: false,
+    executionAuthorized: false,
+    nonceAcquired: false,
+    transactionPrepared: false,
+    transactionSent: false,
+    reason: "Prepared intent validated by the test seam.",
+  };
 }
 
 function dependencies(input: {
@@ -138,6 +178,8 @@ function dependencies(input: {
   loadError?: Error;
   receiptError?: Error;
   receiptStatus?: "success" | "reverted";
+  consumerResult?: DrawPreSignerConsumerResult;
+  consumerError?: Error;
 } = {}): { dependencies: GuardedDrawDependencies; counters: Counters } {
   const snapshots = input.snapshots ?? [dueSnapshot()];
   const counters: Counters = {
@@ -145,6 +187,7 @@ function dependencies(input: {
     identities: 0,
     simulations: 0,
     estimates: 0,
+    consumers: 0,
     loads: 0,
     prepares: 0,
     sends: 0,
@@ -153,6 +196,7 @@ function dependencies(input: {
     simulatedArgs: [],
     sentArgs: [],
     preparedGasLimits: [],
+    executionOrder: [],
   };
   const deps: GuardedDrawDependencies = {
     async readSnapshot(blockNumber) {
@@ -197,8 +241,15 @@ function dependencies(input: {
       if (input.runtimeEstimateError) throw input.runtimeEstimateError;
       return input.runtimeEstimate ?? 123_456n;
     },
+    async consumePreparedDrawIntent(context) {
+      counters.consumers += 1;
+      counters.executionOrder.push("consumer");
+      if (input.consumerError) throw input.consumerError;
+      return input.consumerResult ?? readyConsumerResult(context.logicalDrawKey);
+    },
     async loadExecutionClient() {
       counters.loads += 1;
+      counters.executionOrder.push("loader");
       if (input.loadError) throw input.loadError;
       return {
         chainId: 84_532n,
@@ -843,5 +894,49 @@ describe("guarded single-Draw operator", function () {
     assert.equal(finalAudit?.broadcastOccurred, true);
     assert.equal(finalAudit?.transactionSucceeded, true);
     assert.equal(finalAudit?.postCheckStatus, "INCOMPLETE");
+  });
+
+  it("55. requires the shared consumer before the execution-client seam", async function () {
+    const mock = dependencies({
+      loadError: new Error("test stop after consumer"),
+    });
+    const result = await executeGuardedSingleDraw(
+      { ...common(), confirmation: confirmation() },
+      mock.dependencies,
+    );
+    assert.notEqual(result.status, "TRANSACTION_SUBMITTED");
+    assert.deepEqual(mock.counters.executionOrder.slice(0, 2), [
+      "consumer",
+      "loader",
+    ]);
+    assert.equal(mock.counters.prepares, 0);
+    assert.equal(mock.counters.sends, 0);
+  });
+
+  it("56. does not load the execution client when the consumer fails closed", async function () {
+    const rejected = readyConsumerResult("unused");
+    rejected.status = "CONFLICT";
+    rejected.reason = "Prepared intent mismatch.";
+    const mock = dependencies({ consumerResult: rejected });
+    const result = await executeGuardedSingleDraw(
+      { ...common(), confirmation: confirmation() },
+      mock.dependencies,
+    );
+    assert.equal(result.status, "BLOCKED");
+    assert.equal(mock.counters.consumers, 1);
+    assert.equal(mock.counters.loads, 0);
+    assert.equal(mock.counters.prepares, 0);
+    assert.equal(mock.counters.sends, 0);
+  });
+
+  it("57. keeps inspect and simulate modes journal-free", async function () {
+    const inspectMock = dependencies();
+    const simulateMock = dependencies();
+    await inspectGuardedSingleDraw(common(), inspectMock.dependencies);
+    await simulateGuardedSingleDraw(common(), simulateMock.dependencies);
+    assert.equal(inspectMock.counters.consumers, 0);
+    assert.equal(simulateMock.counters.consumers, 0);
+    assert.equal(inspectMock.counters.loads, 0);
+    assert.equal(simulateMock.counters.loads, 0);
   });
 });

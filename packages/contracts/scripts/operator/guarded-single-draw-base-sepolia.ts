@@ -31,7 +31,9 @@ import {
   type GuardedDrawAuditRecord,
   type GuardedDrawDependencies,
   type GuardedDrawExecutionClient,
+  type GuardedDrawPreparedIntentContext,
 } from "./guarded-single-draw.js";
+import type { DrawPreSignerConsumerResult } from "./draw-pre-signer-consumer.js";
 import {
   GuardedDrawReadOnlyRpcFailover,
 } from "./guarded-draw-rpc-failover.js";
@@ -47,6 +49,9 @@ export interface BaseSepoliaGuardedDrawOptions {
   operatorAddress?: string;
   privateKeyEnvironment?: NodeJS.ProcessEnv;
   auditPath?: string;
+  consumePreparedDrawIntent?(
+    context: GuardedDrawPreparedIntentContext,
+  ): Promise<DrawPreSignerConsumerResult>;
 }
 
 export class GuardedDrawAuditFile {
@@ -183,6 +188,7 @@ export function createBaseSepoliaGuardedDrawDependencies(
 
   return {
     readSnapshot,
+    consumePreparedDrawIntent: options.consumePreparedDrawIntent,
     getLatestBlockNumber: () => rpcFailover.read("eth_blockNumber", (client) =>
       client.publicClient.getBlockNumber()),
     async readPublicIdentity(blockNumber) {

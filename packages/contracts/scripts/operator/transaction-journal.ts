@@ -165,6 +165,10 @@ function canonicalize(value: unknown): string {
   return JSON.stringify(String(value));
 }
 
+export function parameterDigestFor(parameters: unknown): string {
+  return digest(canonicalize(parameters ?? null));
+}
+
 function isoNow(): string {
   return new Date().toISOString();
 }
@@ -236,7 +240,7 @@ export function operationIdFor(meaning: OperationMeaning): string {
     tokenAddress: meaning.tokenAddress ? getAddress(meaning.tokenAddress) : null,
     poolId: meaning.poolId?.toString() ?? null,
     round: meaning.round ?? null,
-    parameterDigest: digest(canonicalize(meaning.parameters ?? null)),
+    parameterDigest: parameterDigestFor(meaning.parameters),
   };
   return operationIdFromNormalized(normalized);
 }
@@ -277,7 +281,7 @@ function operationFromMeaning(meaning: OperationMeaning, runId: string): Journal
     round: meaning.round ?? null,
     nonce: null,
     transactionHash: null,
-    parameterDigest: digest(canonicalize(meaning.parameters ?? null)),
+    parameterDigest: parameterDigestFor(meaning.parameters),
     status: "prepared",
     createdAt: now,
     updatedAt: now,

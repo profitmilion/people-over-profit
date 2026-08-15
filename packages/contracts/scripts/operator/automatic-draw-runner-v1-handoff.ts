@@ -55,7 +55,9 @@ function result(
   };
 }
 
-function drawMeaning(operation: AutomaticDrawStoredOperation): OperationMeaning {
+export function automaticDrawExecutionMeaning(
+  operation: AutomaticDrawStoredOperation,
+): OperationMeaning {
   if (operation.progression.state !== "PREFLIGHT_READY") {
     throw new Error("Automatic Draw handoff requires PREFLIGHT_READY progression.");
   }
@@ -147,7 +149,9 @@ export async function handoffAutomaticDrawExecutionIntent(
   }
 
   try {
-    const claim = await options.journal.claimPreparedDraw(drawMeaning(operation));
+    const claim = await options.journal.claimPreparedDraw(
+      automaticDrawExecutionMeaning(operation),
+    );
     if (claim.status === "CLAIMED") {
       return result(
         options,

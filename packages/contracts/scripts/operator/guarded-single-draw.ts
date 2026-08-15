@@ -34,6 +34,8 @@ import {
   type GuardedDrawReadOnlySimulationDependencies,
   type GuardedDrawSimulation,
 } from "./guarded-draw-read-only-preflight.js";
+import { logicalDrawKey } from "./automatic-draw-runner-v1-decision.js";
+import type { DrawPreSignerConsumerResult } from "./draw-pre-signer-consumer.js";
 
 export {
   GUARDED_DRAW_GAS_BUFFER_BPS,
@@ -112,11 +114,28 @@ export interface GuardedDrawExecutionClient {
   }>;
 }
 
+export interface GuardedDrawPreparedIntentContext {
+  logicalDrawKey: string;
+  chainId: bigint;
+  contractAddress: Address;
+  poolId: bigint;
+  roundNumber: bigint;
+  operatorAddress: Address;
+  planId: string;
+  revalidationBlock: string;
+  gasEstimate: bigint;
+  runtimeGasEstimate: bigint;
+  bufferedGasLimit: bigint;
+}
+
 export interface GuardedDrawDependencies
   extends GuardedDrawReadOnlySimulationDependencies {
   readSnapshot(blockNumber?: bigint): Promise<SystemSnapshot>;
   readPublicIdentity(blockNumber: bigint): Promise<GuardedDrawPublicIdentity>;
   getLatestBlockNumber(): Promise<bigint>;
+  consumePreparedDrawIntent?(
+    context: GuardedDrawPreparedIntentContext,
+  ): Promise<DrawPreSignerConsumerResult>;
   loadExecutionClient?(): Promise<GuardedDrawExecutionClient>;
   waitForReceipt?(transactionHash: Hex): Promise<GuardedDrawReceipt>;
   writeAudit?(record: GuardedDrawAuditRecord): Promise<void>;
@@ -656,6 +675,68 @@ export async function executeGuardedSingleDraw(
       requiredGasEstimate: gasPlan.requiredEstimate,
       gasLimit: gasPlan.gasLimit,
     };
+
+    if (!dependencies.consumePreparedDrawIntent) {
+      throw new GuardedDrawStop(
+        "BLOCKED",
+        "Execute requires the shared prepared Draw intent consumer.",
+        current,
+      );
+    }
+    let consumer: DrawPreSignerConsumerResult;
+    let consumerContext: GuardedDrawPreparedIntentContext;
+    try {
+      const poolId = BigInt(plan.scope.poolId);
+      const roundNumber = BigInt(plan.scope.roundNumber as string);
+      consumerContext = {
+        logicalDrawKey: logicalDrawKey({
+          chainId: BigInt(plan.identity.chainId),
+          contractAddress: plan.identity.contractAddress,
+          poolId,
+          roundNumber,
+        }),
+        chainId: BigInt(plan.identity.chainId),
+        contractAddress: getAddress(plan.identity.contractAddress),
+        poolId,
+        roundNumber,
+        operatorAddress,
+        planId: plan.planId,
+        revalidationBlock:
+          current.revalidation.freshBlockNumber ?? latestBlock.toString(),
+        gasEstimate: preflightEstimate,
+        runtimeGasEstimate: gasPlan.runtimeEstimate,
+        bufferedGasLimit: gasPlan.gasLimit,
+      };
+      consumer = await dependencies.consumePreparedDrawIntent(consumerContext);
+    } catch (error) {
+      throw new GuardedDrawStop(
+        "BLOCKED",
+        `Prepared Draw intent consumer failed: ${sanitizeGuardedDrawError(error)}`,
+        current,
+      );
+    }
+    const consumed = consumer.operation;
+    if (
+      consumer.status !== "CONSUMER_READY" ||
+      !consumed ||
+      consumer.logicalDrawKey !== consumerContext.logicalDrawKey ||
+      consumed.status !== "prepared" ||
+      consumed.action !== "draw" ||
+      consumed.scope !== consumerContext.logicalDrawKey ||
+      consumed.chainId !== consumerContext.chainId.toString() ||
+      consumed.contractAddress !== consumerContext.contractAddress ||
+      consumed.poolId !== consumerContext.poolId.toString() ||
+      consumed.round !== Number(consumerContext.roundNumber) ||
+      consumed.walletAddress !== consumerContext.operatorAddress ||
+      consumed.nonce !== null ||
+      consumed.transactionHash !== null
+    ) {
+      throw new GuardedDrawStop(
+        "BLOCKED",
+        `Prepared Draw intent is not consumable: ${consumer.reason}`,
+        current,
+      );
+    }
 
     const execution = await dependencies.loadExecutionClient();
     if (

@@ -116,6 +116,23 @@ export interface TransactionJournal {
   find(operationId: string): JournalOperation | undefined;
 }
 
+export type PreparedDrawIntentClaimResult =
+  | { status: "CLAIMED" | "EXISTING"; operation: JournalOperation }
+  | { status: "CONFLICT"; operation: JournalOperation | null }
+  | { status: "UNKNOWN" };
+
+export interface LogicalDrawTransactionJournal extends TransactionJournal {
+  /** Atomically creates one prepared intent per chain/contract/pool/round. */
+  claimPreparedDraw(meaning: OperationMeaning): Promise<PreparedDrawIntentClaimResult>;
+}
+
+export class TransactionJournalRevisionConflictError extends Error {
+  constructor() {
+    super("Transaction journal revision conflict; another process changed the file.");
+    this.name = "TransactionJournalRevisionConflictError";
+  }
+}
+
 const ALLOWED_TRANSITIONS: Record<OperationStatus, ReadonlySet<OperationStatus>> = {
   prepared: new Set(["ready_to_broadcast", "failed", "requires_manual_review"]),
   ready_to_broadcast: new Set(["broadcast", "failed", "requires_manual_review"]),
@@ -402,8 +419,9 @@ export function validateJournal(value: unknown, identity: JournalIdentity): Tran
   return result;
 }
 
-abstract class BaseTransactionJournal implements TransactionJournal {
+abstract class BaseTransactionJournal implements LogicalDrawTransactionJournal {
   readonly runId = randomUUID();
+  private logicalDrawClaimTail: Promise<void> = Promise.resolve();
   protected constructor(protected data: TransactionJournalData) {}
   protected abstract persist(): Promise<void>;
 
@@ -414,6 +432,19 @@ abstract class BaseTransactionJournal implements TransactionJournal {
   }
 
   async prepare(meaning: OperationMeaning): Promise<JournalOperation> {
+    if (meaning.action === "draw") {
+      const expectedOperationId = operationIdFor(meaning);
+      const claim = await this.claimPreparedDraw(meaning);
+      if (claim.status === "UNKNOWN") {
+        throw new Error("Logical Draw journal claim outcome is unknown; reconcile before retrying.");
+      }
+      if (claim.status === "CONFLICT" || claim.operation.operationId !== expectedOperationId) {
+        throw new Error(
+          "A different transaction intent already owns this logical Draw; use the shared execution gate and reconcile.",
+        );
+      }
+      return clone(claim.operation);
+    }
     const candidate = operationFromMeaning(meaning, this.runId);
     if (
       candidate.chainId !== this.data.chainId ||
@@ -427,6 +458,74 @@ abstract class BaseTransactionJournal implements TransactionJournal {
     this.data.operations.push(candidate);
     await this.bumpAndPersist();
     return clone(candidate);
+  }
+
+  async claimPreparedDraw(
+    meaning: OperationMeaning,
+  ): Promise<PreparedDrawIntentClaimResult> {
+    const claim = this.logicalDrawClaimTail.then(
+      () => this.claimPreparedDrawExclusive(meaning),
+      () => this.claimPreparedDrawExclusive(meaning),
+    );
+    this.logicalDrawClaimTail = claim.then(
+      () => undefined,
+      () => undefined,
+    );
+    return claim;
+  }
+
+  private async claimPreparedDrawExclusive(
+    meaning: OperationMeaning,
+  ): Promise<PreparedDrawIntentClaimResult> {
+    const candidate = operationFromMeaning(meaning, this.runId);
+    if (
+      candidate.action !== "draw" ||
+      candidate.poolId === null ||
+      candidate.round === null
+    ) {
+      throw new Error("A logical Draw claim requires draw action, pool ID, and round.");
+    }
+    if (
+      candidate.chainId !== this.data.chainId ||
+      candidate.contractAddress !== this.data.contractAddress ||
+      (candidate.tokenAddress !== null && candidate.tokenAddress !== this.data.tokenAddress)
+    ) {
+      throw new Error("Draw intent identity does not match the transaction journal.");
+    }
+
+    const sameIdentity = this.data.operations.filter((operation) =>
+      operation.action === "draw" &&
+      operation.chainId === candidate.chainId &&
+      operation.contractAddress === candidate.contractAddress &&
+      operation.poolId === candidate.poolId &&
+      operation.round === candidate.round);
+    const conflictingScope = this.data.operations.find((operation) =>
+      operation.action === "draw" &&
+      operation.scope === candidate.scope &&
+      !sameIdentity.some((match) => match.operationId === operation.operationId));
+
+    if (sameIdentity.length === 1 && !conflictingScope) {
+      return { status: "EXISTING", operation: clone(sameIdentity[0]) };
+    }
+    if (sameIdentity.length > 1 || conflictingScope) {
+      return {
+        status: "CONFLICT",
+        operation: sameIdentity[0] ? clone(sameIdentity[0]) : clone(conflictingScope as JournalOperation),
+      };
+    }
+
+    const previous = clone(this.data);
+    this.data.operations.push(candidate);
+    try {
+      await this.bumpAndPersist();
+      return { status: "CLAIMED", operation: clone(candidate) };
+    } catch (error) {
+      this.data = previous;
+      if (error instanceof TransactionJournalRevisionConflictError) {
+        return { status: "CONFLICT", operation: null };
+      }
+      return { status: "UNKNOWN" };
+    }
   }
 
   async transition(
@@ -556,7 +655,7 @@ export class JsonTransactionJournal extends BaseTransactionJournal {
       catch { throw new Error("Transaction journal changed into invalid JSON before update."); }
       const currentRevision = (persisted as { revision?: unknown }).revision;
       if (currentRevision !== this.data.revision - 1) {
-        throw new Error("Transaction journal revision conflict; another process changed the file.");
+        throw new TransactionJournalRevisionConflictError();
       }
       await atomicWritePrivateFile(
         this.filePath,

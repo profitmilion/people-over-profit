@@ -16,6 +16,7 @@ import { OPERATOR_WORKSPACE_ROOT } from "./checkpoint.js";
 export interface AtomicWriteHooks {
   afterFileSync?(): Promise<void> | void;
   beforeRename?(): Promise<void> | void;
+  afterRename?(): Promise<void> | void;
 }
 
 function processIsAlive(pid: number): boolean {
@@ -179,6 +180,7 @@ export async function atomicWritePrivateFile(
     await chmod(filePath, 0o600).catch((error: NodeJS.ErrnoException) => {
       if (process.platform !== "win32") throw error;
     });
+    await hooks.afterRename?.();
   } finally {
     await handle?.close().catch(() => undefined);
     if (!renamed) {

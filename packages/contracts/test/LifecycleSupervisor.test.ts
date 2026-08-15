@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 
 import {
   DEFAULT_DRAW_OVERDUE_THRESHOLD_SECONDS,
+  KNOWN_SNAPSHOT_SOURCES,
   analyzeLifecycleSnapshot,
   filterSupervisorReport,
+  isSnapshotSourceIdentifier,
   renderSupervisorJson,
   renderSupervisorText,
   type DrawRoundSnapshot,
@@ -44,6 +46,32 @@ function diagnosticCodes(plan: PoolPlan): string[] {
 }
 
 describe("read-only multi-pool lifecycle supervisor", function () {
+  it("keeps valid snapshot provenance extensible without changing lifecycle decisions", function () {
+    for (const source of KNOWN_SNAPSHOT_SOURCES) {
+      assert.equal(isSnapshotSourceIdentifier(source), true);
+    }
+    const futureSource = "future-production-read-only";
+    assert.equal(isSnapshotSourceIdentifier(futureSource), true);
+    for (const invalid of ["", "Future Source", "-future", "future_source"]) {
+      assert.equal(isSnapshotSourceIdentifier(invalid), false);
+    }
+
+    const fixtureSnapshot = makeSystemFixture([makePoolFixture({ activePositionCount: 99n })]);
+    const futureSnapshot = { ...fixtureSnapshot, source: futureSource };
+    const fixtureReport = analyzeLifecycleSnapshot(fixtureSnapshot);
+    const futureReport = analyzeLifecycleSnapshot(futureSnapshot);
+    assert.equal(futureReport.snapshot.source, futureSource);
+    assert.equal(futureReport.plans[0].nextAction, fixtureReport.plans[0].nextAction);
+    assert.equal(futureReport.plans[0].reasonCode, fixtureReport.plans[0].reasonCode);
+    assert.equal(futureReport.plans[0].dueAt, fixtureReport.plans[0].dueAt);
+    assert.deepEqual(futureReport.plans[0].diagnostics, fixtureReport.plans[0].diagnostics);
+    assert.notEqual(futureReport.plans[0].planId, fixtureReport.plans[0].planId);
+    assert.throws(
+      () => analyzeLifecycleSnapshot({ ...fixtureSnapshot, source: "" }),
+      /Snapshot source must be a valid lowercase identifier/,
+    );
+  });
+
   it("classifies empty, 50/100, and 99/100 Open pools", function () {
     for (const activePositionCount of [0n, 50n, 99n]) {
       const plan = analyze(makePoolFixture({ activePositionCount }));

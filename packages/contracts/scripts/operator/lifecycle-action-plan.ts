@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { getAddress, isAddress } from "viem";
 
 import {
+  isSnapshotSourceIdentifier,
   type NextAction,
   type PoolPlan,
   type PoolSnapshot,
@@ -127,11 +128,6 @@ export type LifecycleActionPlanParseResult =
 const DECIMAL = /^(?:0|[1-9]\d*)$/;
 const SHA256 = /^sha256:[0-9a-f]{64}$/;
 const PLAN_ID = /^lifecycle-plan:[0-9a-f]{64}$/;
-const SOURCES = new Set<SnapshotSource>([
-  "fixture",
-  "local",
-  "base-sepolia-read-only",
-]);
 const NEXT_ACTIONS = new Set<NextAction>([
   "WAITING_FOR_PARTICIPANTS",
   "WAITING_FOR_FIRST_DRAW",
@@ -483,8 +479,8 @@ function parseLifecycleActionPlan(value: unknown): LifecycleActionPlanParseResul
     "scope",
     errors,
   );
-  if (!SOURCES.has(sourceType as SnapshotSource)) {
-    errors.push("source.type is unsupported.");
+  if (!isSnapshotSourceIdentifier(sourceType)) {
+    errors.push("source.type is invalid.");
   }
   if (!CLASSIFICATIONS.has(classification as LifecyclePlanClassification)) {
     errors.push("scope.classification is unsupported.");

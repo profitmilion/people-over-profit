@@ -13,7 +13,13 @@ export const POOL_STATUSES = [
 ] as const;
 
 export type PoolStatus = (typeof POOL_STATUSES)[number];
-export type SnapshotSource = "fixture" | "local" | "base-sepolia-read-only";
+export const KNOWN_SNAPSHOT_SOURCES = [
+  "fixture",
+  "local",
+  "base-sepolia-read-only",
+] as const;
+export type KnownSnapshotSource = (typeof KNOWN_SNAPSHOT_SOURCES)[number];
+export type SnapshotSource = KnownSnapshotSource | (string & {});
 export type RoundStatus = "Pending" | "Finalized" | string;
 export type NextAction =
   | "WAITING_FOR_PARTICIPANTS"
@@ -26,6 +32,16 @@ export type NextAction =
   | "INCONSISTENT_STATE"
   | "NO_ACTION";
 export type Severity = "info" | "warning" | "critical";
+
+const SNAPSHOT_SOURCE_IDENTIFIER = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+export function isSnapshotSourceIdentifier(
+  value: unknown,
+): value is SnapshotSource {
+  return typeof value === "string" &&
+    value.length <= 128 &&
+    SNAPSHOT_SOURCE_IDENTIFIER.test(value);
+}
 
 export interface DrawRoundSnapshot {
   number?: bigint;
@@ -840,6 +856,9 @@ export function analyzeLifecycleSnapshot(
   },
 ): SupervisorReport {
   if (snapshot.observedAt < 0n) throw new Error("observedAt must not be negative.");
+  if (!isSnapshotSourceIdentifier(snapshot.source)) {
+    throw new Error("Snapshot source must be a valid lowercase identifier.");
+  }
   if (config.drawOverdueThresholdSeconds < 0n) {
     throw new Error("drawOverdueThresholdSeconds must not be negative.");
   }

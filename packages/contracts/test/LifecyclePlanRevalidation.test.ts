@@ -131,6 +131,23 @@ describe("lifecycle action plan freshness revalidation", function () {
     assert.equal(parseLifecycleActionPlanJson(serializeLifecycleActionPlan(plan)).ok, true);
   });
 
+  it("round-trips a future valid source identifier and rejects an invalid one", function () {
+    const source = "future-production-read-only";
+    const snapshot = dueSnapshot({ source });
+    const plan = planFor(snapshot);
+    const parsed = parseLifecycleActionPlanJson(serializeLifecycleActionPlan(plan));
+    assert.equal(parsed.ok, true);
+    if (parsed.ok) assert.equal(parsed.plan.source.type, source);
+    assert.equal(revalidate(plan, structuredClone(snapshot)).status, "VALID");
+
+    const invalid = resign({ ...plan, source: { ...plan.source, type: "" } });
+    const invalidParsed = parseLifecycleActionPlanJson(
+      serializeLifecycleActionPlan(invalid),
+    );
+    assert.equal(invalidParsed.ok, false);
+    if (!invalidParsed.ok) assert.ok(invalidParsed.errors.includes("source.type is invalid."));
+  });
+
   it("returns VALID for the identical snapshot", function () {
     const snapshot = dueSnapshot();
     const result = revalidate(planFor(snapshot), structuredClone(snapshot));

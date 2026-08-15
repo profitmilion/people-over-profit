@@ -26,6 +26,23 @@ import {
   type SystemSnapshot,
 } from "./lifecycle-supervisor.js";
 import type { GuardedDrawRpcTelemetry } from "./guarded-draw-rpc-failover.js";
+import {
+  calculateGuardedDrawGasPlan,
+  estimateExactGuardedDraw,
+  simulateExactGuardedDraw,
+  type GuardedDrawGasPlan,
+  type GuardedDrawReadOnlySimulationDependencies,
+  type GuardedDrawSimulation,
+} from "./guarded-draw-read-only-preflight.js";
+
+export {
+  GUARDED_DRAW_GAS_BUFFER_BPS,
+  calculateGuardedDrawGasPlan,
+} from "./guarded-draw-read-only-preflight.js";
+export type {
+  GuardedDrawGasPlan,
+  GuardedDrawSimulation,
+} from "./guarded-draw-read-only-preflight.js";
 
 export const GUARDED_DRAW_EXIT_CODES = Object.freeze({
   INSPECT_VALID: 0,
@@ -41,9 +58,6 @@ export const GUARDED_DRAW_EXIT_CODES = Object.freeze({
   POST_CHECK_FAILED: 29,
   RPC_FAILURE: 30,
 });
-
-export const GUARDED_DRAW_GAS_BUFFER_BPS = 2_500n;
-const BASIS_POINTS = 10_000n;
 
 export type GuardedDrawMode = "inspect" | "simulate" | "execute";
 export type GuardedDrawLifecyclePhase =
@@ -76,11 +90,6 @@ export interface GuardedDrawPublicIdentity {
   hasBytecode: boolean;
 }
 
-export interface GuardedDrawSimulation {
-  result: bigint | null;
-  gasEstimate: bigint | null;
-}
-
 export interface GuardedDrawReceipt {
   transactionHash: Hex;
   status: "success" | "reverted";
@@ -103,25 +112,11 @@ export interface GuardedDrawExecutionClient {
   }>;
 }
 
-export interface GuardedDrawDependencies {
+export interface GuardedDrawDependencies
+  extends GuardedDrawReadOnlySimulationDependencies {
   readSnapshot(blockNumber?: bigint): Promise<SystemSnapshot>;
   readPublicIdentity(blockNumber: bigint): Promise<GuardedDrawPublicIdentity>;
   getLatestBlockNumber(): Promise<bigint>;
-  simulateDraw(input: {
-    account: Address;
-    address: Address;
-    abi: typeof demoV1Abi;
-    functionName: "executeDraw";
-    args: readonly [bigint, bigint];
-    blockNumber: bigint;
-  }): Promise<GuardedDrawSimulation>;
-  estimateDraw(input: {
-    account: Address;
-    address: Address;
-    abi: typeof demoV1Abi;
-    functionName: "executeDraw";
-    args: readonly [bigint, bigint];
-  }): Promise<bigint>;
   loadExecutionClient?(): Promise<GuardedDrawExecutionClient>;
   waitForReceipt?(transactionHash: Hex): Promise<GuardedDrawReceipt>;
   writeAudit?(record: GuardedDrawAuditRecord): Promise<void>;
@@ -215,34 +210,6 @@ class GuardedDrawStop extends Error {
   ) {
     super(message);
   }
-}
-
-export interface GuardedDrawGasPlan {
-  preflightEstimate: bigint;
-  runtimeEstimate: bigint;
-  requiredEstimate: bigint;
-  gasLimit: bigint;
-}
-
-export function calculateGuardedDrawGasPlan(
-  preflightEstimate: bigint,
-  runtimeEstimate: bigint,
-): GuardedDrawGasPlan {
-  if (preflightEstimate <= 0n || runtimeEstimate <= 0n) {
-    throw new Error("Guarded Draw gas estimates must be positive.");
-  }
-  const requiredEstimate = preflightEstimate > runtimeEstimate
-    ? preflightEstimate
-    : runtimeEstimate;
-  const bufferedNumerator =
-    requiredEstimate * (BASIS_POINTS + GUARDED_DRAW_GAS_BUFFER_BPS);
-  const gasLimit = (bufferedNumerator + BASIS_POINTS - 1n) / BASIS_POINTS;
-  return {
-    preflightEstimate,
-    runtimeEstimate,
-    requiredEstimate,
-    gasLimit,
-  };
 }
 
 function statusFromRevalidation(
@@ -513,14 +480,13 @@ async function simulateInternal(
   requirePublicIdentity(await dependencies.readPublicIdentity(blockNumber));
   const calldata = calldataFor(plan);
   try {
-    const simulation = await dependencies.simulateDraw({
-      account: operatorAddress,
-      address: DEMO_V1_CONTRACT_ADDRESS,
-      abi: demoV1Abi,
-      functionName: "executeDraw",
-      args: argsFor(plan),
+    const [poolId, roundNumber] = argsFor(plan);
+    const simulation = await simulateExactGuardedDraw({
+      operatorAddress,
+      poolId,
+      roundNumber,
       blockNumber,
-    });
+    }, dependencies);
     return {
       ...inspected,
       mode,
@@ -629,14 +595,12 @@ export async function executeGuardedSingleDraw(
         current = {
           ...current,
           calldata: calldataFor(plan),
-          simulation: await dependencies.simulateDraw({
-            account: operatorAddress,
-            address: DEMO_V1_CONTRACT_ADDRESS,
-            abi: demoV1Abi,
-            functionName: "executeDraw",
-            args: argsFor(plan),
+          simulation: await simulateExactGuardedDraw({
+            operatorAddress,
+            poolId: BigInt(plan.scope.poolId),
+            roundNumber: BigInt(plan.scope.roundNumber as string),
             blockNumber: latestBlock,
-          }),
+          }, dependencies),
         };
       } catch (error) {
         throw new GuardedDrawStop(
@@ -664,13 +628,11 @@ export async function executeGuardedSingleDraw(
     }
     let runtimeEstimate: bigint;
     try {
-      runtimeEstimate = await dependencies.estimateDraw({
-        account: operatorAddress,
-        address: DEMO_V1_CONTRACT_ADDRESS,
-        abi: demoV1Abi,
-        functionName: "executeDraw",
-        args: argsFor(plan),
-      });
+      runtimeEstimate = await estimateExactGuardedDraw({
+        operatorAddress,
+        poolId: BigInt(plan.scope.poolId),
+        roundNumber: BigInt(plan.scope.roundNumber as string),
+      }, dependencies);
     } catch (error) {
       throw new GuardedDrawStop(
         "SIMULATION_FAILED",

@@ -212,7 +212,7 @@ export function validateAutomaticDrawReservationRecord(
 
 export function createAutomaticDrawReservationRecord(
   decision: AutomaticDrawDueDecision,
-  invocationIdValue = randomUUID(),
+  invocationIdValue: string = randomUUID(),
   nowValue = new Date().toISOString(),
 ): AutomaticDrawReservationRecord {
   if (decision.sourceBlock === null) {

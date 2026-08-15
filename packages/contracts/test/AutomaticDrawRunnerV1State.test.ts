@@ -271,6 +271,68 @@ describe("Automatic Draw Runner V1 durable reservation state", function () {
     ).size, 3);
   });
 
+  it("creates a later reservation after progression advances the global revision", async function () {
+    const filePath = await temporaryStatePath();
+    const store = new JsonAutomaticDrawReservationStore(filePath);
+    const firstDecision = dueDecision();
+    const first = await reserve(store, firstDecision);
+    assert.equal(first.status, "RESERVED_FIRST_TIME");
+
+    const initial = (await inspectAutomaticDrawReservationState(filePath)).operations[0];
+    const recordedAt = new Date(
+      Date.parse(initial.progression.updatedAt) + 1,
+    ).toISOString();
+    const progressed = await store.transitionIfCurrent({
+      logicalDrawKey: initial.record.logicalDrawKey,
+      expectedRevision: initial.revision,
+      expectedState: "RESERVED",
+      next: {
+        schemaVersion: 1,
+        state: "MANUAL_REVIEW_REQUIRED",
+        updatedAt: recordedAt,
+        preflight: null,
+        manualReview: {
+          phase3Status: "PREFLIGHT_FAILED",
+          reason: "Fixture progression remains intact.",
+          recordedAt,
+        },
+      },
+    });
+    assert.equal(progressed.status, "UPDATED");
+    const afterProgression = await inspectAutomaticDrawReservationState(filePath);
+    assert.equal(afterProgression.revision, 2);
+    assert.equal(afterProgression.operations.length, 1);
+
+    const secondDecision = dueDecision({ roundNumber: 2n });
+    const second = await reserve(store, secondDecision);
+    assert.equal(second.status, "RESERVED_FIRST_TIME");
+    assert.equal(second.operation?.logicalDrawKey, secondDecision.logicalDrawKey);
+
+    const finalState = await inspectAutomaticDrawReservationState(filePath);
+    assert.equal(finalState.revision, 3);
+    assert.equal(finalState.operations.length, 2);
+    assert.equal(finalState.operations[0].record.logicalDrawKey, firstDecision.logicalDrawKey);
+    assert.equal(finalState.operations[0].revision, 2);
+    assert.equal(finalState.operations[0].progression.state, "MANUAL_REVIEW_REQUIRED");
+    assert.equal(
+      finalState.operations[0].progression.manualReview?.reason,
+      "Fixture progression remains intact.",
+    );
+    assert.equal(finalState.operations[1].record.logicalDrawKey, secondDecision.logicalDrawKey);
+    assert.equal(finalState.operations[1].revision, 3);
+    assert.equal(finalState.operations[1].progression.state, "RESERVED");
+
+    const reopened = new JsonAutomaticDrawReservationStore(filePath);
+    assert.equal((await reserve(reopened, firstDecision)).status, "EXISTING_OPERATION");
+    assert.equal((await reserve(reopened, secondDecision)).status, "EXISTING_OPERATION");
+    const reopenedState = await inspectAutomaticDrawReservationState(filePath);
+    assert.equal(reopenedState.revision, 3);
+    assert.equal(reopenedState.operations.length, 2);
+    assert.equal(new Set(
+      reopenedState.operations.map((operation) => operation.record.logicalDrawKey),
+    ).size, 2);
+  });
+
   it("fails closed for malformed JSON and never overwrites it", async function () {
     const filePath = await temporaryStatePath();
     await writeFile(filePath, "{", "utf8");
@@ -286,7 +348,7 @@ describe("Automatic Draw Runner V1 durable reservation state", function () {
       operations: Array<{ revision: number }>;
     };
     const corruptions: Array<(state: MutableState) => void> = [
-      (state) => { state.formatVersion = 2; },
+      (state) => { state.formatVersion = 3; },
       (state) => { state.revision = 2; },
       (state) => { state.operations[0].revision = 2; },
     ];

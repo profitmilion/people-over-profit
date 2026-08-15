@@ -7,6 +7,17 @@ import {
   type AutomaticDrawReservationRecord,
 } from "./automatic-draw-runner-v1-reservation.js";
 import {
+  createReservedAutomaticDrawProgression,
+  validateAutomaticDrawProgression,
+  validateAutomaticDrawProgressionTransition,
+  validateAutomaticDrawStoredOperation,
+  type AutomaticDrawAtomicTransitionResult,
+  type AutomaticDrawProgressionReadResult,
+  type AutomaticDrawProgressionStorage,
+  type AutomaticDrawProgressionTransition,
+  type AutomaticDrawStoredOperation,
+} from "./automatic-draw-runner-v1-progression.js";
+import {
   assertSafeExternalFilePath,
   atomicWritePrivateFile,
   pathIsRegularFile,
@@ -15,12 +26,9 @@ import {
 } from "./durable-file.js";
 
 const DRAW_STATE_SUFFIX = ".automatic-draw-state.json";
-const DRAW_STATE_FORMAT_VERSION = 1 as const;
+const DRAW_STATE_FORMAT_VERSION = 2 as const;
 
-export interface JsonAutomaticDrawReservationEntry {
-  revision: number;
-  record: AutomaticDrawReservationRecord;
-}
+export type JsonAutomaticDrawReservationEntry = AutomaticDrawStoredOperation;
 
 export interface AutomaticDrawReservationState {
   formatVersion: typeof DRAW_STATE_FORMAT_VERSION;
@@ -65,7 +73,7 @@ function requireIso(value: unknown, label: string): string {
   return value;
 }
 
-function validateEntry(
+function validateLegacyEntry(
   value: unknown,
   expectedRevision: number,
 ): JsonAutomaticDrawReservationEntry {
@@ -77,15 +85,27 @@ function validateEntry(
   if (entry.revision !== expectedRevision) {
     throw new Error("Automatic Draw filesystem revision is inconsistent.");
   }
+  const record = validateAutomaticDrawReservationRecord(entry.record);
   return {
     revision: expectedRevision,
-    record: validateAutomaticDrawReservationRecord(entry.record),
+    record,
+    progression: createReservedAutomaticDrawProgression(record.updatedAt),
   };
+}
+
+function validateEntry(value: unknown): JsonAutomaticDrawReservationEntry {
+  return validateAutomaticDrawStoredOperation(value);
 }
 
 export function validateAutomaticDrawReservationState(
   value: unknown,
 ): AutomaticDrawReservationState {
+  const candidate = value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+  if (candidate.formatVersion !== 1 && candidate.formatVersion !== 2) {
+    throw new Error("Unsupported automatic Draw state format version.");
+  }
   const state = exactObject(value, [
     "formatVersion",
     "revision",
@@ -93,9 +113,6 @@ export function validateAutomaticDrawReservationState(
     "updatedAt",
     "operations",
   ], "automaticDrawState");
-  if (state.formatVersion !== DRAW_STATE_FORMAT_VERSION) {
-    throw new Error("Unsupported automatic Draw state format version.");
-  }
   if (!Number.isSafeInteger(state.revision) || (state.revision as number) < 0) {
     throw new Error("Automatic Draw state revision is invalid.");
   }
@@ -105,17 +122,35 @@ export function validateAutomaticDrawReservationState(
   if (!Array.isArray(state.operations)) {
     throw new Error("Automatic Draw state operations must be an array.");
   }
-  if (state.operations.length !== state.revision) {
+  const legacy = state.formatVersion === 1;
+  if (legacy && state.operations.length !== state.revision) {
     throw new Error("Automatic Draw state revision does not match its operation count.");
   }
   const operations = state.operations.map((operation, index) =>
-    validateEntry(operation, index + 1));
+    legacy ? validateLegacyEntry(operation, index + 1) : validateEntry(operation));
+  if (!legacy) {
+    const revisions = operations.map(({ revision }) => revision);
+    if (
+      operations.length > (state.revision as number) ||
+      new Set(revisions).size !== revisions.length ||
+      revisions.some((revision) => revision > (state.revision as number)) ||
+      ((state.revision as number) === 0
+        ? operations.length !== 0
+        : Math.max(...revisions) !== state.revision)
+    ) {
+      throw new Error("Automatic Draw operation revisions are inconsistent.");
+    }
+  }
   const keys = new Set(operations.map(({ record }) => record.logicalDrawKey));
   if (keys.size !== operations.length) {
     throw new Error("Automatic Draw state contains duplicate logical operations.");
   }
-  for (const { record } of operations) {
-    if (record.createdAt < createdAt || record.updatedAt > updatedAt) {
+  for (const { record, progression } of operations) {
+    if (
+      record.createdAt < createdAt ||
+      record.updatedAt > updatedAt ||
+      progression.updatedAt > updatedAt
+    ) {
       throw new Error("Automatic Draw operation timestamp is outside state history.");
     }
   }
@@ -162,7 +197,7 @@ export async function inspectAutomaticDrawReservationState(
 }
 
 export class JsonAutomaticDrawReservationStore
-implements AutomaticDrawAtomicReservationStorage {
+implements AutomaticDrawAtomicReservationStorage, AutomaticDrawProgressionStorage {
   constructor(
     private readonly filePathValue: string,
     private readonly hooks: AutomaticDrawReservationFaultHooks = {},
@@ -194,10 +229,16 @@ implements AutomaticDrawAtomicReservationStorage {
         const updated: AutomaticDrawReservationState = {
           ...state,
           revision,
-          updatedAt: now,
-          operations: [...state.operations, { revision, record }],
+          updatedAt: [state.updatedAt, record.updatedAt, now].sort().at(-1) as string,
+          operations: [...state.operations, {
+            revision,
+            record,
+            progression: createReservedAutomaticDrawProgression(record.updatedAt),
+          }],
         };
         const validated = validateAutomaticDrawReservationState(updated);
+        const created = validated.operations.at(-1);
+        if (!created) throw new Error("Created Automatic Draw operation is missing.");
         await atomicWritePrivateFile(
           filePath,
           `${JSON.stringify(validated, null, 2)}\n`,
@@ -206,7 +247,93 @@ implements AutomaticDrawAtomicReservationStorage {
         await this.hooks.afterDurableWrite?.();
         return {
           status: "CREATED",
-          record: validated.operations[revision - 1].record,
+          record: created.record,
+        };
+      });
+    } catch {
+      return { status: "UNKNOWN" };
+    }
+  }
+
+  async read(
+    logicalDrawKey: string,
+  ): Promise<AutomaticDrawProgressionReadResult> {
+    try {
+      const filePath = await assertSafeExternalFilePath(
+        this.filePathValue,
+        DRAW_STATE_SUFFIX,
+      );
+      if (!(await pathIsRegularFile(filePath))) return { status: "NOT_FOUND" };
+      const state = await readState(filePath);
+      const operation = state.operations.find((entry) =>
+        entry.record.logicalDrawKey === logicalDrawKey);
+      return operation
+        ? { status: "FOUND", operation: structuredClone(operation) }
+        : { status: "NOT_FOUND" };
+    } catch {
+      return { status: "UNKNOWN" };
+    }
+  }
+
+  async transitionIfCurrent(
+    transition: AutomaticDrawProgressionTransition,
+  ): Promise<AutomaticDrawAtomicTransitionResult> {
+    try {
+      await this.hooks.beforeLock?.();
+      const filePath = await assertSafeExternalFilePath(
+        this.filePathValue,
+        DRAW_STATE_SUFFIX,
+      );
+      return await withExclusiveFileLock(filePath, async () => {
+        await this.hooks.afterLockAcquired?.();
+        if (!(await pathIsRegularFile(filePath))) {
+          return { status: "CONFLICT", operation: null };
+        }
+        const state = await readState(filePath);
+        const index = state.operations.findIndex((entry) =>
+          entry.record.logicalDrawKey === transition.logicalDrawKey);
+        if (index < 0) return { status: "CONFLICT", operation: null };
+        const current = state.operations[index];
+        if (
+          current.revision !== transition.expectedRevision ||
+          current.progression.state !== transition.expectedState
+        ) {
+          return {
+            status: "CONFLICT",
+            operation: structuredClone(current),
+          };
+        }
+        const validatedTransition = validateAutomaticDrawProgressionTransition(
+          transition,
+          current,
+        );
+        const revision = state.revision + 1;
+        const updatedOperation = validateAutomaticDrawStoredOperation({
+          revision,
+          record: current.record,
+          progression: validateAutomaticDrawProgression(validatedTransition.next),
+        });
+        const operations = [...state.operations];
+        operations[index] = updatedOperation;
+        const updated = validateAutomaticDrawReservationState({
+          ...state,
+          formatVersion: DRAW_STATE_FORMAT_VERSION,
+          revision,
+          updatedAt: [
+            state.updatedAt,
+            updatedOperation.progression.updatedAt,
+          ].sort().at(-1) as string,
+          operations,
+        });
+        await atomicWritePrivateFile(
+          filePath,
+          `${JSON.stringify(updated, null, 2)}\n`,
+          this.hooks,
+        );
+        await this.hooks.afterDurableWrite?.();
+        return {
+          status: "UPDATED",
+          operation: structuredClone(updatedOperation),
         };
       });
     } catch {

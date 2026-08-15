@@ -5,6 +5,11 @@
 This is a working product overview. POP33 is under active development and is
 not a finished product. Unresolved matters are marked `TO DECIDE`.
 
+This document records the current and approved product model. Longer-term
+direction, future ideas, possible milestones, and unresolved product questions
+are kept separately in `docs/PRODUCT_VISION_AND_ROADMAP.md`; inclusion there
+does not approve an implementation requirement or change the rules here.
+
 ## Product vision
 
 POP33 is intended to be a transparent, community-oriented product combining

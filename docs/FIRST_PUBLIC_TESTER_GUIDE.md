@@ -11,15 +11,20 @@ archiwum. Nie używaj prawdziwych środków ani głównego portfela.
 ## Test links and reviewed addresses
 
 - Landing:
-  <https://pop33-demo-git-codex-pop33-recovery-profitmilions-projects.vercel.app>
+  <https://pop33-demo-git-codex-pop33-farcas-b58381-profitmilions-projects.vercel.app>
 - Demo V1:
-  <https://pop33-demo-git-codex-pop33-recovery-profitmilions-projects.vercel.app/#/demo-v1>
+  <https://pop33-demo-git-codex-pop33-farcas-b58381-profitmilions-projects.vercel.app/#/demo-v1>
 - Demo V1 archive:
-  <https://pop33-demo-git-codex-pop33-recovery-profitmilions-projects.vercel.app/#/archive-v1>
+  <https://pop33-demo-git-codex-pop33-farcas-b58381-profitmilions-projects.vercel.app/#/archive-v1>
 - POP33 Demo USD (`dUSDC`) token:
   `0xA7FA084b34c888061757d4b5FBb08a7B53fee786`
 - POP33 Basic V1 contract and approval spender:
-  `0x140DA1b29F0B00b003Cabe86AE1a473d6745f56F`
+  `0xc2fAA10d3E5FEeB88604dc3A1Ab33656fFeBCA98`
+
+These links are the current Pilot 10 **testing Preview**, not Vercel
+Production. The intended future Production host is
+`https://pop33-demo.vercel.app`, but it has not been promoted or approved by
+this checkpoint.
 
 Compare the complete addresses, not only the first and last characters.
 
@@ -50,7 +55,7 @@ Compare the complete addresses, not only the first and last characters.
 5. In MetaMask, tap the **Explore** tab.
 6. Tap the browser icon or use the search/address field in Explore.
 7. Paste the full Demo V1 link:
-   <https://pop33-demo-git-codex-pop33-recovery-profitmilions-projects.vercel.app/#/demo-v1>
+   <https://pop33-demo-git-codex-pop33-farcas-b58381-profitmilions-projects.vercel.app/#/demo-v1>
 8. In **Przygotowanie do Demo**, tap **Connect wallet**.
 9. In MetaMask, select and connect only the separate test account.
 10. Return to POP33 and compare the shortened value under **Wallet** with the
@@ -209,7 +214,7 @@ The app never sends the join before observing the exact allowance on-chain.
 - [ ] In the first MetaMask request, verify all of the following:
   - network: Base Sepolia, chain ID `84532`;
   - token: `0xA7FA084b34c888061757d4b5FBb08a7B53fee786`;
-  - spender: `0x140DA1b29F0B00b003Cabe86AE1a473d6745f56F`;
+  - spender: `0xc2fAA10d3E5FEeB88604dc3A1Ab33656fFeBCA98`;
   - amount or spending cap: exactly `33 dUSDC`, not unlimited.
 - [ ] Approve only if every value is correct.
 - [ ] Watch for **Approve exactly 33 dUSDC: Confirmed and verified**.
@@ -219,7 +224,7 @@ The app never sends the join before observing the exact allowance on-chain.
       becomes the single main action.
 - [ ] When MetaMask opens the join request, confirm it is a separate Base
       Sepolia transaction to the reviewed POP33 Basic V1 contract:
-      `0x140DA1b29F0B00b003Cabe86AE1a473d6745f56F`.
+      `0xc2fAA10d3E5FEeB88604dc3A1Ab33656fFeBCA98`.
 - [ ] Approve the join transaction only after the approval is confirmed.
 - [ ] Do not tap the main action again while the status says
       waiting, submitted, confirming, or verifying.
@@ -289,7 +294,7 @@ verified without an unresolved warning or error.
 ### Check the archive
 
 - [ ] Open **Demo V1 archive** from the Demo page, or use:
-      <https://pop33-demo-git-codex-pop33-recovery-profitmilions-projects.vercel.app/#/archive-v1>.
+      <https://pop33-demo-git-codex-pop33-farcas-b58381-profitmilions-projects.vercel.app/#/archive-v1>.
 - [ ] Confirm the page title is **Demo V1 archive**.
 - [ ] Confirm it says **Base Sepolia test data only**.
 - [ ] Confirm pools and their round rows load without `RPC read failed`.
@@ -310,7 +315,7 @@ Stop immediately and do not approve another request if any of these happens:
 - The approval token is not
   `0xA7FA084b34c888061757d4b5FBb08a7B53fee786`.
 - The approval spender or join contract is not
-  `0x140DA1b29F0B00b003Cabe86AE1a473d6745f56F`.
+  `0xc2fAA10d3E5FEeB88604dc3A1Ab33656fFeBCA98`.
 - Any website or person asks for a seed phrase, Secret Recovery Phrase, or
   private key.
 - A MetaMask request is unclear or does not match the action you just started.
@@ -324,8 +329,8 @@ Stop immediately and do not approve another request if any of these happens:
   save the hash, inspect BaseScan, and report the result.
 - The pool is not **Open**, the position is inactive, or
   **Withdraw from open pool** is disabled.
-- The pool reaches 100/100. The 100th join locks the pool and withdrawal is no
-  longer available.
+- The pool reaches 10/10. The 10th join locks the Pilot 10 pool and withdrawal
+  is no longer available.
 - The visible balance, allowance, active position, refund, or escrow change
   does not match the expected result.
 

@@ -123,11 +123,11 @@ The repository currently provides:
 - a getter-based draw and pool archive;
 - a local operator that exercises the complete Basic V1 lifecycle.
 
-The Public Pilot 10 profile is implemented and tested locally but still needs
-its separate Base Sepolia contract deployment and public Preview environment.
-The complete 100-position lifecycle has not been executed publicly on Base
-Sepolia. Current implementation coverage and limitations are tracked in
-`docs/STATUS.md`.
+The Public Pilot 10 profile is deployed on Base Sepolia and connected to its
+branch Vercel Preview. Pilot 10 Pool 1 completed its ten-Draw, ten-Claim
+lifecycle and reached `Finished` with zero accounted escrow. The complete
+100-position lifecycle has not been executed publicly on Base Sepolia. Current
+implementation coverage and limitations are tracked in `docs/STATUS.md`.
 
 ## Intended users
 
@@ -162,10 +162,11 @@ future mainnet USDC payment asset.
 The first controlled `Pop33BasicV1` testnet release is named POP33 Demo
 V1. Its explicitly non-production scope, test-token limitations, deployment
 status, and intended end-to-end demonstration are defined in `docs/DEMO_V1.md`.
-The original 100-position Demo V1 is deployed on Base Sepolia, connected to the
-separate public Demo V1 frontend, and source-verified in BaseScan. A separate
-10-position pilot profile is prepared for a new Base Sepolia deployment. The
-current release remains on Vercel Preview; Production remains separate.
+The original 100-position Demo V1 is deployed on Base Sepolia and remains a
+historical deployment. The separate 10-position Pilot 10 contract is now the
+current branch Preview configuration and has completed Pool 1 on Base Sepolia.
+The current release remains on Vercel Preview; Production remains separate and
+has not been promoted by this checkpoint.
 
 The public frontend surface for this release consists of the landing page,
 `#/demo-v1`, and `#/archive-v1`. Preserved legacy contract components and the

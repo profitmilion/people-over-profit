@@ -177,7 +177,7 @@ to that exact block.
 
 The canonical contract address comes from `src/demo-v1/safety.ts`:
 
-`0x140DA1b29F0B00b003Cabe86AE1a473d6745f56F`
+`0xc2fAA10d3E5FEeB88604dc3A1Ab33656fFeBCA98`
 
 The ABI is imported from `src/demo-v1/abi.ts`. The adapter does not maintain a
 second handwritten ABI.
@@ -224,7 +224,10 @@ a hash is known, fallback is limited to receipt, event, and state verification.
 Operator output reports only provider name/index and retry/failover counts.
 
 The contract override is read-only and must be a valid non-zero address. The
-default remains the reviewed Demo V1 address.
+default remains the reviewed current Pilot 10 Demo V1 address. The previous
+100-position deployment at `0x140DA1b29F0B00b003Cabe86AE1a473d6745f56F`
+remains historical and can still be inspected only through an explicit
+read-only override.
 
 ### Pool discovery and block consistency
 
@@ -251,9 +254,10 @@ requested range.
 ### Event logs
 
 No event logs are used. Current direct getters contain every field required by
-the supervisor, and `poolCount()` discovers the complete ID range. The
-canonical POP33 deployment block is `44144873`, as recorded in
-`docs/DEMO_V1.md`, but it is not queried by this adapter.
+the supervisor, and `poolCount()` discovers the complete ID range. Block
+`44144873`, recorded in `docs/DEMO_V1.md`, belongs to the historical
+100-position deployment and is not the Pilot 10 deployment block. The adapter
+does not query either deployment block.
 
 Any future log-backed extension must use a positive, explicit deployment block
 and a bounded range. Missing deployment metadata is a hard error; scanning

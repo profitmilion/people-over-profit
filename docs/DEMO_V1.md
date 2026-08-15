@@ -35,17 +35,18 @@ public deployment path.
 ## Public Pilot 10 profile
 
 The 9 August 2026 Public Pilot 10 is a separate Base Sepolia alpha profile,
-not a mutation of the deployed 100-position contract. Its prepared constructor
-configuration is capacity `10` with the existing 3,600-second draw interval and
-the existing deployed dUSDC token. It retains the 33 dUSDC entry and ten draw
-rounds; each round is therefore 33 dUSDC and the pool's total claim accounting
-is exactly 330 dUSDC. The same allocation algorithm locks Pool 1 on Join 10 and
-routes Join 11 to the oldest qualifying open pool or creates Pool 2 when needed.
+not a mutation of the deployed 100-position contract. It is deployed at
+`0xc2fAA10d3E5FEeB88604dc3A1Ab33656fFeBCA98` with capacity `10`, the existing
+3,600-second draw interval, and the existing deployed dUSDC token. It retains
+the 33 dUSDC entry and ten draw rounds; each round is therefore 33 dUSDC and
+the pool's total claim accounting is exactly 330 dUSDC. The same allocation
+algorithm locks Pool 1 on Join 10 and routes Join 11 to the oldest qualifying
+open pool or creates Pool 2 when needed.
 
-Status: **implemented and tested locally; Base Sepolia deployment not yet
-recorded**. Do not point a public frontend at a pilot address until its bytecode,
-token linkage, capacity, prize totals, initial Pool 1 state, and chain ID have
-all passed the deployment verifier and a deployment-register row is added.
+Status: **deployed on Base Sepolia and active through the branch Vercel Preview
+for alpha testing**. Pilot 10 Pool 1 completed its full ten-Draw, ten-Claim
+lifecycle and reached `Finished` with zero accounted escrow. This is testnet
+evidence, not Production promotion or mainnet readiness.
 
 ## Demo V1 technical configuration
 
@@ -324,7 +325,16 @@ and initial state were checked directly through Base Sepolia RPC.
 
 | Version | Network | Chain ID | Demo token contract | Pop33 contract | Source commit | Deployment date | Status | Randomness | Warnings and limitations |
 | --- | --- | ---: | --- | --- | --- | --- | --- | --- | --- |
-| POP33 Demo V1 dUSDC pair | Base Sepolia | 84532 | `0xA7FA084b34c888061757d4b5FBb08a7B53fee786` | `0x140DA1b29F0B00b003Cabe86AE1a473d6745f56F` | `1db086dd958cf34bb72bd8f7b8c9f93dab4361a0` | 2026-07-14 UTC | **DEPLOYED — PUBLIC PREVIEW ACTIVE; SOURCES VERIFIED** | temporary block-derived selection | dUSDC has no value; faucet supply is uncapped and cooldown is multi-wallet bypassable; Base Sepolia ETH required; no VRF, Automation, KYC, or production safety |
+| POP33 Demo V1 dUSDC pair | Base Sepolia | 84532 | `0xA7FA084b34c888061757d4b5FBb08a7B53fee786` | `0x140DA1b29F0B00b003Cabe86AE1a473d6745f56F` | `1db086dd958cf34bb72bd8f7b8c9f93dab4361a0` | 2026-07-14 UTC | **DEPLOYED — HISTORICAL PUBLIC PREVIEW; SOURCES VERIFIED** | temporary block-derived selection | dUSDC has no value; faucet supply is uncapped and cooldown is multi-wallet bypassable; Base Sepolia ETH required; no VRF, Automation, KYC, or production safety |
+
+The row above is the historical 100-position deployment. The current Public
+Pilot 10 contract is
+`0xc2fAA10d3E5FEeB88604dc3A1Ab33656fFeBCA98`, linked to the same dUSDC token on
+Base Sepolia. Its deployment transaction, deployment block, and source commit
+are not yet recorded in this register and require historical reconstruction
+and verification;
+they must not be inferred from the historical row. Pilot 10 is active only as
+an alpha testing Preview, not Vercel Production.
 
 ### Deployment transactions
 

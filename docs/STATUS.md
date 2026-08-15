@@ -1,6 +1,6 @@
 # POP33 Development Status
 
-Last reviewed: 2026-08-13
+Last reviewed: 2026-08-15
 
 Branch reviewed: `codex/pop33-farcaster-pilot-10`
 
@@ -94,6 +94,13 @@ reported `Claimable`, `completedDrawRoundCount=10`, `missingDrawCount=0`, two
 claimed prizes, eight missing claims, and `264000000` base units escrowed. The
 eight remaining winners then claimed manually through the branch Vercel
 Preview UI, completing all ten claims and the pool lifecycle.
+
+A fresh read-only lifecycle supervisor verification on 2026-08-15 pinned block
+`45505065` (block timestamp `2026-08-15 07:20:18 UTC`). Pool 1 was `Finished`
+with `completedDrawRoundCount=10`, `claimedPrizeCount=10`,
+`missingDrawCount=0`, `missingClaimCount=0`, and `escrowedAmount=0`; its
+`nextAction` was `FINISHED`. The snapshot used the credential-free Base public
+RPC read path and loaded no signer or transaction capability.
 
 The controlled Draw operations also validated the optional independent
 Alchemy Base Sepolia fallback in a real failover during Draw #6, with both

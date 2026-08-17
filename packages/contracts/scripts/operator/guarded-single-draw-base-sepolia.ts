@@ -4,9 +4,15 @@ import { dirname, isAbsolute, resolve } from "node:path";
 import {
   createPublicClient,
   createWalletClient,
+  concatHex,
+  encodeFunctionData,
   getAddress,
   http,
   isAddress,
+  parseAbi,
+  size,
+  toHex,
+  toRlp,
   type Address,
   type Hex,
 } from "viem";
@@ -37,9 +43,25 @@ import type { DrawPreSignerConsumerResult } from "./draw-pre-signer-consumer.js"
 import {
   GuardedDrawReadOnlyRpcFailover,
 } from "./guarded-draw-rpc-failover.js";
+import type {
+  GuardedDrawExecutionReadinessReadDependencies,
+} from "./automatic-draw-runner-v1-readiness.js";
 
 const PRIVATE_KEY = /^0x[0-9a-fA-F]{64}$/;
 const AUDIT_SUFFIX = ".guarded-draw-audit.json";
+const GAS_PRICE_ORACLE_ADDRESS =
+  "0x420000000000000000000000000000000000000F";
+const L1_BLOCK_ADDRESS = "0x4200000000000000000000000000000000000015";
+const MAX_PRE_SIGNER_NONCE = (1n << 64n) - 1n;
+const JOVIAN_OPERATOR_FEE_MULTIPLIER = 100n;
+const gasPriceOracleFeeAbi = parseAbi([
+  "function getL1FeeUpperBound(uint256 unsignedTxSize) view returns (uint256)",
+]);
+const l1BlockFeeAbi = parseAbi([
+  "function operatorFeeScalar() view returns (uint32)",
+  "function operatorFeeConstant() view returns (uint64)",
+  "function daFootprintGasScalar() view returns (uint16)",
+]);
 
 export interface BaseSepoliaGuardedDrawOptions {
   rpcUrl: string;
@@ -115,7 +137,7 @@ function loadPrivateKey(
 
 export function createBaseSepoliaGuardedDrawDependencies(
   options: BaseSepoliaGuardedDrawOptions,
-): GuardedDrawDependencies {
+): GuardedDrawDependencies & GuardedDrawExecutionReadinessReadDependencies {
   const rpcUrl = validateLifecycleSupervisorRpcUrl(options.rpcUrl);
   const rpcUrls = [...new Set([
     rpcUrl,
@@ -246,6 +268,100 @@ export function createBaseSepoliaGuardedDrawDependencies(
         functionName: input.functionName,
         args: input.args,
       })),
+    readNativeBalance: (input) => rpcFailover.read(
+      "public operator native balance",
+      async (client) => ({
+        blockNumber: input.blockNumber,
+        nativeBalanceWei: await client.publicClient.getBalance({
+          address: input.address,
+          blockNumber: input.blockNumber,
+        }),
+      }),
+    ),
+    readDrawNativeFeeUpperBounds: (input) => rpcFailover.read(
+      "complete bounded Base Draw fee data",
+      async (client) => {
+        const blockNumber = await client.publicClient.getBlockNumber();
+        const fees = await client.publicClient.estimateFeesPerGas({
+          type: "eip1559",
+        });
+        const calldata = encodeFunctionData({
+          abi: demoV1Abi,
+          functionName: "executeDraw",
+          args: [input.poolId, input.roundNumber],
+        });
+        // EIP-2681 bounds nonce to uint64. Using that maximum yields the
+        // largest unsigned EIP-1559 envelope for the exact Draw calldata.
+        const unsignedTransaction = concatHex([
+          "0x02",
+          toRlp([
+            toHex(baseSepolia.id),
+            toHex(MAX_PRE_SIGNER_NONCE),
+            fees.maxPriorityFeePerGas > 0n
+              ? toHex(fees.maxPriorityFeePerGas)
+              : "0x",
+            toHex(fees.maxFeePerGas),
+            toHex(input.bufferedGasLimit),
+            input.contractAddress,
+            "0x",
+            calldata,
+            [],
+          ]),
+        ]);
+        const l1UnsignedTransactionSizeBytes = BigInt(
+          size(unsignedTransaction),
+        );
+        const [
+          l1DataFeeUpperBoundWei,
+          operatorFeeScalar,
+          operatorFeeConstantWei,
+        ] = await Promise.all([
+          client.publicClient.readContract({
+            address: GAS_PRICE_ORACLE_ADDRESS,
+            abi: gasPriceOracleFeeAbi,
+            functionName: "getL1FeeUpperBound",
+            args: [l1UnsignedTransactionSizeBytes],
+            blockNumber,
+          }),
+          client.publicClient.readContract({
+            address: L1_BLOCK_ADDRESS,
+            abi: l1BlockFeeAbi,
+            functionName: "operatorFeeScalar",
+            blockNumber,
+          }),
+          client.publicClient.readContract({
+            address: L1_BLOCK_ADDRESS,
+            abi: l1BlockFeeAbi,
+            functionName: "operatorFeeConstant",
+            blockNumber,
+          }),
+          // Proves the pinned Base block exposes the current Jovian fee semantics.
+          client.publicClient.readContract({
+            address: L1_BLOCK_ADDRESS,
+            abi: l1BlockFeeAbi,
+            functionName: "daFootprintGasScalar",
+            blockNumber,
+          }),
+        ]);
+        if (fees.maxFeePerGas <= 0n) {
+          throw new Error("Public provider returned no positive bounded fee.");
+        }
+        const operatorFeeUpperBoundWei =
+          input.bufferedGasLimit *
+            BigInt(operatorFeeScalar) *
+            JOVIAN_OPERATOR_FEE_MULTIPLIER +
+          operatorFeeConstantWei;
+        return {
+          blockNumber,
+          boundedFeePerGasWei: fees.maxFeePerGas,
+          l1UnsignedTransactionSizeBytes,
+          l1DataFeeUpperBoundWei,
+          operatorFeeScalar: BigInt(operatorFeeScalar),
+          operatorFeeConstantWei,
+          operatorFeeUpperBoundWei,
+        };
+      },
+    ),
     async loadExecutionClient(): Promise<GuardedDrawExecutionClient> {
       const expectedAddress = requirePublicOperatorAddress(publicOperator);
       const account = loadPrivateKey(

@@ -99,10 +99,12 @@ async function readProgression(
 
 function stopped(
   logicalDrawKey: string,
-  status: DrawPreSignerConsumerStatus,
+  status: Exclude<DrawPreSignerConsumerStatus, "CONSUMER_READY">,
   reason: string,
   operation: AutomaticDrawStoredOperation | null = null,
-): DrawPreSignerConsumerResult {
+): DrawPreSignerConsumerResult & {
+  status: Exclude<DrawPreSignerConsumerStatus, "CONSUMER_READY">;
+} {
   return {
     status,
     logicalDrawKey,
@@ -123,7 +125,7 @@ function stopped(
 async function loadExpectedProgression(
   config: AutomaticDrawDurableRuntimeConfig,
   logicalDrawKey: string,
-): Promise<AutomaticDrawStoredOperation | DrawPreSignerConsumerResult> {
+): Promise<AutomaticDrawStoredOperation | ReturnType<typeof stopped>> {
   const read = await readProgression(config, logicalDrawKey);
   if (read.status === "UNKNOWN") {
     return stopped(
@@ -164,9 +166,42 @@ async function loadExpectedProgression(
 }
 
 function isConsumerResult(
-  value: AutomaticDrawStoredOperation | DrawPreSignerConsumerResult,
-): value is DrawPreSignerConsumerResult {
+  value: AutomaticDrawStoredOperation | ReturnType<typeof stopped>,
+): value is ReturnType<typeof stopped> {
   return "status" in value;
+}
+
+export type AutomaticDrawDurableProgressionInspection =
+  | {
+      status: "READY";
+      operation: AutomaticDrawStoredOperation;
+      reason: string;
+    }
+  | {
+      status: Exclude<DrawPreSignerConsumerStatus, "CONSUMER_READY">;
+      operation: null;
+      reason: string;
+    };
+
+/** Re-reads one exact progression checkpoint without migrating or writing it. */
+export async function inspectAutomaticDrawDurableProgression(
+  options: AutomaticDrawDurableRuntimeOptions,
+): Promise<AutomaticDrawDurableProgressionInspection> {
+  const inspected = await loadExpectedProgression(
+    options,
+    options.logicalDrawKey,
+  );
+  return isConsumerResult(inspected)
+    ? {
+        status: inspected.status,
+        operation: null,
+        reason: inspected.reason,
+      }
+    : {
+        status: "READY",
+        operation: structuredClone(inspected),
+        reason: "The exact durable PREFLIGHT_READY progression is current.",
+      };
 }
 
 /** One-shot automatic composition over the existing durable read paths. */

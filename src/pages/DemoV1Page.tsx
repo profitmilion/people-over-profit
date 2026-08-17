@@ -22,9 +22,15 @@ import {
 import { demoV1Config, getDemoV1ConfigErrorMessage } from "../demo-v1/config";
 import { useDemoV1Actions } from "../hooks/useDemoV1Actions";
 import { useDemoV1Data } from "../hooks/useDemoV1Data";
-import type { DemoV1TxPhase } from "../demo-v1/safety";
+import {
+  isDemoV1ManualDrawEnabled,
+  type DemoV1TxPhase,
+} from "../demo-v1/safety";
 
 const explorer = "https://sepolia.basescan.org";
+const manualDrawEnabled = isDemoV1ManualDrawEnabled(
+  import.meta.env.VITE_POP33_MANUAL_DRAW_ENABLED,
+);
 
 const transactionPhaseLabels: Record<DemoV1TxPhase, string> = {
   idle: "Idle",
@@ -406,13 +412,19 @@ export default function DemoV1Page() {
                   <div className="mt-1 text-sm text-slate-400">
                     Scheduled: {formatTimestamp(currentRound.scheduledAt)} · {formatCountdown(currentRound.scheduledAt, now)}
                   </div>
-                  <Button
-                    className="mt-3"
-                    disabled={!data.runtimeIdentityVerified || !drawReady || !data.isConnected || !data.isCorrectChain || !hasGas || actions.isBusy}
-                    onClick={() => handle(actions.executeDraw(currentPool.id, currentRoundNumber))}
-                  >
-                    Execute permissionless test draw
-                  </Button>
+                  {manualDrawEnabled ? (
+                    <Button
+                      className="mt-3"
+                      disabled={!data.runtimeIdentityVerified || !drawReady || !data.isConnected || !data.isCorrectChain || !hasGas || actions.isBusy}
+                      onClick={() => handle(actions.executeDraw(currentPool.id, currentRoundNumber))}
+                    >
+                      Execute permissionless test draw
+                    </Button>
+                  ) : (
+                    <div className="mt-3 text-sm text-amber-300">
+                      Manual Draw is temporarily disabled during the controlled automatic one-shot activation.
+                    </div>
+                  )}
                 </div>
               ) : currentPool.status === 1 || currentPool.status === 2 ? (
                 <div className="rounded-xl border border-slate-800 p-4 text-sm text-slate-400">

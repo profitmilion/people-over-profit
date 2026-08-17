@@ -29,6 +29,7 @@ import {
   assertWithdrawalPostReceipt,
   classifyDemoV1TransactionError,
   exactDemoV1ApprovalAmount,
+  isDemoV1ManualDrawEnabled,
   refreshDemoV1AfterConfirmation,
   runBoundedDemoV1ReadVerification,
   runDemoV1SingleFlight,
@@ -220,6 +221,23 @@ test("draw eligibility requires a due pending round in a locked or drawing pool"
   assert.equal(canExecuteDraw({ ...valid, scheduledAt: 0n }), false);
   assert.equal(canExecuteDraw({ ...valid, scheduledAt: 1_001n }), false);
   assert.equal(canExecuteDraw({ ...valid, completedRounds: 10n }), false);
+});
+
+test("manual Draw defaults off for the one-shot cutover while Claim eligibility remains unchanged", () => {
+  assert.equal(isDemoV1ManualDrawEnabled(undefined), false);
+  assert.equal(isDemoV1ManualDrawEnabled("false"), false);
+  assert.equal(isDemoV1ManualDrawEnabled("true"), true);
+
+  assert.equal(canClaim({
+    configured: true,
+    connected: true,
+    correctChain: true,
+    user: demoUser,
+    winner: demoUser,
+    roundStatus: 1,
+    claimed: false,
+    prizeAmount: 33_000_000n,
+  }), true);
 });
 
 test("claim eligibility requires the connected winner and an unclaimed finalized round", () => {

@@ -51,13 +51,30 @@
   --simulate-draw lifecycle-plan.json` adds exact `executeDraw(poolId,
   roundNumber)` calldata, public `msg.sender` simulation, and gas estimation.
   It never signs or sends.
-- `--execute-draw` is a future, separately authorized one-transaction path. It
+- `--execute-draw` is the retained manual, separately authorized
+  one-transaction path. It
   requires exact `--confirm-chain`, `--confirm-contract`, `--confirm-pool`, and
   `--confirm-round` values, rechecks the latest block, never retries a
   broadcast, persists the hash before receipt waiting, and performs a
   supervisor post-check. It was not run against Base Sepolia in this
   milestone. The execute-only key comes from
   `BASE_SEPOLIA_DRAW_OPERATOR_PRIVATE_KEY`, never a CLI argument.
+- During the controlled automatic one-shot window,
+  `POP33_AUTOMATIC_DRAW_LIVE_TEST_ACTIVE=true` blocks the retained manual
+  `--execute-draw` command without affecting inspect, simulate, or other
+  supervisor modes.
+- `npm run automatic-draw-one-shot -- --mode prepare --pool ID --plan
+  FILE.json` runs the existing reservation, preflight/progression, journal
+  handoff, and execution-readiness pipeline. It removes the execute-only key
+  from the child environment and never loads a signer, acquires an execution
+  nonce, prepares a transaction, broadcasts, or waits for a receipt.
+- `npm run automatic-draw-one-shot -- --mode execute-once --plan FILE.json
+  --confirm-chain 84532 --confirm-contract ADDRESS --confirm-pool ID
+  --confirm-round NUMBER` requires the durable paths and exact revisions
+  printed by `prepare`, plus `POP33_AUTOMATIC_DRAW_LIVE_TEST_ACTIVE=true`.
+  It reruns readiness, invokes the reviewed coordinator exactly once, prints
+  only public sanitized evidence, and exits without retrying or advancing to
+  another Draw.
 - Guarded runs create ignored atomic `*.guarded-draw-audit.json` records. Use
   `--audit-log` to select an explicit path; no key or credential-bearing RPC
   URL is included.

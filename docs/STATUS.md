@@ -122,8 +122,18 @@ current approved Basic V1 rule. `TO DECIDE`: whether a future product version
 should instead release pool slots after all ten Draws complete, independently
 of outstanding winner claims.
 
-The next planned operator milestone is Automatic Draw Runner V1. The next
-public-product target remains one Farcaster Mini App on one stable short URL;
+Automatic Draw Runner V1 now has a durable read-only decision, reservation,
+preflight/progression, journal handoff, execution readiness, and one-shot
+execution core. A temporary activation layer adds explicit `prepare` and
+`execute-once` modes: `prepare` cannot access the signer boundary, while
+`execute-once` requires exact public chain, contract, pool, round, plan, and
+revision bindings before invoking one coordinator call. The public manual Draw
+button defaults off during this controlled cutover, and the retained manual
+supervisor execute command is blocked when the public activation flag is set.
+No live automatic Base Sepolia Draw has been executed, and no scheduler,
+automatic retry, Draw loop, or automatic Claim exists.
+
+The next public-product target remains one Farcaster Mini App on one stable short URL;
 this is a target, not evidence of Production promotion or Farcaster support.
 A POP33-operated Base Sepolia faucet is also planned, with its scope, safety
 limits, and operating model `TO DECIDE`. No private RPC URL or infrastructure

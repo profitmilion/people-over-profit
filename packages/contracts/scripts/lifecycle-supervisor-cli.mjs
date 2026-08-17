@@ -162,6 +162,15 @@ if (
   process.exit(2);
 }
 if (
+  executeDraw &&
+  process.env.POP33_AUTOMATIC_DRAW_LIVE_TEST_ACTIVE === "true"
+) {
+  console.error(
+    "Manual --execute-draw is disabled while the automatic one-shot live-test cutover is active.",
+  );
+  process.exit(2);
+}
+if (
   exact99Readiness &&
   guardedDrawModeCount > 0
 ) {

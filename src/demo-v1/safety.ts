@@ -185,6 +185,10 @@ export class DemoV1SingleFlightGuard {
   }
 }
 
+export function isDemoV1ManualDrawEnabled(value: string | undefined): boolean {
+  return value === "true";
+}
+
 export async function runDemoV1SingleFlight<T>(
   guard: DemoV1SingleFlightGuard,
   operation: () => Promise<T>,

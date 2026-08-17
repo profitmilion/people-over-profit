@@ -108,10 +108,33 @@ export interface GuardedDrawExecutionClient {
     functionName: "executeDraw";
     args: readonly [bigint, bigint];
     gasLimit: bigint;
+    nonce?: number;
   }): Promise<{
     gasLimit: bigint;
     broadcast(): Promise<Hex>;
   }>;
+}
+
+export type GuardedDrawOneShotTransactionResult =
+  | {
+      status: "CONFIRMED" | "REVERTED";
+      transactionHash: Hex;
+      receipt: GuardedDrawReceipt;
+      reason: string;
+    }
+  | {
+      status: "RECONCILIATION_REQUIRED";
+      transactionHash: Hex | null;
+      receipt: null;
+      reason: string;
+    };
+
+export interface GuardedDrawOneShotTransactionInput {
+  prepare(nonce: number): Promise<{
+    gasLimit: bigint;
+    broadcast(): Promise<Hex>;
+  }>;
+  waitForReceipt(transactionHash: Hex): Promise<GuardedDrawReceipt>;
 }
 
 export interface GuardedDrawPreparedIntentContext {
@@ -133,10 +156,19 @@ export interface GuardedDrawDependencies
   readSnapshot(blockNumber?: bigint): Promise<SystemSnapshot>;
   readPublicIdentity(blockNumber: bigint): Promise<GuardedDrawPublicIdentity>;
   getLatestBlockNumber(): Promise<bigint>;
+  getTransactionCount?(
+    address: Address,
+    blockTag: "latest" | "pending",
+  ): Promise<number>;
   consumePreparedDrawIntent?(
     context: GuardedDrawPreparedIntentContext,
   ): Promise<DrawPreSignerConsumerResult>;
-  loadExecutionClient?(): Promise<GuardedDrawExecutionClient>;
+  loadExecutionClient?(
+    expectedOperatorAddress: Address,
+  ): Promise<GuardedDrawExecutionClient>;
+  executeOneDrawTransaction?(
+    input: GuardedDrawOneShotTransactionInput,
+  ): Promise<GuardedDrawOneShotTransactionResult>;
   waitForReceipt?(transactionHash: Hex): Promise<GuardedDrawReceipt>;
   writeAudit?(record: GuardedDrawAuditRecord): Promise<void>;
   getRpcTelemetry?(): GuardedDrawRpcTelemetry;
@@ -738,7 +770,7 @@ export async function executeGuardedSingleDraw(
       );
     }
 
-    const execution = await dependencies.loadExecutionClient();
+    const execution = await dependencies.loadExecutionClient(operatorAddress);
     if (
       execution.chainId !== BigInt(DEMO_V1_CHAIN_ID) ||
       execution.account !== operatorAddress ||
@@ -751,67 +783,129 @@ export async function executeGuardedSingleDraw(
       );
     }
 
-    const prepared = await execution.prepareDraw({
-      address: DEMO_V1_CONTRACT_ADDRESS,
-      abi: demoV1Abi,
-      functionName: "executeDraw",
-      args: argsFor(plan),
-      gasLimit: gasPlan.gasLimit,
-    });
-    if (prepared.gasLimit < gasPlan.gasLimit) {
-      throw new GuardedDrawStop(
-        "BLOCKED",
-        `Final gas limit ${prepared.gasLimit} is below the required buffered limit ${gasPlan.gasLimit}; transaction was not signed or broadcast.`,
-        { ...current, gasLimit: prepared.gasLimit },
-      );
-    }
-    current = { ...current, gasLimit: prepared.gasLimit };
-    const transactionHash = await prepared.broadcast();
-    current = {
-      ...current,
-      status: "TRANSACTION_SUBMITTED",
-      exitCode: GUARDED_DRAW_EXIT_CODES.TRANSACTION_SUBMITTED,
-      lifecyclePhase: "BROADCASTED",
-      broadcastOccurred: true,
-      transactionHash,
-      message:
-        "One Draw transaction was submitted. It will never be resent automatically.",
-    };
-    preserveEvidence(current);
-    try {
-      await audit(dependencies, current);
-    } catch (error) {
-      return {
-        ...current,
-        message:
-          `Transaction hash could not be persisted; do not resend and verify it manually: ${sanitizeGuardedDrawError(error)}`,
-      };
-    }
-
     let receipt: GuardedDrawReceipt;
-    try {
-      receipt = await dependencies.waitForReceipt(transactionHash);
-    } catch (error) {
-      return {
+    if (dependencies.executeOneDrawTransaction) {
+      const coordinated = await dependencies.executeOneDrawTransaction({
+        prepare: async (nonce) => {
+          const prepared = await execution.prepareDraw({
+            address: DEMO_V1_CONTRACT_ADDRESS,
+            abi: demoV1Abi,
+            functionName: "executeDraw",
+            args: argsFor(plan),
+            gasLimit: gasPlan.gasLimit,
+            nonce,
+          });
+          if (prepared.gasLimit < gasPlan.gasLimit) {
+            throw new GuardedDrawStop(
+              "BLOCKED",
+              `Final gas limit ${prepared.gasLimit} is below the required buffered limit ${gasPlan.gasLimit}; transaction was not signed or broadcast.`,
+              { ...current, gasLimit: prepared.gasLimit },
+            );
+          }
+          current = { ...current, gasLimit: prepared.gasLimit };
+          return prepared;
+        },
+        waitForReceipt: dependencies.waitForReceipt,
+      });
+      if (coordinated.status === "RECONCILIATION_REQUIRED") {
+        current = {
+          ...current,
+          status: coordinated.transactionHash
+            ? "TRANSACTION_SUBMITTED"
+            : "RPC_FAILURE",
+          exitCode: coordinated.transactionHash
+            ? GUARDED_DRAW_EXIT_CODES.TRANSACTION_SUBMITTED
+            : GUARDED_DRAW_EXIT_CODES.RPC_FAILURE,
+          lifecyclePhase: coordinated.transactionHash
+            ? "BROADCASTED"
+            : "PRE_BROADCAST",
+          broadcastOccurred: coordinated.transactionHash !== null,
+          transactionHash: coordinated.transactionHash,
+          message: coordinated.reason,
+        };
+        if (coordinated.transactionHash) preserveEvidence(current);
+        return current;
+      }
+      receipt = coordinated.receipt;
+      current = {
         ...current,
+        status: coordinated.status === "REVERTED"
+          ? "RECEIPT_REVERTED"
+          : "TRANSACTION_SUBMITTED",
+        exitCode: coordinated.status === "REVERTED"
+          ? GUARDED_DRAW_EXIT_CODES.RECEIPT_REVERTED
+          : GUARDED_DRAW_EXIT_CODES.TRANSACTION_SUBMITTED,
+        lifecyclePhase: "RECEIPT_KNOWN",
+        broadcastOccurred: true,
+        transactionSucceeded: receipt.status === "success",
+        transactionHash: coordinated.transactionHash,
+        receipt,
+        message: coordinated.reason,
+      };
+      preserveEvidence(current);
+      if (coordinated.status === "REVERTED") return current;
+    } else {
+      const prepared = await execution.prepareDraw({
+        address: DEMO_V1_CONTRACT_ADDRESS,
+        abi: demoV1Abi,
+        functionName: "executeDraw",
+        args: argsFor(plan),
+        gasLimit: gasPlan.gasLimit,
+      });
+      if (prepared.gasLimit < gasPlan.gasLimit) {
+        throw new GuardedDrawStop(
+          "BLOCKED",
+          `Final gas limit ${prepared.gasLimit} is below the required buffered limit ${gasPlan.gasLimit}; transaction was not signed or broadcast.`,
+          { ...current, gasLimit: prepared.gasLimit },
+        );
+      }
+      current = { ...current, gasLimit: prepared.gasLimit };
+      const transactionHash = await prepared.broadcast();
+      current = {
+        ...current,
+        status: "TRANSACTION_SUBMITTED",
+        exitCode: GUARDED_DRAW_EXIT_CODES.TRANSACTION_SUBMITTED,
+        lifecyclePhase: "BROADCASTED",
+        broadcastOccurred: true,
+        transactionHash,
         message:
-          `Receipt lookup failed after broadcast; transaction outcome is unknown. Preserve the hash, do not retry, and verify it manually: ${sanitizeGuardedDrawError(error)}`,
+          "One Draw transaction was submitted. It will never be resent automatically.",
       };
-    }
-    current = {
-      ...current,
-      lifecyclePhase: "RECEIPT_KNOWN",
-      transactionSucceeded: receipt.status === "success",
-      receipt,
-    };
-    preserveEvidence(current);
-    if (receipt.status !== "success") {
-      return {
+      preserveEvidence(current);
+      try {
+        await audit(dependencies, current);
+      } catch (error) {
+        return {
+          ...current,
+          message:
+            `Transaction hash could not be persisted; do not resend and verify it manually: ${sanitizeGuardedDrawError(error)}`,
+        };
+      }
+
+      try {
+        receipt = await dependencies.waitForReceipt(transactionHash);
+      } catch (error) {
+        return {
+          ...current,
+          message:
+            `Receipt lookup failed after broadcast; transaction outcome is unknown. Preserve the hash, do not retry, and verify it manually: ${sanitizeGuardedDrawError(error)}`,
+        };
+      }
+      current = {
         ...current,
-        status: "RECEIPT_REVERTED",
-        exitCode: GUARDED_DRAW_EXIT_CODES.RECEIPT_REVERTED,
-        message: "Draw receipt is reverted. No resend is allowed.",
+        lifecyclePhase: "RECEIPT_KNOWN",
+        transactionSucceeded: receipt.status === "success",
+        receipt,
       };
+      preserveEvidence(current);
+      if (receipt.status !== "success") {
+        return {
+          ...current,
+          status: "RECEIPT_REVERTED",
+          exitCode: GUARDED_DRAW_EXIT_CODES.RECEIPT_REVERTED,
+          message: "Draw receipt is reverted. No resend is allowed.",
+        };
+      }
     }
     const postSnapshot = await dependencies.readSnapshot(receipt.blockNumber);
     const postReport = analyzeLifecycleSnapshot(postSnapshot);

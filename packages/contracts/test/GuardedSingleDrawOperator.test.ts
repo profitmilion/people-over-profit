@@ -12,6 +12,7 @@ import {
   type LifecycleActionPlan,
 } from "../scripts/operator/lifecycle-action-plan.js";
 import {
+  createBaseSepoliaGuardedDrawDependencies,
   GuardedDrawAuditFile,
 } from "../scripts/operator/guarded-single-draw-base-sepolia.js";
 import {
@@ -41,6 +42,12 @@ import {
 } from "../scripts/operator/lifecycle-supervisor-base-sepolia.js";
 
 const OPERATOR = getAddress("0x0000000000000000000000000000000000000042");
+const APPROVED_PILOT_OPERATOR = getAddress(
+  "0xCaeb6D19d6d85349a08172e0efb9bb8541E4BeFB",
+);
+const OTHER_PUBLIC_OPERATOR = getAddress(
+  "0x0000000000000000000000000000000000000043",
+);
 const HASH =
   "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" as Hex;
 
@@ -938,5 +945,53 @@ describe("guarded single-Draw operator", function () {
     assert.equal(simulateMock.counters.consumers, 0);
     assert.equal(inspectMock.counters.loads, 0);
     assert.equal(simulateMock.counters.loads, 0);
+  });
+
+  it("58. rejects a different Base adapter operator before reading the secret environment", async function () {
+    let secretReads = 0;
+    const environment = new Proxy({} as NodeJS.ProcessEnv, {
+      get(target, property, receiver) {
+        if (property === "BASE_SEPOLIA_DRAW_OPERATOR_PRIVATE_KEY") {
+          secretReads += 1;
+        }
+        return Reflect.get(target, property, receiver) as string | undefined;
+      },
+    });
+    const adapter = createBaseSepoliaGuardedDrawDependencies({
+      rpcUrl: "https://mocked-rpc.example",
+      poolId: 1n,
+      operatorAddress: OTHER_PUBLIC_OPERATOR,
+      privateKeyEnvironment: environment,
+    });
+    assert.ok(adapter.loadExecutionClient);
+    await assert.rejects(
+      adapter.loadExecutionClient(APPROVED_PILOT_OPERATOR),
+      /configured Base Sepolia operator does not match/i,
+    );
+    assert.equal(secretReads, 0);
+  });
+
+  it("59. reaches the late mocked secret seam only for the approved adapter operator", async function () {
+    let secretReads = 0;
+    const environment = new Proxy({} as NodeJS.ProcessEnv, {
+      get(target, property, receiver) {
+        if (property === "BASE_SEPOLIA_DRAW_OPERATOR_PRIVATE_KEY") {
+          secretReads += 1;
+        }
+        return Reflect.get(target, property, receiver) as string | undefined;
+      },
+    });
+    const adapter = createBaseSepoliaGuardedDrawDependencies({
+      rpcUrl: "https://mocked-rpc.example",
+      poolId: 1n,
+      operatorAddress: APPROVED_PILOT_OPERATOR,
+      privateKeyEnvironment: environment,
+    });
+    assert.ok(adapter.loadExecutionClient);
+    await assert.rejects(
+      adapter.loadExecutionClient(APPROVED_PILOT_OPERATOR),
+      /missing or invalid/i,
+    );
+    assert.equal(secretReads, 1);
   });
 });

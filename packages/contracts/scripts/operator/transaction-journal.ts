@@ -108,6 +108,10 @@ export interface TransactionJournal {
   readonly runId: string;
   snapshot(): TransactionJournalData;
   prepare(meaning: OperationMeaning): Promise<JournalOperation>;
+  claimReadyToBroadcast?(
+    operationId: string,
+    nonce: number,
+  ): Promise<ReadyToBroadcastClaimResult>;
   transition(
     operationId: string,
     status: OperationStatus,
@@ -115,6 +119,11 @@ export interface TransactionJournal {
   ): Promise<JournalOperation>;
   find(operationId: string): JournalOperation | undefined;
 }
+
+export type ReadyToBroadcastClaimResult =
+  | { status: "CLAIMED"; operation: JournalOperation }
+  | { status: "CONFLICT"; operation: JournalOperation | null }
+  | { status: "UNKNOWN" };
 
 export type PreparedDrawIntentClaimResult =
   | { status: "CLAIMED" | "EXISTING"; operation: JournalOperation }
@@ -426,6 +435,7 @@ export function validateJournal(value: unknown, identity: JournalIdentity): Tran
 abstract class BaseTransactionJournal implements LogicalDrawTransactionJournal {
   readonly runId = randomUUID();
   private logicalDrawClaimTail: Promise<void> = Promise.resolve();
+  private readyToBroadcastClaimTail: Promise<void> = Promise.resolve();
   protected constructor(protected data: TransactionJournalData) {}
   protected abstract persist(): Promise<void>;
 
@@ -523,6 +533,54 @@ abstract class BaseTransactionJournal implements LogicalDrawTransactionJournal {
     try {
       await this.bumpAndPersist();
       return { status: "CLAIMED", operation: clone(candidate) };
+    } catch (error) {
+      this.data = previous;
+      if (error instanceof TransactionJournalRevisionConflictError) {
+        return { status: "CONFLICT", operation: null };
+      }
+      return { status: "UNKNOWN" };
+    }
+  }
+
+  async claimReadyToBroadcast(
+    operationId: string,
+    nonce: number,
+  ): Promise<ReadyToBroadcastClaimResult> {
+    const claim = this.readyToBroadcastClaimTail.then(
+      () => this.claimReadyToBroadcastExclusive(operationId, nonce),
+      () => this.claimReadyToBroadcastExclusive(operationId, nonce),
+    );
+    this.readyToBroadcastClaimTail = claim.then(
+      () => undefined,
+      () => undefined,
+    );
+    return claim;
+  }
+
+  private async claimReadyToBroadcastExclusive(
+    operationId: string,
+    nonce: number,
+  ): Promise<ReadyToBroadcastClaimResult> {
+    if (!Number.isSafeInteger(nonce) || nonce < 0) {
+      throw new Error("ready_to_broadcast requires a valid reserved nonce.");
+    }
+    const operation = this.data.operations.find(
+      (entry) => entry.operationId === operationId.toLowerCase(),
+    );
+    if (!operation || operation.status !== "prepared") {
+      return {
+        status: "CONFLICT",
+        operation: operation ? clone(operation) : null,
+      };
+    }
+
+    const previous = clone(this.data);
+    operation.nonce = nonce;
+    operation.status = "ready_to_broadcast";
+    operation.updatedAt = isoNow();
+    try {
+      await this.bumpAndPersist();
+      return { status: "CLAIMED", operation: clone(operation) };
     } catch (error) {
       this.data = previous;
       if (error instanceof TransactionJournalRevisionConflictError) {

@@ -45,6 +45,10 @@ export type CoordinatorFailurePoint =
   | "after_pending"
   | "after_receipt";
 
+export class JournaledExecutionOwnershipError extends Error {
+  override readonly name = "JournaledExecutionOwnershipError";
+}
+
 function receiptSummary(receipt: RecoveryReceipt): JournalReceiptSummary {
   return {
     transactionHash: receipt.hash,
@@ -204,7 +208,27 @@ export async function executeJournaledOperation(
   }
 
   const nonce = await input.getNonce();
-  operation = await input.journal.transition(operation.operationId, "ready_to_broadcast", { nonce });
+  const ownership = input.journal.claimReadyToBroadcast
+    ? await input.journal.claimReadyToBroadcast(operation.operationId, nonce)
+    : {
+        status: "CLAIMED" as const,
+        operation: await input.journal.transition(
+          operation.operationId,
+          "ready_to_broadcast",
+          { nonce },
+        ),
+      };
+  if (ownership.status === "UNKNOWN") {
+    throw new JournaledExecutionOwnershipError(
+      "Nonce ownership outcome is unknown; operation requires reconciliation.",
+    );
+  }
+  if (ownership.status === "CONFLICT") {
+    throw new JournaledExecutionOwnershipError(
+      "Another invocation owns this operation; operation requires reconciliation.",
+    );
+  }
+  operation = ownership.operation;
   await input.failureHook?.("after_ready");
 
   let response: BroadcastResponse;

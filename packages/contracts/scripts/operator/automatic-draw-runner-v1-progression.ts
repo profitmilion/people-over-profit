@@ -25,6 +25,7 @@ const PREFLIGHT_STATUSES: readonly AutomaticDrawDryRunStatus[] = [
 export type AutomaticDrawProgressionState =
   | "RESERVED"
   | "PREFLIGHT_READY"
+  | "EXECUTION_CONFIRMED"
   | "MANUAL_REVIEW_REQUIRED";
 
 export interface AutomaticDrawPreflightReadyEvidence {
@@ -45,6 +46,7 @@ export interface AutomaticDrawManualReviewEvidence {
   phase3Status: AutomaticDrawDryRunStatus;
   reason: string;
   recordedAt: string;
+  executionAttempted?: true;
 }
 
 export type AutomaticDrawProgression =
@@ -58,6 +60,13 @@ export type AutomaticDrawProgression =
   | {
       schemaVersion: typeof AUTOMATIC_DRAW_PROGRESSION_SCHEMA_VERSION;
       state: "PREFLIGHT_READY";
+      updatedAt: string;
+      preflight: AutomaticDrawPreflightReadyEvidence;
+      manualReview: null;
+    }
+  | {
+      schemaVersion: typeof AUTOMATIC_DRAW_PROGRESSION_SCHEMA_VERSION;
+      state: "EXECUTION_CONFIRMED";
       updatedAt: string;
       preflight: AutomaticDrawPreflightReadyEvidence;
       manualReview: null;
@@ -89,7 +98,7 @@ export type AutomaticDrawProgressionReadResult =
 export interface AutomaticDrawProgressionTransition {
   logicalDrawKey: string;
   expectedRevision: number;
-  expectedState: "RESERVED";
+  expectedState: "RESERVED" | "PREFLIGHT_READY";
   next: AutomaticDrawTerminalProgression;
 }
 
@@ -119,12 +128,15 @@ export interface AutomaticDrawProgressionCycleOptions {
 
 export type AutomaticDrawProgressionCycleResult =
   | {
-      status: "PREFLIGHT_READY" | "MANUAL_REVIEW_REQUIRED";
+      status:
+        | "PREFLIGHT_READY"
+        | "EXECUTION_CONFIRMED"
+        | "MANUAL_REVIEW_REQUIRED";
       operation: AutomaticDrawStoredOperation;
       preflightExecuted: boolean;
-      dryRunOnly: true;
-      transactionAuthorized: false;
-      transactionSent: false;
+      dryRunOnly: boolean;
+      transactionAuthorized: boolean;
+      transactionSent: boolean | null;
       reason: string;
     }
   | {
@@ -264,10 +276,17 @@ function validatePreflightEvidence(
 function validateManualReviewEvidence(
   value: unknown,
 ): AutomaticDrawManualReviewEvidence {
+  const executionAttempted = Boolean(
+    value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    (value as Record<string, unknown>).executionAttempted === true,
+  );
   const evidence = exactObject(value, [
     "phase3Status",
     "reason",
     "recordedAt",
+    ...(executionAttempted ? ["executionAttempted"] : []),
   ], "automaticDrawProgression.manualReview");
   if (
     typeof evidence.phase3Status !== "string" ||
@@ -283,6 +302,7 @@ function validateManualReviewEvidence(
     phase3Status: evidence.phase3Status as AutomaticDrawDryRunStatus,
     reason,
     recordedAt: requireIso(evidence.recordedAt, "manualReview.recordedAt"),
+    ...(executionAttempted ? { executionAttempted: true as const } : {}),
   };
 }
 
@@ -323,6 +343,22 @@ export function validateAutomaticDrawProgression(
     return {
       schemaVersion: AUTOMATIC_DRAW_PROGRESSION_SCHEMA_VERSION,
       state: "PREFLIGHT_READY",
+      updatedAt,
+      preflight,
+      manualReview: null,
+    };
+  }
+  if (progression.state === "EXECUTION_CONFIRMED") {
+    if (progression.manualReview !== null) {
+      throw new Error("EXECUTION_CONFIRMED must not contain manual-review evidence.");
+    }
+    const preflight = validatePreflightEvidence(progression.preflight);
+    if (preflight.completedAt > updatedAt) {
+      throw new Error("EXECUTION_CONFIRMED predates its preflight evidence.");
+    }
+    return {
+      schemaVersion: AUTOMATIC_DRAW_PROGRESSION_SCHEMA_VERSION,
+      state: "EXECUTION_CONFIRMED",
       updatedAt,
       preflight,
       manualReview: null,
@@ -392,14 +428,18 @@ export function validateAutomaticDrawProgressionTransition(
   if (
     transition.logicalDrawKey !== current.record.logicalDrawKey ||
     transition.expectedRevision !== current.revision ||
-    transition.expectedState !== "RESERVED" ||
-    current.progression.state !== "RESERVED"
+    transition.expectedState !== current.progression.state
   ) {
     throw new Error("Automatic Draw progression transition precondition failed.");
   }
   const next = validateAutomaticDrawProgression(transition.next);
-  if (next.state === "RESERVED") {
-    throw new Error("Automatic Draw progression cannot rewrite RESERVED.");
+  const allowed = current.progression.state === "RESERVED"
+    ? next.state === "PREFLIGHT_READY" || next.state === "MANUAL_REVIEW_REQUIRED"
+    : current.progression.state === "PREFLIGHT_READY" &&
+      (next.state === "EXECUTION_CONFIRMED" ||
+        next.state === "MANUAL_REVIEW_REQUIRED");
+  if (!allowed) {
+    throw new Error("Automatic Draw progression transition is not allowed.");
   }
   if (next.updatedAt <= current.progression.updatedAt) {
     throw new Error("Automatic Draw progression timestamp must move forward.");
@@ -407,8 +447,8 @@ export function validateAutomaticDrawProgressionTransition(
   return {
     logicalDrawKey: transition.logicalDrawKey,
     expectedRevision: transition.expectedRevision,
-    expectedState: "RESERVED",
-    next,
+    expectedState: transition.expectedState,
+    next: next as AutomaticDrawTerminalProgression,
   };
 }
 
@@ -427,6 +467,7 @@ function manualProgression(
   reason: unknown,
   after: string,
   nowValue?: string,
+  executionAttempted = false,
 ): AutomaticDrawTerminalProgression {
   const recordedAt = nextIsoTimestamp(after, nowValue);
   return validateAutomaticDrawProgression({
@@ -438,8 +479,43 @@ function manualProgression(
       phase3Status,
       reason: sanitizeAutomaticDrawReviewReason(reason),
       recordedAt,
+      ...(executionAttempted ? { executionAttempted: true } : {}),
     },
   }) as AutomaticDrawTerminalProgression;
+}
+
+export function createAutomaticDrawExecutionConfirmedProgression(
+  current: AutomaticDrawProgression,
+  nowValue?: string,
+): AutomaticDrawTerminalProgression {
+  if (current.state !== "PREFLIGHT_READY") {
+    throw new Error("Automatic Draw execution confirmation requires PREFLIGHT_READY.");
+  }
+  const confirmedAt = nextIsoTimestamp(current.updatedAt, nowValue);
+  return validateAutomaticDrawProgression({
+    schemaVersion: AUTOMATIC_DRAW_PROGRESSION_SCHEMA_VERSION,
+    state: "EXECUTION_CONFIRMED",
+    updatedAt: confirmedAt,
+    preflight: current.preflight,
+    manualReview: null,
+  }) as AutomaticDrawTerminalProgression;
+}
+
+export function createAutomaticDrawExecutionManualReviewProgression(
+  current: AutomaticDrawProgression,
+  reason: unknown,
+  nowValue?: string,
+): AutomaticDrawTerminalProgression {
+  if (current.state !== "PREFLIGHT_READY") {
+    throw new Error("Automatic Draw execution review requires PREFLIGHT_READY.");
+  }
+  return manualProgression(
+    "READY_FOR_EXECUTION",
+    reason,
+    current.updatedAt,
+    nowValue,
+    true,
+  );
 }
 
 export function mapAutomaticDrawDryRunToProgression(
@@ -503,14 +579,27 @@ function terminalResult(
         "The last persisted non-transactional dry-run preflight completed successfully.",
     };
   }
+  if (operation.progression.state === "EXECUTION_CONFIRMED") {
+    return {
+      status: "EXECUTION_CONFIRMED",
+      operation,
+      preflightExecuted,
+      dryRunOnly: false,
+      transactionAuthorized: true,
+      transactionSent: true,
+      reason: "The exact Automatic Draw execution is durably confirmed.",
+    };
+  }
   if (operation.progression.state === "MANUAL_REVIEW_REQUIRED") {
+    const executionAttempted =
+      operation.progression.manualReview.executionAttempted === true;
     return {
       status: "MANUAL_REVIEW_REQUIRED",
       operation,
       preflightExecuted,
-      dryRunOnly: true,
-      transactionAuthorized: false,
-      transactionSent: false,
+      dryRunOnly: !executionAttempted,
+      transactionAuthorized: executionAttempted,
+      transactionSent: executionAttempted ? null : false,
       reason: operation.progression.manualReview.reason,
     };
   }

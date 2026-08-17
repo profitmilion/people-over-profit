@@ -213,6 +213,13 @@ export function createBaseSepoliaGuardedDrawDependencies(
     consumePreparedDrawIntent: options.consumePreparedDrawIntent,
     getLatestBlockNumber: () => rpcFailover.read("eth_blockNumber", (client) =>
       client.publicClient.getBlockNumber()),
+    getTransactionCount: (address, blockTag) => rpcFailover.read(
+      `eth_getTransactionCount:${blockTag}`,
+      (client) => client.publicClient.getTransactionCount({
+        address,
+        blockTag,
+      }),
+    ),
     async readPublicIdentity(blockNumber) {
       const { chainId, bytecode } = await rpcFailover.read(
         "public identity",
@@ -362,8 +369,18 @@ export function createBaseSepoliaGuardedDrawDependencies(
         };
       },
     ),
-    async loadExecutionClient(): Promise<GuardedDrawExecutionClient> {
+    async loadExecutionClient(
+      expectedOperatorAddress,
+    ): Promise<GuardedDrawExecutionClient> {
       const expectedAddress = requirePublicOperatorAddress(publicOperator);
+      if (
+        !isAddress(expectedOperatorAddress) ||
+        getAddress(expectedOperatorAddress) !== expectedAddress
+      ) {
+        throw new Error(
+          "Configured Base Sepolia operator does not match the approved execution operator.",
+        );
+      }
       const account = loadPrivateKey(
         options.privateKeyEnvironment ?? process.env,
         expectedAddress,
@@ -393,6 +410,7 @@ export function createBaseSepoliaGuardedDrawDependencies(
               functionName: input.functionName,
               args: input.args,
               gas: gasLimit,
+              ...(input.nonce === undefined ? {} : { nonce: input.nonce }),
             }),
           };
         },

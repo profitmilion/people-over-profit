@@ -28,6 +28,7 @@ import {
 } from "../scripts/operator/automatic-draw-runner-v1-state.js";
 import type { GuardedDrawPreparedIntentContext } from "../scripts/operator/guarded-single-draw.js";
 import {
+  calculateGuardedDrawGasPlan,
   executeGuardedSingleDraw,
   type GuardedDrawDependencies,
 } from "../scripts/operator/guarded-single-draw.js";
@@ -228,6 +229,8 @@ function guardedDependencies(input: {
   consume: ReturnType<typeof createGuardedDrawDurableRuntimeConsumer>;
   events: string[];
   loads: { count: number };
+  simulationGasEstimate?: bigint;
+  runtimeGasEstimate?: bigint;
 }): GuardedDrawDependencies {
   return {
     async readSnapshot() { return structuredClone(input.snapshot); },
@@ -241,8 +244,15 @@ function guardedDependencies(input: {
     async getLatestBlockNumber() {
       return input.snapshot.blockNumber as bigint;
     },
-    async simulateDraw() { return { result: 7n, gasEstimate: 123_456n }; },
-    async estimateDraw() { return 123_456n; },
+    async simulateDraw() {
+      return {
+        result: 7n,
+        gasEstimate: input.simulationGasEstimate ?? 123_456n,
+      };
+    },
+    async estimateDraw() {
+      return input.runtimeGasEstimate ?? 123_456n;
+    },
     async consumePreparedDrawIntent(context) {
       input.events.push("runtime:start");
       const result = await input.consume(context);
@@ -407,6 +417,100 @@ describe("Automatic Draw durable read-only runtime wiring", function () {
     const result = await createGuardedDrawDurableRuntimeConsumer(
       fixture.config,
     )({ ...fixture.context, planId: `${fixture.context.planId}-changed` });
+    assert.equal(result.status, "CONFLICT");
+  });
+
+  it("accepts a newer final revalidation block with independently safe refreshed gas evidence", async function () {
+    const preparedSnapshot = dueSnapshot();
+    const plan = planFor(preparedSnapshot);
+    const persistedBlock = preparedSnapshot.blockNumber as bigint;
+    const freshSnapshot = {
+      ...structuredClone(preparedSnapshot),
+      blockNumber: persistedBlock + 25n,
+    };
+    const fixture = await persistFixture({
+      evidence: {
+        planId: plan.planId,
+        revalidationBlock: persistedBlock.toString(),
+      },
+    });
+    const events: string[] = [];
+    const loads = { count: 0 };
+    const result = await executeGuardedSingleDraw({
+      planJson: serializeLifecycleActionPlan(plan),
+      operatorAddress: OPERATOR,
+      confirmation: {
+        chainId: plan.identity.chainId,
+        contractAddress: plan.identity.contractAddress,
+        poolId: plan.scope.poolId,
+        roundNumber: plan.scope.roundNumber as string,
+      },
+    }, guardedDependencies({
+      snapshot: freshSnapshot,
+      consume: createGuardedDrawDurableRuntimeConsumer(fixture.config),
+      events,
+      loads,
+      simulationGasEstimate: 150_000n,
+      runtimeGasEstimate: 160_000n,
+    }));
+    assert.notEqual(result.status, "TRANSACTION_SUBMITTED");
+    assert.deepEqual(events, ["runtime:start", "runtime:CONSUMER_READY", "loader"]);
+    assert.equal(loads.count, 1);
+  });
+
+  it("fails closed when final revalidation regresses behind persisted preflight", async function () {
+    const snapshot = dueSnapshot();
+    const plan = planFor(snapshot);
+    const fixture = await persistFixture({
+      evidence: {
+        planId: plan.planId,
+        revalidationBlock: ((snapshot.blockNumber as bigint) + 1n).toString(),
+      },
+    });
+    const events: string[] = [];
+    const loads = { count: 0 };
+    const result = await executeGuardedSingleDraw({
+      planJson: serializeLifecycleActionPlan(plan),
+      operatorAddress: OPERATOR,
+      confirmation: {
+        chainId: plan.identity.chainId,
+        contractAddress: plan.identity.contractAddress,
+        poolId: plan.scope.poolId,
+        roundNumber: plan.scope.roundNumber as string,
+      },
+    }, guardedDependencies({
+      snapshot,
+      consume: createGuardedDrawDurableRuntimeConsumer(fixture.config),
+      events,
+      loads,
+    }));
+    assert.equal(result.status, "BLOCKED");
+    assert.deepEqual(events, ["runtime:start", "runtime:CONFLICT"]);
+    assert.equal(loads.count, 0);
+  });
+
+  it("fails closed when refreshed gas evidence is not exactly buffered", async function () {
+    const fixture = await persistFixture();
+    const freshGas = calculateGuardedDrawGasPlan(150_000n, 160_000n);
+    const result = await createGuardedDrawDurableRuntimeConsumer(
+      fixture.config,
+    )({
+      ...fixture.context,
+      revalidationBlock: "12346",
+      gasEstimate: freshGas.preflightEstimate,
+      runtimeGasEstimate: freshGas.runtimeEstimate,
+      bufferedGasLimit: freshGas.gasLimit - 1n,
+    });
+    assert.equal(result.status, "CONFLICT");
+  });
+
+  it("fails closed when persisted gas evidence is not exactly buffered", async function () {
+    const fixture = await persistFixture({
+      evidence: { bufferedGasLimit: "154319" },
+    });
+    const result = await createGuardedDrawDurableRuntimeConsumer(
+      fixture.config,
+    )(fixture.context);
     assert.equal(result.status, "CONFLICT");
   });
 

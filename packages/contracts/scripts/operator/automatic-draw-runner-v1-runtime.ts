@@ -18,6 +18,7 @@ import {
   type DrawPreSignerConsumerResult,
   type DrawPreSignerConsumerStatus,
 } from "./draw-pre-signer-consumer.js";
+import { calculateGuardedDrawGasPlan } from "./guarded-draw-read-only-preflight.js";
 import type { GuardedDrawPreparedIntentContext } from "./guarded-single-draw.js";
 import {
   inspectExistingTransactionJournal,
@@ -229,6 +230,29 @@ function matchesGuardedContext(
 ): boolean {
   if (operation.progression.state !== "PREFLIGHT_READY") return false;
   const { record, progression } = operation;
+  let persistedRevalidationBlock: bigint;
+  let freshRevalidationBlock: bigint;
+  try {
+    persistedRevalidationBlock = BigInt(progression.preflight.revalidationBlock);
+    freshRevalidationBlock = BigInt(context.revalidationBlock);
+    const persistedGasPlan = calculateGuardedDrawGasPlan(
+      BigInt(progression.preflight.gasEstimate),
+      BigInt(progression.preflight.runtimeGasEstimate),
+    );
+    const freshGasPlan = calculateGuardedDrawGasPlan(
+      context.gasEstimate,
+      context.runtimeGasEstimate,
+    );
+    if (
+      persistedGasPlan.gasLimit !==
+        BigInt(progression.preflight.bufferedGasLimit) ||
+      freshGasPlan.gasLimit !== context.bufferedGasLimit
+    ) {
+      return false;
+    }
+  } catch {
+    return false;
+  }
   return (
     record.logicalDrawKey === context.logicalDrawKey &&
     record.chainId === context.chainId.toString() &&
@@ -237,11 +261,7 @@ function matchesGuardedContext(
     record.roundNumber === context.roundNumber.toString() &&
     progression.preflight.publicOperatorAddress === context.operatorAddress &&
     progression.preflight.planId === context.planId &&
-    progression.preflight.revalidationBlock === context.revalidationBlock &&
-    progression.preflight.gasEstimate === context.gasEstimate.toString() &&
-    progression.preflight.runtimeGasEstimate ===
-      context.runtimeGasEstimate.toString() &&
-    progression.preflight.bufferedGasLimit === context.bufferedGasLimit.toString()
+    freshRevalidationBlock >= persistedRevalidationBlock
   );
 }
 
